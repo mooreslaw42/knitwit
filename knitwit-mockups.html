@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Knitwit — Design Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FDF6EF;
+    --cream-deep:#F7EBDD;
+    --blush:#F4C6D3;
+    --blush-deep:#E58AA0;
+    --sage:#B9CFAD;
+    --sage-deep:#7FA06D;
+    --lavender:#D9C9EA;
+    --lavender-deep:#A985CC;
+    --coral:#F0A67E;
+    --coral-deep:#DE7C46;
+    --butter:#F6E2A6;
+    --butter-deep:#E2B84A;
+    --ink:#4A3B38;
+    --ink-soft:#8A7873;
+    --white:#FFFFFF;
+    --radius-lg:28px;
+    --radius-md:18px;
+    --radius-sm:12px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--cream-deep);
+    font-family:'Nunito',sans-serif;
+    color:var(--ink);
+    padding:48px 24px 120px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  .masthead{text-align:center;margin-bottom:56px;}
+  .logo-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px;}
+  .logo-mark{width:44px;height:44px;}
+  .masthead h1{font-family:'Quicksand',sans-serif;font-weight:700;font-size:40px;margin:0;color:var(--ink);letter-spacing:-0.5px;}
+  .masthead p{font-size:16px;color:var(--ink-soft);margin:6px 0 0;font-weight:600;}
+
+  .section{margin-bottom:72px;}
+  .section-label{
+    font-family:'Quicksand',sans-serif;font-weight:700;font-size:13px;
+    letter-spacing:1.5px;text-transform:uppercase;color:var(--sage-deep);
+    margin-bottom:8px;
+  }
+  .section-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:26px;margin:0 0 6px;}
+  .section-desc{font-size:15px;color:var(--ink-soft);margin:0 0 28px;max-width:640px;font-weight:600;}
+
+  /* Style guide */
+  .swatch-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:32px;}
+  .swatch{border-radius:var(--radius-md);padding:18px 16px;min-height:86px;display:flex;flex-direction:column;justify-content:flex-end;}
+  .swatch span{font-family:'Quicksand',sans-serif;font-weight:700;font-size:13px;}
+  .swatch small{font-size:11px;opacity:0.75;font-weight:700;}
+  .type-row{display:flex;gap:40px;background:var(--white);border-radius:var(--radius-md);padding:28px 32px;flex-wrap:wrap;}
+  .type-sample .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-soft);font-weight:800;margin-bottom:6px;}
+  .btn-row{display:flex;gap:14px;margin-top:24px;flex-wrap:wrap;}
+  .btn{font-family:'Quicksand',sans-serif;font-weight:700;font-size:14px;padding:13px 26px;border-radius:999px;border:none;cursor:pointer;}
+  .btn-primary{background:var(--coral-deep);color:var(--white);}
+  .btn-secondary{background:var(--white);color:var(--ink);border:2px solid var(--sage);}
+  .btn-ghost{background:var(--blush);color:var(--blush-deep);}
+
+  /* Frames */
+  .frame-row{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;}
+  .browser-frame{
+    background:var(--white);border-radius:var(--radius-lg);overflow:hidden;
+    box-shadow:0 20px 40px -20px rgba(74,59,56,0.25);width:100%;
+  }
+  .browser-topbar{background:var(--cream-deep);padding:12px 18px;display:flex;align-items:center;gap:8px;}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .phone-frame{
+    background:var(--ink);border-radius:44px;padding:12px;width:300px;flex-shrink:0;
+    box-shadow:0 20px 40px -18px rgba(74,59,56,0.35);
+  }
+  .phone-screen{
+    background:var(--cream);border-radius:32px;overflow:hidden;min-height:560px;position:relative;
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:110px;height:22px;background:var(--ink);border-radius:0 0 16px 16px;z-index:5;}
+
+  /* Dashboard (website) */
+  .dash-body{padding:26px 30px 30px;}
+  .dash-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+  .dash-greet h2{font-family:'Quicksand',sans-serif;font-weight:600;font-size:22px;margin:0;}
+  .dash-greet p{font-size:13px;color:var(--ink-soft);margin:4px 0 0;font-weight:700;}
+  .avatar{width:42px;height:42px;border-radius:50%;background:var(--lavender);display:flex;align-items:center;justify-content:center;font-family:'Quicksand',sans-serif;font-weight:700;color:var(--lavender-deep);}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
+  .stat-card{background:var(--cream-deep);border-radius:var(--radius-sm);padding:16px;}
+  .stat-card .num{font-family:'Quicksand',sans-serif;font-weight:700;font-size:22px;}
+  .stat-card .lbl{font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:2px;}
+  .dash-columns{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;}
+  .card{background:var(--cream-deep);border-radius:var(--radius-md);padding:18px;}
+  .card h3{font-family:'Quicksand',sans-serif;font-size:15px;margin:0 0 14px;font-weight:700;}
+  .proj-row{display:flex;align-items:center;gap:12px;background:var(--white);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;}
+  .proj-thumb{width:44px;height:44px;border-radius:12px;flex-shrink:0;}
+  .proj-info{flex:1;min-width:0;}
+  .proj-info .pname{font-weight:800;font-size:13.5px;}
+  .proj-info .pmeta{font-size:11.5px;color:var(--ink-soft);font-weight:700;}
+  .progress-track{background:var(--cream-deep);border-radius:999px;height:6px;width:100%;margin-top:5px;overflow:hidden;}
+  .progress-fill{height:100%;border-radius:999px;}
+  .pct{font-family:'Quicksand',sans-serif;font-weight:700;font-size:12px;color:var(--sage-deep);}
+  .pattern-chip{display:inline-flex;align-items:center;gap:8px;background:var(--white);border-radius:var(--radius-sm);padding:9px 12px;margin:0 8px 8px 0;font-size:12.5px;font-weight:800;}
+  .chip-dot{width:8px;height:8px;border-radius:50%;}
+
+  /* Mobile: project tracker */
+  .p-topbar{display:flex;align-items:center;justify-content:space-between;padding:36px 20px 14px;}
+  .p-back{width:30px;height:30px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;}
+  .p-hero{margin:0 16px;border-radius:22px;height:150px;background:linear-gradient(135deg,var(--blush),var(--lavender));position:relative;overflow:hidden;}
+  .p-hero-tag{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,0.85);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:800;color:var(--blush-deep);}
+  .p-body{padding:18px 16px;}
+  .p-title{font-family:'Quicksand',sans-serif;font-weight:700;font-size:19px;margin:0 0 4px;}
+  .p-sub{font-size:12.5px;color:var(--ink-soft);font-weight:700;margin:0 0 16px;}
+  .p-ring-wrap{display:flex;align-items:center;gap:16px;background:var(--white);border-radius:20px;padding:16px;margin-bottom:14px;}
+  .p-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .p-tag{background:var(--white);border-radius:12px;padding:9px 11px;font-size:11px;font-weight:800;flex:1;min-width:80px;text-align:center;}
+  .p-tag .tv{font-family:'Quicksand',sans-serif;font-size:13px;display:block;margin-bottom:2px;}
+  .p-notes{background:var(--white);border-radius:16px;padding:14px;font-size:12.5px;font-weight:700;color:var(--ink-soft);line-height:1.6;}
+  .p-photos{display:flex;gap:8px;margin-bottom:16px;}
+  .p-photo{width:56px;height:56px;border-radius:14px;flex-shrink:0;}
+  .p-photo.add{background:var(--white);border:2px dashed var(--sage);display:flex;align-items:center;justify-content:center;color:var(--sage-deep);font-size:20px;font-weight:800;}
+
+  /* Mobile: pattern library */
+  .lib-search{margin:18px 16px 14px;background:var(--white);border-radius:16px;padding:12px 16px;font-size:13px;font-weight:700;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
+  .lib-filters{display:flex;gap:8px;padding:0 16px 14px;overflow:hidden;}
+  .filt{background:var(--white);border-radius:999px;padding:7px 14px;font-size:11.5px;font-weight:800;color:var(--ink-soft);}
+  .filt.active{background:var(--coral-deep);color:var(--white);}
+  .lib-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 20px;}
+  .lib-card{background:var(--white);border-radius:18px;overflow:hidden;}
+  .lib-thumb{height:88px;}
+  .lib-info{padding:10px 11px;}
+  .lib-info .lname{font-family:'Quicksand',sans-serif;font-weight:700;font-size:12.5px;margin:0 0 2px;}
+  .lib-info .ltype{font-size:10.5px;color:var(--ink-soft);font-weight:700;}
+  .lib-heart{float:right;font-size:12px;}
+
+  /* Mobile: counter */
+  .cnt-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:60px 20px 30px;text-align:center;}
+  .cnt-label{font-size:12px;font-weight:800;color:var(--ink-soft);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;}
+  .cnt-proj{font-family:'Quicksand',sans-serif;font-weight:700;font-size:16px;margin-bottom:36px;}
+  .cnt-number{font-family:'Quicksand',sans-serif;font-weight:700;font-size:88px;line-height:1;color:var(--coral-deep);margin-bottom:8px;}
+  .cnt-of{font-size:13px;color:var(--ink-soft);font-weight:700;margin-bottom:36px;}
+  .cnt-btns{display:flex;align-items:center;gap:22px;margin-bottom:30px;}
+  .cnt-btn{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;}
+  .cnt-btn.minus{background:var(--white);color:var(--ink-soft);}
+  .cnt-btn.plus{background:var(--coral-deep);color:var(--white);}
+  .cnt-row-marker{background:var(--white);border-radius:14px;padding:10px 18px;font-size:12px;font-weight:800;color:var(--sage-deep);}
+
+  .bottom-nav{position:absolute;bottom:0;left:0;right:0;background:var(--white);display:flex;justify-content:space-around;padding:14px 0 20px;border-radius:0 0 32px 32px;}
+  .nav-dot{width:22px;height:22px;border-radius:8px;}
+
+  .caption{margin-top:14px;font-size:12.5px;color:var(--ink-soft);font-weight:700;text-align:center;max-width:300px;}
+  .frame-col{display:flex;flex-direction:column;align-items:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="logo-row">
+      <svg class="logo-mark" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="21" fill="#F4C6D3"/>
+        <path d="M22 10c-7 0-10 4-10 8s3 6 7 6-1 4-4 5" stroke="#E58AA0" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <path d="M22 10c7 0 10 4 10 8s-3 6-7 6 1 4 4 5" stroke="#DE7C46" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <circle cx="22" cy="22" r="3" fill="#7FA06D"/>
+      </svg>
+      <h1>Knitwit</h1>
+    </div>
+    <p>App + website design concept — soft, cozy, easy on the hands</p>
+  </div>
+
+  <!-- STYLE GUIDE -->
+  <div class="section">
+    <div class="section-label">Style system</div>
+    <div class="section-title">Palette &amp; type</div>
+    <div class="section-desc">Warm cream base with blush, sage, lavender and coral accents. Rounded shapes and generous padding throughout — nothing feels sharp or clinical.</div>
+
+    <div class="swatch-grid">
+      <div class="swatch" style="background:var(--blush);color:var(--blush-deep);"><span>Blush</span><small>primary accent</small></div>
+      <div class="swatch" style="background:var(--sage);color:var(--sage-deep);"><span>Sage</span><small>success / progress</small></div>
+      <div class="swatch" style="background:var(--lavender);color:var(--lavender-deep);"><span>Lavender</span><small>secondary accent</small></div>
+      <div class="swatch" style="background:var(--coral);color:#7A3D1C;"><span>Coral</span><small>buttons / CTAs</small></div>
+      <div class="swatch" style="background:var(--butter);color:#7A5C0A;"><span>Butter</span><small>highlights</small></div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-sample">
+        <div class="label">Heading — Quicksand</div>
+        <div style="font-family:'Quicksand',sans-serif;font-weight:700;font-size:28px;">Cast on something new</div>
+      </div>
+      <div class="type-sample">
+        <div class="label">Body — Nunito</div>
+        <div style="font-size:15px;font-weight:600;max-width:280px;">Friendly, rounded and easy to read at a glance — even mid-row.</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary">+ New project</button>
+      <button class="btn btn-secondary">Browse patterns</button>
+      <button class="btn btn-ghost">♥ Saved</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="section">
+    <div class="section-label">Website — 01</div>
+    <div class="section-title">Home dashboard</div>
+    <div class="section-desc">Landing page after login: a warm greeting, project progress at a glance, and quick access to the pattern library.</div>
+
+    <div class="browser-frame">
+      <div class="browser-topbar">
+        <div class="dot" style="background:var(--blush);"></div>
+        <div class="dot" style="background:var(--butter);"></div>
+        <div class="dot" style="background:var(--sage);"></div>
+      </div>
+      <div class="dash-body">
+        <div class="dash-header">
+          <div class="dash-greet">
+            <h2>Good evening, Pim 🧶</h2>
+            <p>You're 3 rows from finishing today's goal</p>
+          </div>
+          <div class="avatar">P</div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num">4</div><div class="lbl">Active projects</div></div>
+          <div class="stat-card"><div class="num">128</div><div class="lbl">Saved patterns</div></div>
+          <div class="stat-card"><div class="num">12</div><div class="lbl">Finished this year</div></div>
+          <div class="stat-card"><div class="num">3</div><div class="lbl">In queue</div></div>
+        </div>
+
+        <div class="dash-columns">
+          <div class="card">
+            <h3>Continue knitting</h3>
+            <div class="proj-row">
+              <div class="proj-thumb" style="background:var(--blush);"></div>
+              <div class="proj-info">
+                <div class="pname">Meadow Cardigan</div>
+                <div class="pmeta">Sleeve 2 · row 84 of 120</div>
+                <div class="progress-track"><div class="progress-fill" style="width:70%;background:var(--blush-deep);"></div></div>
+              </div>
+              <div class="pct">70%</div>
+            </div>
+            <div class="proj-row">
+              <div class="proj-thumb" style="background:var(--sage);"></div>
+              <div class="proj-info">
+                <div class="pname">Rowan Socks</div>
+                <div class="pmeta">Heel turn · row 12 of 40</div>
+                <div class="progress-track"><div class="progress-fill" style="width:30%;background:var(--sage-deep);"></div></div>
+              </div>
+              <div class="pct">30%</div>
+            </div>
+            <div class="proj-row">
+              <div class="proj-thumb" style="background:var(--lavender);"></div>
+              <div class="proj-info">
+                <div class="pname">Clover Baby Blanket</div>
+                <div class="pmeta">Panel 3 of 5</div>
+                <div class="progress-track"><div class="progress-fill" style="width:52%;background:var(--lavender-deep);"></div></div>
+              </div>
+              <div class="pct">52%</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>From your pattern library</h3>
+            <div class="pattern-chip"><span class="chip-dot" style="background:var(--coral-deep);"></span>Textured Beanie</div>
+            <div class="pattern-chip"><span class="chip-dot" style="background:var(--sage-deep);"></span>Garter Cowl</div>
+            <div class="pattern-chip"><span class="chip-dot" style="background:var(--lavender-deep);"></span>Fair Isle Mitts</div>
+            <div class="pattern-chip"><span class="chip-dot" style="background:var(--blush-deep);"></span>Lace Shawl</div>
+            <div class="pattern-chip"><span class="chip-dot" style="background:var(--butter-deep);"></span>Cable Scarf</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE SCREENS -->
+  <div class="section">
+    <div class="section-label">App — 02, 03, 04</div>
+    <div class="section-title">Project tracker, pattern library &amp; row counter</div>
+    <div class="section-desc">Core mobile screens, designed for one-handed use while a project is on the needles.</div>
+
+    <div class="frame-row">
+
+      <div class="frame-col">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="notch"></div>
+            <div class="p-topbar">
+              <div class="p-back">←</div>
+              <div class="p-back">⋯</div>
+            </div>
+            <div class="p-hero">
+              <div class="p-hero-tag">In progress</div>
+            </div>
+            <div class="p-body">
+              <div class="p-title">Meadow Cardigan</div>
+              <div class="p-sub">Started Jun 14 · Sleeve 2 of 2</div>
+
+              <div class="p-ring-wrap">
+                <svg width="64" height="64" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="#F7EBDD" stroke-width="8"/>
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="#E58AA0" stroke-width="8" stroke-linecap="round" stroke-dasharray="163" stroke-dashoffset="49" transform="rotate(-90 32 32)"/>
+                </svg>
+                <div>
+                  <div style="font-family:'Quicksand',sans-serif;font-weight:700;font-size:20px;">Row 84 / 120</div>
+                  <div style="font-size:12px;color:var(--ink-soft);font-weight:700;">Tap to open counter</div>
+                </div>
+              </div>
+
+              <div class="p-tags">
+                <div class="p-tag"><span class="tv">Merino DK</span>Yarn</div>
+                <div class="p-tag"><span class="tv">4.5mm</span>Needles</div>
+                <div class="p-tag"><span class="tv">22 sts</span>Gauge</div>
+              </div>
+
+              <div class="p-photos">
+                <div class="p-photo" style="background:var(--blush);"></div>
+                <div class="p-photo" style="background:var(--lavender);"></div>
+                <div class="p-photo add">+</div>
+              </div>
+
+              <div class="p-notes">"Switched to magic loop for the sleeve — much easier to try on as I go."</div>
+            </div>
+            <div class="bottom-nav">
+              <div class="nav-dot" style="background:var(--blush);"></div>
+              <div class="nav-dot" style="background:var(--cream-deep);"></div>
+              <div class="nav-dot" style="background:var(--cream-deep);"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Project tracker — progress ring, yarn/needle details, photos and notes in one view</div>
+      </div>
+
+      <div class="frame-col">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="notch"></div>
+            <div style="padding-top:34px;">
+              <div style="padding:0 16px;font-family:'Quicksand',sans-serif;font-weight:700;font-size:20px;">Pattern library</div>
+              <div class="lib-search">🔍 Search patterns, tags, designers…</div>
+              <div class="lib-filters">
+                <div class="filt active">All</div>
+                <div class="filt">Sweaters</div>
+                <div class="filt">Accessories</div>
+                <div class="filt">Queue</div>
+              </div>
+              <div class="lib-grid">
+                <div class="lib-card">
+                  <div class="lib-thumb" style="background:var(--blush);"></div>
+                  <div class="lib-info"><span class="lib-heart">♥</span><div class="lname">Meadow Cardigan</div><div class="ltype">Sweater · worsted</div></div>
+                </div>
+                <div class="lib-card">
+                  <div class="lib-thumb" style="background:var(--sage);"></div>
+                  <div class="lib-info"><span class="lib-heart">♥</span><div class="lname">Rowan Socks</div><div class="ltype">Accessory · fingering</div></div>
+                </div>
+                <div class="lib-card">
+                  <div class="lib-thumb" style="background:var(--lavender);"></div>
+                  <div class="lib-info"><span class="lib-heart">♡</span><div class="lname">Fair Isle Mitts</div><div class="ltype">Accessory · DK</div></div>
+                </div>
+                <div class="lib-card">
+                  <div class="lib-thumb" style="background:var(--butter);"></div>
+                  <div class="lib-info"><span class="lib-heart">♡</span><div class="lname">Lace Shawl</div><div class="ltype">Accessory · lace</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="bottom-nav">
+              <div class="nav-dot" style="background:var(--cream-deep);"></div>
+              <div class="nav-dot" style="background:var(--sage);"></div>
+              <div class="nav-dot" style="background:var(--cream-deep);"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Pattern library — search, filter chips, and a favoriteable card grid</div>
+      </div>
+
+      <div class="frame-col">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="notch"></div>
+            <div class="cnt-wrap">
+              <div class="cnt-label">Meadow Cardigan · Sleeve 2</div>
+              <div class="cnt-proj">Stockinette section</div>
+              <div class="cnt-number">84</div>
+              <div class="cnt-of">of 120 rows</div>
+              <div class="cnt-btns">
+                <div class="cnt-btn minus">–</div>
+                <div class="cnt-btn plus">+</div>
+              </div>
+              <div class="cnt-row-marker">📍 Marker every 12 rows — next at 96</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Row counter — big tap targets and high contrast for quick glances mid-stitch</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
