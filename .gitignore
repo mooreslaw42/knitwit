@@ -46,3 +46,5 @@ yarn-error.*
 
 # legacy demo fixture (not a build artifact, just kept out of git)
 reference/example pattern.pdf
+.vercel
+.env*
