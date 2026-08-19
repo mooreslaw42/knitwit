@@ -2,6 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Jest's globals (describe/it/expect) are ambient, so they need naming explicitly —
+    // without this, `tsc --noEmit` fails on every test file even though the tests run fine.
+    "types": ["jest"],
     "paths": {
       "@/*": [
         "./src/*"

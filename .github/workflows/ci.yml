@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes an in-flight run redundant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test
+    # Ubuntu only: the iOS build runs on EAS's own macOS machines, so CI never needs
+    # (much pricier) macOS runners.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # Catches breakage that lint and unit tests cannot: a bad route, a bundler-level
+      # import error, or anything that only fails when Metro actually builds the app.
+      # This is the same command Vercel runs to deploy, so a green CI means a deployable build.
+      - name: Build web bundle
+        run: npx expo export --platform web
