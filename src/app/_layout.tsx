@@ -15,10 +15,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { Colors } from '@/constants/theme';
+import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  // Saved projects are read off the device asynchronously; hold the splash screen until they
+  // land so the app never renders seed data over the user's real work.
+  const hasHydrated = useKnitwitStore((state) => state.hasHydrated);
   const [fontsLoaded] = useFonts({
     Quicksand_500Medium,
     Quicksand_600SemiBold,
@@ -29,13 +33,15 @@ export default function RootLayout() {
     Nunito_800ExtraBold,
   });
 
+  const ready = fontsLoaded && hasHydrated;
+
   useEffect(() => {
-    if (fontsLoaded) {
+    if (ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [ready]);
 
-  if (!fontsLoaded) {
+  if (!ready) {
     return null;
   }
 

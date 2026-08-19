@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { goBackOr } from '@/lib/navigation';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -68,14 +69,14 @@ export default function NewMaterialWizardScreen() {
       brand: form.brand.trim() || 'Unbranded',
       colorName: form.colorName.trim() || 'Unnamed color',
     });
-    router.back();
+    goBackOr(router, '/materials');
   };
 
   const handleBack = () => {
     if (step > 0) {
       setStep((s) => s - 1);
     } else {
-      router.back();
+      goBackOr(router, '/materials');
     }
   };
 

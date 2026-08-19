@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { goBackOr } from '@/lib/navigation';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -145,7 +146,7 @@ export default function MaterialEditScreen() {
                 brand: form.brand || 'Unbranded',
                 colorName: form.colorName || 'Unnamed color',
               });
-              router.back();
+              goBackOr(router, '/materials');
             }}>
             <ThemedText type="smallBold" themeColor="white">
               Save
@@ -156,7 +157,7 @@ export default function MaterialEditScreen() {
             <DeleteButton
               onPress={() => {
                 deleteMaterial(id);
-                router.back();
+                goBackOr(router, '/materials');
               }}
             />
           )}

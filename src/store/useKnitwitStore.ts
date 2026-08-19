@@ -1,10 +1,17 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { SEED_MATERIALS, SEED_PATTERNS, SEED_PROJECTS, SEED_TOOLS } from '@/data/seed';
 import { currentSectionIndexOf } from '@/lib/knitwit-helpers';
 import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
 
 type KnitwitState = {
+  // False until the saved state has been read back off the device. The UI waits on this so it
+  // never flashes seed data before the user's real projects load.
+  hasHydrated: boolean;
+  setHasHydrated: (value: boolean) => void;
+
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
   patterns: Record<string, Pattern>;
@@ -50,212 +57,248 @@ function clampSectionIndex(projects: Record<string, Project>, projectKey: string
   return index;
 }
 
-export const useKnitwitStore = create<KnitwitState>((set, get) => ({
-  materials: SEED_MATERIALS,
-  tools: SEED_TOOLS,
-  patterns: SEED_PATTERNS,
-  projects: SEED_PROJECTS,
+export const useKnitwitStore = create<KnitwitState>()(
+  persist(
+    (set, get) => ({
+      hasHydrated: false,
+      setHasHydrated: (value) => set({ hasHydrated: value }),
 
-  activeProjectKey: 'meadow',
-  activeSectionIndex: currentSectionIndexOf(SEED_PROJECTS.meadow),
+      materials: SEED_MATERIALS,
+      tools: SEED_TOOLS,
+      patterns: SEED_PATTERNS,
+      projects: SEED_PROJECTS,
 
-  timerKey: null,
-  timerStartedAt: null,
+      activeProjectKey: 'meadow',
+      activeSectionIndex: currentSectionIndexOf(SEED_PROJECTS.meadow),
 
-  dismissedMarkerRow: null,
-  castOffDismissed: false,
-  noteFormOpen: false,
-  noteSeq: 4,
-  materialSeq: 4,
-  toolSeq: 4,
+      timerKey: null,
+      timerStartedAt: null,
 
-  saveMaterial: (id, data) => {
-    const { materials, materialSeq } = get();
-    const resolvedId = id ?? `m${materialSeq}`;
-    set({
-      materials: { ...materials, [resolvedId]: data },
-      materialSeq: id ? materialSeq : materialSeq + 1,
-    });
-    return resolvedId;
-  },
-
-  deleteMaterial: (id) => {
-    const { materials, projects } = get();
-    const nextMaterials = { ...materials };
-    delete nextMaterials[id];
-    const nextProjects = Object.fromEntries(
-      Object.entries(projects).map(([key, p]) => [
-        key,
-        {
-          ...p,
-          sections: p.sections.map((s) =>
-            s.materialId === id ? { ...s, materialId: null } : s,
-          ),
-        },
-      ]),
-    );
-    set({ materials: nextMaterials, projects: nextProjects });
-  },
-
-  saveTool: (id, data) => {
-    const { tools, toolSeq } = get();
-    const resolvedId = id ?? `t${toolSeq}`;
-    set({
-      tools: { ...tools, [resolvedId]: data },
-      toolSeq: id ? toolSeq : toolSeq + 1,
-    });
-    return resolvedId;
-  },
-
-  deleteTool: (id) => {
-    const { tools, projects } = get();
-    const nextTools = { ...tools };
-    delete nextTools[id];
-    const nextProjects = Object.fromEntries(
-      Object.entries(projects).map(([key, p]) => [
-        key,
-        {
-          ...p,
-          sections: p.sections.map((s) => (s.toolId === id ? { ...s, toolId: null } : s)),
-        },
-      ]),
-    );
-    set({ tools: nextTools, projects: nextProjects });
-  },
-
-  setActiveSection: (projectKey, sectionIndex) => {
-    const { projects } = get();
-    set({
-      activeProjectKey: projectKey,
-      activeSectionIndex: clampSectionIndex(projects, projectKey, sectionIndex),
       dismissedMarkerRow: null,
       castOffDismissed: false,
       noteFormOpen: false,
-    });
-  },
+      noteSeq: 4,
+      materialSeq: 4,
+      toolSeq: 4,
 
-  changeRow: (delta) => {
-    const { projects, activeProjectKey, activeSectionIndex, dismissedMarkerRow } = get();
-    const section = projects[activeProjectKey].sections[activeSectionIndex];
-    const nextRow = Math.min(section.totalRows, Math.max(0, section.row + delta));
-    set({
-      projects: {
-        ...projects,
-        [activeProjectKey]: {
-          ...projects[activeProjectKey],
-          sections: projects[activeProjectKey].sections.map((s, i) =>
-            i === activeSectionIndex ? { ...s, row: nextRow } : s,
-          ),
-        },
+      saveMaterial: (id, data) => {
+        const { materials, materialSeq } = get();
+        const resolvedId = id ?? `m${materialSeq}`;
+        set({
+          materials: { ...materials, [resolvedId]: data },
+          materialSeq: id ? materialSeq : materialSeq + 1,
+        });
+        return resolvedId;
       },
-      dismissedMarkerRow: nextRow === dismissedMarkerRow ? dismissedMarkerRow : null,
-    });
-    get().ensureTimerRunning();
-  },
 
-  toggleTimer: () => {
-    const { timerKey, activeProjectKey, activeSectionIndex } = get();
-    const key = `${activeProjectKey}|${activeSectionIndex}`;
-    if (timerKey === key) {
-      get().stopTimer();
-    } else {
-      get().stopTimer();
-      set({ timerKey: key, timerStartedAt: Date.now() });
-    }
-  },
-
-  ensureTimerRunning: () => {
-    const { timerKey, activeProjectKey, activeSectionIndex } = get();
-    const key = `${activeProjectKey}|${activeSectionIndex}`;
-    if (timerKey !== key) {
-      set({ timerKey: key, timerStartedAt: Date.now() });
-    }
-  },
-
-  stopTimer: () => {
-    const { timerKey, timerStartedAt, projects } = get();
-    if (!timerKey || !timerStartedAt) {
-      set({ timerKey: null, timerStartedAt: null });
-      return;
-    }
-    const [projectKey, indexStr] = timerKey.split('|');
-    const index = Number(indexStr);
-    const elapsed = Math.round((Date.now() - timerStartedAt) / 1000);
-    set({
-      projects: {
-        ...projects,
-        [projectKey]: {
-          ...projects[projectKey],
-          sections: projects[projectKey].sections.map((s, i) =>
-            i === index ? { ...s, seconds: (s.seconds || 0) + elapsed } : s,
-          ),
-        },
+      deleteMaterial: (id) => {
+        const { materials, projects } = get();
+        const nextMaterials = { ...materials };
+        delete nextMaterials[id];
+        const nextProjects = Object.fromEntries(
+          Object.entries(projects).map(([key, p]) => [
+            key,
+            {
+              ...p,
+              sections: p.sections.map((s) =>
+                s.materialId === id ? { ...s, materialId: null } : s,
+              ),
+            },
+          ]),
+        );
+        set({ materials: nextMaterials, projects: nextProjects });
       },
-      timerKey: null,
-      timerStartedAt: null,
-    });
-  },
 
-  confirmMarker: () => {
-    const { projects, activeProjectKey, activeSectionIndex } = get();
-    const section = projects[activeProjectKey].sections[activeSectionIndex];
-    set({ dismissedMarkerRow: section.row });
-    get().ensureTimerRunning();
-  },
-
-  dismissMarker: () => {
-    const { projects, activeProjectKey, activeSectionIndex } = get();
-    set({ dismissedMarkerRow: projects[activeProjectKey].sections[activeSectionIndex].row });
-  },
-
-  dismissCastOff: () => set({ castOffDismissed: true }),
-
-  confirmCastOff: () => {
-    const { projects, activeProjectKey, activeSectionIndex } = get();
-    set({
-      projects: {
-        ...projects,
-        [activeProjectKey]: {
-          ...projects[activeProjectKey],
-          sections: projects[activeProjectKey].sections.map((s, i) =>
-            i === activeSectionIndex ? { ...s, complete: true } : s,
-          ),
-        },
+      saveTool: (id, data) => {
+        const { tools, toolSeq } = get();
+        const resolvedId = id ?? `t${toolSeq}`;
+        set({
+          tools: { ...tools, [resolvedId]: data },
+          toolSeq: id ? toolSeq : toolSeq + 1,
+        });
+        return resolvedId;
       },
-    });
-    get().stopTimer();
-  },
 
-  openNoteForm: () => set({ noteFormOpen: true }),
-  closeNoteForm: () => set({ noteFormOpen: false }),
-
-  saveNote: (row, text) => {
-    if (!text.trim()) return;
-    const { projects, activeProjectKey, activeSectionIndex, noteSeq } = get();
-    set({
-      projects: {
-        ...projects,
-        [activeProjectKey]: {
-          ...projects[activeProjectKey],
-          sections: projects[activeProjectKey].sections.map((s, i) =>
-            i === activeSectionIndex
-              ? { ...s, notes: [...s.notes, { id: noteSeq, row, text }] }
-              : s,
-          ),
-        },
+      deleteTool: (id) => {
+        const { tools, projects } = get();
+        const nextTools = { ...tools };
+        delete nextTools[id];
+        const nextProjects = Object.fromEntries(
+          Object.entries(projects).map(([key, p]) => [
+            key,
+            {
+              ...p,
+              sections: p.sections.map((s) => (s.toolId === id ? { ...s, toolId: null } : s)),
+            },
+          ]),
+        );
+        set({ tools: nextTools, projects: nextProjects });
       },
-      noteSeq: noteSeq + 1,
-      noteFormOpen: false,
-    });
-  },
 
-  toggleFavorite: (patternId) => {
-    const { patterns } = get();
-    set({
-      patterns: {
-        ...patterns,
-        [patternId]: { ...patterns[patternId], favorited: !patterns[patternId].favorited },
+      setActiveSection: (projectKey, sectionIndex) => {
+        const { projects } = get();
+        set({
+          activeProjectKey: projectKey,
+          activeSectionIndex: clampSectionIndex(projects, projectKey, sectionIndex),
+          dismissedMarkerRow: null,
+          castOffDismissed: false,
+          noteFormOpen: false,
+        });
       },
-    });
-  },
-}));
+
+      changeRow: (delta) => {
+        const { projects, activeProjectKey, activeSectionIndex, dismissedMarkerRow } = get();
+        const section = projects[activeProjectKey].sections[activeSectionIndex];
+        const nextRow = Math.min(section.totalRows, Math.max(0, section.row + delta));
+        set({
+          projects: {
+            ...projects,
+            [activeProjectKey]: {
+              ...projects[activeProjectKey],
+              sections: projects[activeProjectKey].sections.map((s, i) =>
+                i === activeSectionIndex ? { ...s, row: nextRow } : s,
+              ),
+            },
+          },
+          dismissedMarkerRow: nextRow === dismissedMarkerRow ? dismissedMarkerRow : null,
+        });
+        get().ensureTimerRunning();
+      },
+
+      toggleTimer: () => {
+        const { timerKey, activeProjectKey, activeSectionIndex } = get();
+        const key = `${activeProjectKey}|${activeSectionIndex}`;
+        if (timerKey === key) {
+          get().stopTimer();
+        } else {
+          get().stopTimer();
+          set({ timerKey: key, timerStartedAt: Date.now() });
+        }
+      },
+
+      ensureTimerRunning: () => {
+        const { timerKey, activeProjectKey, activeSectionIndex } = get();
+        const key = `${activeProjectKey}|${activeSectionIndex}`;
+        if (timerKey !== key) {
+          set({ timerKey: key, timerStartedAt: Date.now() });
+        }
+      },
+
+      stopTimer: () => {
+        const { timerKey, timerStartedAt, projects } = get();
+        if (!timerKey || !timerStartedAt) {
+          set({ timerKey: null, timerStartedAt: null });
+          return;
+        }
+        const [projectKey, indexStr] = timerKey.split('|');
+        const index = Number(indexStr);
+        const elapsed = Math.round((Date.now() - timerStartedAt) / 1000);
+        set({
+          projects: {
+            ...projects,
+            [projectKey]: {
+              ...projects[projectKey],
+              sections: projects[projectKey].sections.map((s, i) =>
+                i === index ? { ...s, seconds: (s.seconds || 0) + elapsed } : s,
+              ),
+            },
+          },
+          timerKey: null,
+          timerStartedAt: null,
+        });
+      },
+
+      confirmMarker: () => {
+        const { projects, activeProjectKey, activeSectionIndex } = get();
+        const section = projects[activeProjectKey].sections[activeSectionIndex];
+        set({ dismissedMarkerRow: section.row });
+        get().ensureTimerRunning();
+      },
+
+      dismissMarker: () => {
+        const { projects, activeProjectKey, activeSectionIndex } = get();
+        set({ dismissedMarkerRow: projects[activeProjectKey].sections[activeSectionIndex].row });
+      },
+
+      dismissCastOff: () => set({ castOffDismissed: true }),
+
+      confirmCastOff: () => {
+        const { projects, activeProjectKey, activeSectionIndex } = get();
+        set({
+          projects: {
+            ...projects,
+            [activeProjectKey]: {
+              ...projects[activeProjectKey],
+              sections: projects[activeProjectKey].sections.map((s, i) =>
+                i === activeSectionIndex ? { ...s, complete: true } : s,
+              ),
+            },
+          },
+        });
+        get().stopTimer();
+      },
+
+      openNoteForm: () => set({ noteFormOpen: true }),
+      closeNoteForm: () => set({ noteFormOpen: false }),
+
+      saveNote: (row, text) => {
+        if (!text.trim()) return;
+        const { projects, activeProjectKey, activeSectionIndex, noteSeq } = get();
+        set({
+          projects: {
+            ...projects,
+            [activeProjectKey]: {
+              ...projects[activeProjectKey],
+              sections: projects[activeProjectKey].sections.map((s, i) =>
+                i === activeSectionIndex
+                  ? { ...s, notes: [...s.notes, { id: noteSeq, row, text }] }
+                  : s,
+              ),
+            },
+          },
+          noteSeq: noteSeq + 1,
+          noteFormOpen: false,
+        });
+      },
+
+      toggleFavorite: (patternId) => {
+        const { patterns } = get();
+        set({
+          patterns: {
+            ...patterns,
+            [patternId]: { ...patterns[patternId], favorited: !patterns[patternId].favorited },
+          },
+        });
+      },
+    }),
+    {
+      name: 'knitwit-store',
+      version: 1,
+      storage: createJSONStorage(() => AsyncStorage),
+
+      // Only the user's actual data is written to disk. Everything omitted here is transient
+      // UI state that should start fresh on each launch.
+      //
+      // The running timer (timerKey/timerStartedAt) is deliberately NOT persisted. Restoring it
+      // would mean an app closed overnight with the timer running silently credits hours of
+      // "knitting time" that never happened — corrupting the one number the timer exists to
+      // report. Undercounting an interrupted session is the safer failure. Accumulated time
+      // already banked into section.seconds does persist.
+      partialize: (state) => ({
+        materials: state.materials,
+        tools: state.tools,
+        patterns: state.patterns,
+        projects: state.projects,
+        activeProjectKey: state.activeProjectKey,
+        activeSectionIndex: state.activeSectionIndex,
+        noteSeq: state.noteSeq,
+        materialSeq: state.materialSeq,
+        toolSeq: state.toolSeq,
+      }),
+
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    },
+  ),
+);
