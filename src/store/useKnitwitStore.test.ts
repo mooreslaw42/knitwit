@@ -149,3 +149,58 @@ describe('notes', () => {
     expect(activeSection().notes.length).toBe(before);
   });
 });
+
+describe('createProject', () => {
+  it('adds a countable project and leaves it at row zero', () => {
+    const key = useKnitwitStore.getState().createProject({
+      name: 'Summer Tee',
+      started: 'Started Aug 19',
+      patternId: null,
+      totalRows: 40,
+    });
+    const p = useKnitwitStore.getState().projects[key];
+    expect(p.name).toBe('Summer Tee');
+    expect(p.sections).toHaveLength(1);
+    expect(p.sections[0]).toMatchObject({ totalRows: 40, row: 0, complete: false });
+  });
+
+  it('takes its colour from the linked pattern, and stays neutral without one', () => {
+    const withPattern = useKnitwitStore.getState().createProject({
+      name: 'A',
+      started: '',
+      patternId: 'p1',
+      totalRows: 10,
+    });
+    const improvised = useKnitwitStore.getState().createProject({
+      name: 'B',
+      started: '',
+      patternId: null,
+      totalRows: 10,
+    });
+    const projects = useKnitwitStore.getState().projects;
+    expect(projects[withPattern].color).toBe(useKnitwitStore.getState().patterns.p1.accentColor);
+    expect(projects[improvised].color).toBe('#F7EBDD');
+  });
+
+  it('falls back to placeholder text rather than saving an empty name', () => {
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: '   ', started: '  ', patternId: null, totalRows: 0 });
+    const p = useKnitwitStore.getState().projects[key];
+    expect(p.name).toBe('Untitled project');
+    expect(p.started).toBe('Just cast on');
+    // A zero-row section would be uncountable, so it must be coerced to a usable default.
+    expect(p.sections[0].totalRows).toBe(60);
+  });
+
+  it('gives each project a distinct key', () => {
+    const a = useKnitwitStore
+      .getState()
+      .createProject({ name: 'A', started: '', patternId: null, totalRows: 10 });
+    const b = useKnitwitStore
+      .getState()
+      .createProject({ name: 'B', started: '', patternId: null, totalRows: 10 });
+    expect(a).not.toBe(b);
+    expect(Object.keys(useKnitwitStore.getState().projects)).toContain(b);
+  });
+});

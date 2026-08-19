@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { SEED_MATERIALS, SEED_PATTERNS, SEED_PROJECTS, SEED_TOOLS } from '@/data/seed';
-import { currentSectionIndexOf } from '@/lib/knitwit-helpers';
+import { currentSectionIndexOf, deriveProjectColors } from '@/lib/knitwit-helpers';
 import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
 
 type KnitwitState = {
@@ -29,6 +29,14 @@ type KnitwitState = {
   noteSeq: number;
   materialSeq: number;
   toolSeq: number;
+  projectSeq: number;
+
+  createProject: (draft: {
+    name: string;
+    started: string;
+    patternId: string | null;
+    totalRows: number;
+  }) => string;
 
   saveMaterial: (id: string | null, data: Material) => string;
   deleteMaterial: (id: string) => void;
@@ -80,6 +88,45 @@ export const useKnitwitStore = create<KnitwitState>()(
       noteSeq: 4,
       materialSeq: 4,
       toolSeq: 4,
+      projectSeq: 1,
+
+      createProject: ({ name, started, patternId, totalRows }) => {
+        const { projects, patterns, projectSeq } = get();
+        const key = `proj${projectSeq}`;
+        const accent = patternId ? (patterns[patternId]?.accentColor ?? null) : null;
+
+        // The original seeds one section per pattern section when a pattern is linked. That
+        // needs the pattern engine (expansionFor), which is not ported yet, so every project
+        // starts with a single countable section regardless — the same shape the original
+        // produces when improvising without a pattern.
+        set({
+          projects: {
+            ...projects,
+            [key]: {
+              name: name.trim() || 'Untitled project',
+              started: started.trim() || 'Just cast on',
+              photo: null,
+              ...deriveProjectColors(accent),
+              patternId,
+              sections: [
+                {
+                  name: 'Main',
+                  totalRows: Math.max(1, totalRows || 60),
+                  row: 0,
+                  complete: false,
+                  seconds: 0,
+                  notes: [],
+                  materialId: null,
+                  toolId: null,
+                  markers: [],
+                },
+              ],
+            },
+          },
+          projectSeq: projectSeq + 1,
+        });
+        return key;
+      },
 
       saveMaterial: (id, data) => {
         const { materials, materialSeq } = get();
@@ -294,6 +341,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         noteSeq: state.noteSeq,
         materialSeq: state.materialSeq,
         toolSeq: state.toolSeq,
+        projectSeq: state.projectSeq,
       }),
 
       onRehydrateStorage: () => (state) => {

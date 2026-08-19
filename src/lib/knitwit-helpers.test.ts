@@ -1,8 +1,11 @@
 import {
   currentSectionIndexOf,
+  darken,
+  deriveProjectColors,
   formatClock,
   projectProgress,
   sectionStatus,
+  todayStarted,
 } from '@/lib/knitwit-helpers';
 import type { Project, ProjectSection } from '@/types/knitwit';
 
@@ -102,5 +105,36 @@ describe('currentSectionIndexOf', () => {
   it('falls back to the last section when everything is done', () => {
     const p = project([section({ complete: true }), section({ complete: true })]);
     expect(currentSectionIndexOf(p)).toBe(1);
+  });
+});
+
+describe('darken', () => {
+  it('scales each channel toward black', () => {
+    expect(darken('#FFFFFF', 0.5)).toBe('#808080');
+    expect(darken('#000000', 0.5)).toBe('#000000');
+  });
+
+  it('falls back to the neutral deep colour for anything that is not a 6-digit hex', () => {
+    expect(darken('nonsense')).toBe('#8A7873');
+    expect(darken('#FFF')).toBe('#8A7873');
+  });
+});
+
+describe('deriveProjectColors', () => {
+  it('takes its colour from the pattern accent', () => {
+    const { color, colorDeep } = deriveProjectColors('#F4C6D3');
+    expect(color).toBe('#F4C6D3');
+    expect(colorDeep).not.toBe('#F4C6D3'); // visibly deeper, for the progress bar
+  });
+
+  it('is neutral when improvising without a pattern', () => {
+    expect(deriveProjectColors(null)).toEqual({ color: '#F7EBDD', colorDeep: '#8A7873' });
+  });
+});
+
+describe('todayStarted', () => {
+  it('formats as the seeded projects do', () => {
+    expect(todayStarted(new Date(2026, 5, 14))).toBe('Started Jun 14');
+    expect(todayStarted(new Date(2026, 0, 1))).toBe('Started Jan 1');
   });
 });

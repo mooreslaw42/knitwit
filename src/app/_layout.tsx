@@ -53,6 +53,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: Colors.cream },
         }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="project/new" options={{ headerShown: false }} />
         <Stack.Screen name="project/[key]/index" options={{ headerShown: true, title: '' }} />
         <Stack.Screen
           name="project/[key]/section/[index]"

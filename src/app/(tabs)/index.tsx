@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, ProgressBar } from '@/components/knitwit-ui';
+import { Card, PillButton, ProgressBar } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -32,9 +32,14 @@ export default function HomeScreen() {
             <MiniStat num={doneCount} label="Done" />
           </View>
 
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Your projects
-          </ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="subtitle">Your projects</ThemedText>
+            <PillButton style={styles.newBtn} onPress={() => router.push('/project/new')}>
+              <ThemedText type="smallBold" themeColor="white">
+                + New project
+              </ThemedText>
+            </PillButton>
+          </View>
 
           <View style={styles.projList}>
             {entries.map(([key, p]) => {
@@ -118,8 +123,16 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 26,
   },
-  sectionTitle: {
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
     marginTop: Spacing.two,
+  },
+  newBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   projList: {
     gap: Spacing.two,
