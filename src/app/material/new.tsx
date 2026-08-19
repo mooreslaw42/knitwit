@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ChipPicker, FormField, PillButton } from '@/components/knitwit-ui';
+import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
@@ -151,7 +151,7 @@ export default function NewMaterialWizardScreen() {
                 onChangeText={(v) => set('composition', v)}
                 placeholder="e.g. 100% wool, or 80/20 wool/nylon"
               />
-              <ChipPicker
+              <SelectField
                 label="Yarn weight"
                 options={WEIGHT_OPTIONS}
                 value={form.weight}
@@ -180,7 +180,7 @@ export default function NewMaterialWizardScreen() {
               <ThemedText type="small" themeColor="inkSoft">
                 Worth recording now — the ball band tends to go missing.
               </ThemedText>
-              <ChipPicker
+              <SelectField
                 label="Washing"
                 options={WASHING_OPTIONS}
                 value={form.washing}
@@ -208,7 +208,7 @@ export default function NewMaterialWizardScreen() {
               <ThemedText type="small" themeColor="inkSoft">
                 Record a gauge for the craft you use.
               </ThemedText>
-              <ChipPicker
+              <SelectField
                 label="Craft"
                 options={CRAFT_OPTIONS}
                 value={form.craftType}

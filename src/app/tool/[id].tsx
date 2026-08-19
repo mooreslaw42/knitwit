@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ChipPicker, DeleteButton, FormField, PillButton } from '@/components/knitwit-ui';
+import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
@@ -49,7 +49,7 @@ export default function ToolEditScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">{isNew ? 'New tool' : 'Edit tool'}</ThemedText>
 
-          <ChipPicker
+          <SelectField
             label="Type"
             options={TYPE_OPTIONS}
             value={form.type}

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ChipPicker, DeleteButton, FormField, PillButton } from '@/components/knitwit-ui';
+import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
@@ -87,7 +87,7 @@ export default function MaterialEditScreen() {
             onChangeText={(v) => set('composition', v)}
             placeholder="e.g. 100% merino wool"
           />
-          <ChipPicker
+          <SelectField
             label="Yarn weight"
             options={WEIGHT_OPTIONS}
             value={form.weight}
@@ -105,7 +105,7 @@ export default function MaterialEditScreen() {
             onChangeText={(v) => set('meters', v)}
             keyboardType="numeric"
           />
-          <ChipPicker
+          <SelectField
             label="Craft"
             options={CRAFT_OPTIONS}
             value={form.craftType}
@@ -129,7 +129,7 @@ export default function MaterialEditScreen() {
             onChangeText={(v) => set('gaugeRows', v)}
             keyboardType="numeric"
           />
-          <ChipPicker
+          <SelectField
             label="Washing"
             options={WASHING_OPTIONS}
             value={form.washing}

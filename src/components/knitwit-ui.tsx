@@ -1,6 +1,6 @@
+import { Picker } from '@react-native-picker/picker';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -85,7 +85,7 @@ export function FormField({
   );
 }
 
-export function ChipPicker<T extends string>({
+export function SelectField<T extends string>({
   label,
   options,
   value,
@@ -101,23 +101,17 @@ export function ChipPicker<T extends string>({
       <ThemedText type="smallBold" themeColor="inkSoft">
         {label}
       </ThemedText>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.chipRow}>
-          {options.map((opt) => {
-            const active = opt.value === value;
-            return (
-              <Pressable
-                key={opt.value}
-                onPress={() => onChange(opt.value)}
-                style={[styles.chip, active && styles.chipActive]}>
-                <ThemedText type="smallBold" themeColor={active ? 'white' : 'inkSoft'}>
-                  {opt.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
+      <View style={styles.selectBox}>
+        <Picker<T>
+          selectedValue={value}
+          onValueChange={onChange}
+          style={styles.select}
+          itemStyle={styles.selectItem}>
+          {options.map((opt) => (
+            <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+          ))}
+        </Picker>
+      </View>
     </View>
   );
 }
@@ -185,18 +179,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.ink,
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  chip: {
+  selectBox: {
     backgroundColor: Colors.white,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    borderRadius: Radii.medium,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
-  chipActive: {
-    backgroundColor: Colors.blushDeep,
+  select: {
+    backgroundColor: Colors.white,
+    color: Colors.ink,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 15,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderWidth: 0,
+  },
+  selectItem: {
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 15,
+    color: Colors.ink,
   },
   deleteBtn: {
     alignSelf: 'flex-start',
