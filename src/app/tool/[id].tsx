@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,16 +25,19 @@ export default function ToolEditScreen() {
   const existing = useKnitwitStore((state) => (isNew ? null : state.tools[id]));
   const saveTool = useKnitwitStore((state) => state.saveTool);
   const deleteTool = useKnitwitStore((state) => state.deleteTool);
-  const activeUsage = useKnitwitStore((state) =>
-    isNew
-      ? []
-      : Object.entries(state.projects).flatMap(([, p]) =>
-          p.sections.filter((s) => s.toolId === id && !s.complete).map((s) => ({
-            projectName: p.name,
-            sectionName: s.name,
-          })),
-        ),
-  );
+  // Select the raw store slice (a stable reference) and derive the list in a
+  // plain useMemo, rather than returning a freshly-computed array straight from
+  // the Zustand selector — the latter breaks useSyncExternalStore's snapshot
+  // caching and causes an infinite render loop.
+  const projects = useKnitwitStore((state) => state.projects);
+  const activeUsage = useMemo(() => {
+    if (isNew) return [];
+    return Object.values(projects).flatMap((p) =>
+      p.sections
+        .filter((s) => s.toolId === id && !s.complete)
+        .map((s) => ({ projectName: p.name, sectionName: s.name })),
+    );
+  }, [isNew, projects, id]);
 
   const [form, setForm] = useState<Tool>(existing ?? BLANK);
   const set = <K extends keyof Tool>(key: K, value: Tool[K]) =>
