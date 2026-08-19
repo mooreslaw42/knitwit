@@ -15,7 +15,8 @@ export default function CounterScreen() {
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
   const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const project = useKnitwitStore((state) => state.projects[activeProjectKey]);
-  const section = project.sections[activeSectionIndex];
+  // Every project can be deleted, which leaves nothing to count.
+  const section = project?.sections[activeSectionIndex];
 
   const dismissedMarkerRow = useKnitwitStore((state) => state.dismissedMarkerRow);
   const castOffDismissed = useKnitwitStore((state) => state.castOffDismissed);
@@ -36,6 +37,21 @@ export default function CounterScreen() {
   const liveSeconds = useLiveSeconds(activeProjectKey, activeSectionIndex);
 
   const [noteText, setNoteText] = useState('');
+
+  if (!project || !section) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <ThemedText type="subtitle" style={styles.emptyTitle}>
+            Nothing to count yet
+          </ThemedText>
+          <ThemedText type="small" themeColor="inkSoft" style={styles.centerText}>
+            Start a project from the Home tab, then come back here to count your rows.
+          </ThemedText>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
 
   const atMarker =
     !noteFormOpen &&
@@ -356,6 +372,10 @@ const styles = StyleSheet.create({
   },
   centerText: {
     textAlign: 'center',
+  },
+  emptyTitle: {
+    textAlign: 'center',
+    marginTop: Spacing.six,
   },
   noteInput: {
     backgroundColor: Colors.cream,

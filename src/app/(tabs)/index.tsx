@@ -41,6 +41,15 @@ export default function HomeScreen() {
             </PillButton>
           </View>
 
+          {entries.length === 0 && (
+            <Card style={styles.emptyCard}>
+              <ThemedText type="smallBold">No projects yet</ThemedText>
+              <ThemedText type="small" themeColor="inkSoft">
+                Tap “+ New project” to cast on your first one.
+              </ThemedText>
+            </Card>
+          )}
+
           <View style={styles.projList}>
             {entries.map(([key, p]) => {
               const pct = projectProgress(p).pct;
@@ -133,6 +142,9 @@ const styles = StyleSheet.create({
   newBtn: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  emptyCard: {
+    gap: Spacing.one,
   },
   projList: {
     gap: Spacing.two,

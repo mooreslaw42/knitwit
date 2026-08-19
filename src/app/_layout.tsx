@@ -55,6 +55,11 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="project/new" options={{ headerShown: false }} />
         <Stack.Screen name="project/[key]/index" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="project/[key]/edit" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen
+          name="project/[key]/section/new"
+          options={{ headerShown: true, title: '' }}
+        />
         <Stack.Screen
           name="project/[key]/section/[index]"
           options={{ headerShown: true, title: '' }}

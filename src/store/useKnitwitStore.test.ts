@@ -204,3 +204,88 @@ describe('createProject', () => {
     expect(Object.keys(useKnitwitStore.getState().projects)).toContain(b);
   });
 });
+
+describe('updateProject', () => {
+  it('moves the colour with the pattern when relinking', () => {
+    const patterns = useKnitwitStore.getState().patterns;
+    useKnitwitStore
+      .getState()
+      .updateProject('clover', { name: 'Clover', started: 'x', patternId: 'p2' });
+    expect(useKnitwitStore.getState().projects.clover.color).toBe(patterns.p2.accentColor);
+
+    useKnitwitStore
+      .getState()
+      .updateProject('clover', { name: 'Clover', started: 'x', patternId: null });
+    expect(useKnitwitStore.getState().projects.clover.color).toBe('#F7EBDD');
+  });
+
+  it('keeps sections and their progress untouched', () => {
+    const before = useKnitwitStore.getState().projects.clover.sections;
+    useKnitwitStore
+      .getState()
+      .updateProject('clover', { name: 'Renamed', started: 'x', patternId: null });
+    expect(useKnitwitStore.getState().projects.clover.sections).toEqual(before);
+  });
+});
+
+describe('deleteProject', () => {
+  it('moves the active project on so the counter has something to read', () => {
+    useKnitwitStore.getState().setActiveSection('clover', 0);
+    useKnitwitStore.getState().deleteProject('clover');
+    expect(useKnitwitStore.getState().projects.clover).toBeUndefined();
+    const { activeProjectKey, projects } = useKnitwitStore.getState();
+    expect(Object.keys(projects)).toContain(activeProjectKey);
+  });
+
+  it('stops a timer belonging to the deleted project', () => {
+    useKnitwitStore.getState().setActiveSection('clover', 0);
+    useKnitwitStore.getState().toggleTimer();
+    expect(useKnitwitStore.getState().timerKey).toBe('clover|0');
+    useKnitwitStore.getState().deleteProject('clover');
+    expect(useKnitwitStore.getState().timerKey).toBeNull();
+  });
+
+  it('survives deleting every project', () => {
+    Object.keys(useKnitwitStore.getState().projects).forEach((k) =>
+      useKnitwitStore.getState().deleteProject(k),
+    );
+    expect(useKnitwitStore.getState().projects).toEqual({});
+    expect(useKnitwitStore.getState().activeProjectKey).toBe('');
+  });
+});
+
+describe('sections', () => {
+  it('adds a section at row zero', () => {
+    useKnitwitStore.getState().addSection('clover', { name: 'Border', totalRows: 12 });
+    const sections = useKnitwitStore.getState().projects.clover.sections;
+    expect(sections.at(-1)).toMatchObject({ name: 'Border', totalRows: 12, row: 0 });
+  });
+
+  it('names an unnamed section rather than leaving it blank', () => {
+    useKnitwitStore.getState().addSection('clover', { name: '  ', totalRows: 5 });
+    expect(useKnitwitStore.getState().projects.clover.sections.at(-1)!.name).toBe('Section 2');
+  });
+
+  it('pulls progress back when a section is shortened below the current row', () => {
+    // clover's only section sits at row 31 of 60.
+    useKnitwitStore.getState().updateSection('clover', 0, { name: 'Cable panel', totalRows: 20 });
+    const s = useKnitwitStore.getState().projects.clover.sections[0];
+    expect(s.totalRows).toBe(20);
+    expect(s.row).toBe(20); // never "row 31 of 20"
+  });
+
+  it('refuses to delete the last section, since a project must have something to count', () => {
+    expect(useKnitwitStore.getState().projects.clover.sections).toHaveLength(1);
+    useKnitwitStore.getState().deleteSection('clover', 0);
+    expect(useKnitwitStore.getState().projects.clover.sections).toHaveLength(1);
+  });
+
+  it('keeps the active section pointing at the same work when an earlier one is removed', () => {
+    // meadow has two sections; sit on the second, then delete the first.
+    useKnitwitStore.getState().setActiveSection('meadow', 1);
+    const target = useKnitwitStore.getState().projects.meadow.sections[1];
+    useKnitwitStore.getState().deleteSection('meadow', 0);
+    const { activeSectionIndex, projects } = useKnitwitStore.getState();
+    expect(projects.meadow.sections[activeSectionIndex].name).toBe(target.name);
+  });
+});

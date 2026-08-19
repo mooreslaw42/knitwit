@@ -37,6 +37,19 @@ type KnitwitState = {
     patternId: string | null;
     totalRows: number;
   }) => string;
+  updateProject: (
+    key: string,
+    patch: { name: string; started: string; patternId: string | null },
+  ) => void;
+  deleteProject: (key: string) => void;
+
+  addSection: (projectKey: string, draft: { name: string; totalRows: number }) => void;
+  updateSection: (
+    projectKey: string,
+    index: number,
+    patch: { name: string; totalRows: number },
+  ) => void;
+  deleteSection: (projectKey: string, index: number) => void;
 
   saveMaterial: (id: string | null, data: Material) => string;
   deleteMaterial: (id: string) => void;
@@ -126,6 +139,121 @@ export const useKnitwitStore = create<KnitwitState>()(
           projectSeq: projectSeq + 1,
         });
         return key;
+      },
+
+      updateProject: (key, { name, started, patternId }) => {
+        const { projects, patterns } = get();
+        const project = projects[key];
+        if (!project) return;
+        const accent = patternId ? (patterns[patternId]?.accentColor ?? null) : null;
+        set({
+          projects: {
+            ...projects,
+            [key]: {
+              ...project,
+              name: name.trim() || 'Untitled project',
+              started: started.trim() || 'Just cast on',
+              patternId,
+              // Re-derive rather than keep the old colour: the project is colour-coded by the
+              // pattern it is knitting, so relinking has to move the colour with it.
+              ...deriveProjectColors(accent),
+            },
+          },
+        });
+      },
+
+      deleteProject: (key) => {
+        const { projects, activeProjectKey, timerKey } = get();
+        // A timer belonging to the deleted project has nowhere to bank its time.
+        if (timerKey?.startsWith(`${key}|`)) set({ timerKey: null, timerStartedAt: null });
+
+        const nextProjects = { ...projects };
+        delete nextProjects[key];
+        const patch: Partial<KnitwitState> = { projects: nextProjects };
+
+        if (activeProjectKey === key) {
+          // Counting screens read projects[activeProjectKey]; leaving it dangling would
+          // crash them, so move to whatever project remains.
+          patch.activeProjectKey = Object.keys(nextProjects)[0] ?? '';
+          patch.activeSectionIndex = 0;
+        }
+        set(patch);
+      },
+
+      addSection: (projectKey, { name, totalRows }) => {
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (!project) return;
+        set({
+          projects: {
+            ...projects,
+            [projectKey]: {
+              ...project,
+              sections: [
+                ...project.sections,
+                {
+                  name: name.trim() || `Section ${project.sections.length + 1}`,
+                  totalRows: Math.max(1, totalRows || 1),
+                  row: 0,
+                  complete: false,
+                  seconds: 0,
+                  notes: [],
+                  materialId: null,
+                  toolId: null,
+                  markers: [],
+                },
+              ],
+            },
+          },
+        });
+      },
+
+      updateSection: (projectKey, index, { name, totalRows }) => {
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (!project?.sections[index]) return;
+        const nextTotal = Math.max(1, totalRows || 1);
+        set({
+          projects: {
+            ...projects,
+            [projectKey]: {
+              ...project,
+              sections: project.sections.map((s, i) =>
+                i === index
+                  ? {
+                      ...s,
+                      name: name.trim() || s.name,
+                      totalRows: nextTotal,
+                      // Shrinking a section below the current row would leave the counter
+                      // reading "row 40 of 20"; pull the progress back to the new end.
+                      row: Math.min(s.row, nextTotal),
+                    }
+                  : s,
+              ),
+            },
+          },
+        });
+      },
+
+      deleteSection: (projectKey, index) => {
+        const { projects, activeProjectKey, activeSectionIndex, timerKey } = get();
+        const project = projects[projectKey];
+        // A project with no sections has nothing to count and breaks every screen that
+        // reads sections[0], so the last one cannot be removed.
+        if (!project || project.sections.length <= 1 || !project.sections[index]) return;
+
+        if (timerKey === `${projectKey}|${index}`) set({ timerKey: null, timerStartedAt: null });
+
+        const nextSections = project.sections.filter((_, i) => i !== index);
+        const patch: Partial<KnitwitState> = {
+          projects: { ...projects, [projectKey]: { ...project, sections: nextSections } },
+        };
+        // Indices shift when an earlier section goes; keep the active one pointing at the
+        // same section rather than silently sliding to its neighbour.
+        if (activeProjectKey === projectKey && activeSectionIndex >= index) {
+          patch.activeSectionIndex = Math.max(0, Math.min(activeSectionIndex - 1, nextSections.length - 1));
+        }
+        set(patch);
       },
 
       saveMaterial: (id, data) => {

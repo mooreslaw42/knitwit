@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
+import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -35,7 +35,12 @@ export default function ProjectDetailScreen() {
               {pct >= 1 ? 'Complete' : 'In progress'}
             </ThemedText>
           </View>
-          <ThemedText type="title">{project.name}</ThemedText>
+          <View style={styles.titleRow}>
+            <ThemedText type="title">{project.name}</ThemedText>
+            <Pressable hitSlop={8} onPress={() => router.push(`/project/${key}/edit`)}>
+              <ThemedText type="default">✎</ThemedText>
+            </Pressable>
+          </View>
           <ThemedText type="default" themeColor="inkSoft">
             {project.started} · {Math.round(pct * 100)}% complete
           </ThemedText>
@@ -56,9 +61,16 @@ export default function ProjectDetailScreen() {
             )}
           </Card>
 
-          <ThemedText type="subtitle" style={styles.sectionsTitle}>
-            Sections
-          </ThemedText>
+          <View style={styles.sectionsHeader}>
+            <ThemedText type="subtitle">Sections</ThemedText>
+            <PillButton
+              style={styles.addBtn}
+              onPress={() => router.push(`/project/${key}/section/new`)}>
+              <ThemedText type="smallBold" themeColor="white">
+                + Add section
+              </ThemedText>
+            </PillButton>
+          </View>
           <View style={styles.sectionsList}>
             {project.sections.map((s, i) => {
               const status = sectionStatus(s);
@@ -116,8 +128,22 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     gap: 2,
   },
-  sectionsTitle: {
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  sectionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
     marginTop: Spacing.three,
+  },
+  addBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   sectionsList: {
     gap: Spacing.two,
