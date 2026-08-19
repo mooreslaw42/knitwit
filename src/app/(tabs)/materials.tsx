@@ -1,7 +1,9 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TOOL_ICONS, TOOL_TYPE_LABELS, yarnWeightLabel } from '@/constants/catalogs';
@@ -9,6 +11,7 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function MaterialsScreen() {
+  const router = useRouter();
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const [view, setView] = useState<'materials' | 'tools'>('materials');
@@ -17,7 +20,16 @@ export default function MaterialsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Materials & tools</ThemedText>
+          <View style={styles.headerRow}>
+            <ThemedText type="title">Materials & tools</ThemedText>
+            <PillButton
+              style={styles.newBtn}
+              onPress={() => router.push(view === 'materials' ? '/material/new' : '/tool/new')}>
+              <ThemedText type="smallBold" themeColor="white">
+                + New {view === 'materials' ? 'material' : 'tool'}
+              </ThemedText>
+            </PillButton>
+          </View>
 
           <View style={styles.segment}>
             <SegButton
@@ -40,7 +52,10 @@ export default function MaterialsScreen() {
                   .filter(Boolean)
                   .join(' · ');
                 return (
-                  <View key={id} style={styles.row}>
+                  <Pressable
+                    key={id}
+                    style={styles.row}
+                    onPress={() => router.push(`/material/${id}`)}>
                     <View style={[styles.thumb, { backgroundColor: Colors.creamDeep }]} />
                     <View style={styles.rowInfo}>
                       <ThemedText type="smallBold">
@@ -50,14 +65,14 @@ export default function MaterialsScreen() {
                         {meta}
                       </ThemedText>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
           ) : (
             <View style={styles.list}>
               {Object.entries(tools).map(([id, t]) => (
-                <View key={id} style={styles.row}>
+                <Pressable key={id} style={styles.row} onPress={() => router.push(`/tool/${id}`)}>
                   <View style={[styles.thumb, styles.iconThumb]}>
                     <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
                   </View>
@@ -69,7 +84,7 @@ export default function MaterialsScreen() {
                       {t.length}
                     </ThemedText>
                   </View>
-                </View>
+                </Pressable>
               ))}
             </View>
           )}
@@ -111,6 +126,16 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     paddingBottom: Spacing.six * 2,
     gap: Spacing.three,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  newBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   segment: {
     flexDirection: 'row',

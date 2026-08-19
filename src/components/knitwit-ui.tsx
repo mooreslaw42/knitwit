@@ -1,7 +1,16 @@
-import { Pressable, StyleSheet, View, type PressableProps, type ViewProps } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+  type PressableProps,
+  type TextInputProps,
+  type ViewProps,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import type { SectionStatus } from '@/types/knitwit';
 
 export function Card({ style, ...props }: ViewProps) {
@@ -57,6 +66,74 @@ export function PillButton({
   );
 }
 
+export function FormField({
+  label,
+  style,
+  ...props
+}: TextInputProps & { label: string }) {
+  return (
+    <View style={styles.field}>
+      <ThemedText type="smallBold" themeColor="inkSoft">
+        {label}
+      </ThemedText>
+      <TextInput
+        placeholderTextColor={Colors.inkSoft}
+        style={[styles.input, style]}
+        {...props}
+      />
+    </View>
+  );
+}
+
+export function ChipPicker<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.field}>
+      <ThemedText type="smallBold" themeColor="inkSoft">
+        {label}
+      </ThemedText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.chipRow}>
+          {options.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => onChange(opt.value)}
+                style={[styles.chip, active && styles.chipActive]}>
+                <ThemedText type="smallBold" themeColor={active ? 'white' : 'inkSoft'}>
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+export function DeleteButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
+      <ThemedText type="smallBold" themeColor="coralDeep">
+        Delete
+      </ThemedText>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.white,
@@ -95,5 +172,34 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  field: {
+    gap: Spacing.one,
+  },
+  input: {
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 15,
+    color: Colors.ink,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  chip: {
+    backgroundColor: Colors.white,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  chipActive: {
+    backgroundColor: Colors.blushDeep,
+  },
+  deleteBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.two,
   },
 });

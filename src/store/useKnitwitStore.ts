@@ -20,6 +20,13 @@ type KnitwitState = {
   castOffDismissed: boolean;
   noteFormOpen: boolean;
   noteSeq: number;
+  materialSeq: number;
+  toolSeq: number;
+
+  saveMaterial: (id: string | null, data: Material) => string;
+  deleteMaterial: (id: string) => void;
+  saveTool: (id: string | null, data: Tool) => string;
+  deleteTool: (id: string) => void;
 
   setActiveSection: (projectKey: string, sectionIndex: number) => void;
   changeRow: (delta: number) => void;
@@ -59,6 +66,62 @@ export const useKnitwitStore = create<KnitwitState>((set, get) => ({
   castOffDismissed: false,
   noteFormOpen: false,
   noteSeq: 4,
+  materialSeq: 4,
+  toolSeq: 4,
+
+  saveMaterial: (id, data) => {
+    const { materials, materialSeq } = get();
+    const resolvedId = id ?? `m${materialSeq}`;
+    set({
+      materials: { ...materials, [resolvedId]: data },
+      materialSeq: id ? materialSeq : materialSeq + 1,
+    });
+    return resolvedId;
+  },
+
+  deleteMaterial: (id) => {
+    const { materials, projects } = get();
+    const nextMaterials = { ...materials };
+    delete nextMaterials[id];
+    const nextProjects = Object.fromEntries(
+      Object.entries(projects).map(([key, p]) => [
+        key,
+        {
+          ...p,
+          sections: p.sections.map((s) =>
+            s.materialId === id ? { ...s, materialId: null } : s,
+          ),
+        },
+      ]),
+    );
+    set({ materials: nextMaterials, projects: nextProjects });
+  },
+
+  saveTool: (id, data) => {
+    const { tools, toolSeq } = get();
+    const resolvedId = id ?? `t${toolSeq}`;
+    set({
+      tools: { ...tools, [resolvedId]: data },
+      toolSeq: id ? toolSeq : toolSeq + 1,
+    });
+    return resolvedId;
+  },
+
+  deleteTool: (id) => {
+    const { tools, projects } = get();
+    const nextTools = { ...tools };
+    delete nextTools[id];
+    const nextProjects = Object.fromEntries(
+      Object.entries(projects).map(([key, p]) => [
+        key,
+        {
+          ...p,
+          sections: p.sections.map((s) => (s.toolId === id ? { ...s, toolId: null } : s)),
+        },
+      ]),
+    );
+    set({ tools: nextTools, projects: nextProjects });
+  },
 
   setActiveSection: (projectKey, sectionIndex) => {
     const { projects } = get();

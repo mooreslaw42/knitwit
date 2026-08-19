@@ -52,6 +52,8 @@ export default function RootLayout() {
           name="project/[key]/section/[index]"
           options={{ headerShown: true, title: '' }}
         />
+        <Stack.Screen name="material/[id]" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="tool/[id]" options={{ headerShown: true, title: '' }} />
       </Stack>
     </ThemeProvider>
   );
