@@ -10,11 +10,11 @@ import {
   Nunito_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/nunito';
-import { DefaultTheme, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
-import AppTabs from '@/components/app-tabs';
+import { Colors } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -41,7 +41,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={DefaultTheme}>
-      <AppTabs />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.cream },
+        }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="project/[key]/index" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen
+          name="project/[key]/section/[index]"
+          options={{ headerShown: true, title: '' }}
+        />
+      </Stack>
     </ThemeProvider>
   );
 }
