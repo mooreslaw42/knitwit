@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +11,7 @@ import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function CounterScreen() {
+  const router = useRouter();
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
   const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const project = useKnitwitStore((state) => state.projects[activeProjectKey]);
@@ -78,12 +80,17 @@ export default function CounterScreen() {
           </Pressable>
         </View>
 
-        <ThemedText type="smallBold" style={styles.label}>
-          {project.name}
-        </ThemedText>
-        <ThemedText type="small" themeColor="inkSoft" style={styles.section}>
-          {section.name}
-        </ThemedText>
+        <Pressable
+          onPress={() => router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)}
+          style={styles.sectionLink}
+          hitSlop={8}>
+          <ThemedText type="smallBold" style={styles.label}>
+            {project.name}
+          </ThemedText>
+          <ThemedText type="small" themeColor="inkSoft" style={styles.section}>
+            {section.name}
+          </ThemedText>
+        </Pressable>
 
         {noteFormOpen && (
           <AlertCard borderColor={Colors.coralDeep} icon="📝" title="Add a note">
@@ -265,12 +272,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
   },
+  sectionLink: {
+    alignItems: 'center',
+    marginBottom: Spacing.three,
+  },
   label: {
     alignSelf: 'center',
   },
   section: {
     alignSelf: 'center',
-    marginBottom: Spacing.three,
   },
   counterArea: {
     alignItems: 'center',
