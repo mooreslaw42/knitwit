@@ -26,8 +26,14 @@ jobs:
           node-version: 24
           cache: npm
 
+      # `npm ci` is the usual choice here, but it hard-fails on this lockfile with
+      # "Missing: @emnapi/core from lock file". Those are optional wasm fallbacks pulled in
+      # transitively by eslint's resolver, and which of them npm records depends on the
+      # platform and npm version that generated the lockfile — so a lock written on macOS
+      # trips `npm ci` on a Linux runner. `npm install` still honours the lockfile, it just
+      # tolerates that platform skew instead of aborting.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
