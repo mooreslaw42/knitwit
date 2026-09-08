@@ -30,8 +30,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local Claude Code settings (machine-specific)
-.claude/
+# Claude Code: settings.json is shared (committed so every Conductor
+# workspace gets the same config); settings.local.json is machine-specific
+.claude/*
+!.claude/settings.json
+
+# Conductor: .conductor/settings.toml is shared, personal overrides are not
+.conductor/settings.local.toml
 
 # local env files
 .env

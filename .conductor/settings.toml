@@ -1,0 +1,22 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Each Conductor workspace is a fresh git worktree, so gitignored files don't
+# come along. Copy the Supabase env files (see .env.example), the machine-local
+# Claude Code permissions, and the Vercel project link into every new workspace.
+file_include_globs = ".env*\n.claude/settings.local.json\n.vercel/**\n"
+
+[scripts]
+# Runs after Conductor creates a workspace: node_modules is gitignored.
+setup = "npm install"
+
+# Expo binds to $CONDUCTOR_PORT, so several workspaces can run side by side.
+run_mode = "concurrent"
+
+[scripts.run.web]
+command = "npx expo start --web --port $CONDUCTOR_PORT"
+default = true
+icon = "play"
+
+[scripts.run.test]
+command = "npm test -- --watch"
+icon = "test-tube"
