@@ -31,6 +31,8 @@ export default function NewProjectWizardScreen() {
   // Chosen mappings from the pattern's generic slots to the user's own stash.
   const [slotMaterials, setSlotMaterials] = useState<Record<string, string>>({});
   const [slotTools, setSlotTools] = useState<Record<string, string>>({});
+  // Which of the pattern's sizes this project is knitted in; every per-size number resolves to it.
+  const [sizeIndex, setSizeIndex] = useState(0);
 
   const selectedPattern = patternId ? patterns[patternId] : null;
   const patternMaterials = selectedPattern?.materials ?? [];
@@ -60,6 +62,7 @@ export default function NewProjectWizardScreen() {
     // The old mappings belonged to a different pattern's slots — clear them.
     setSlotMaterials({});
     setSlotTools({});
+    setSizeIndex(0);
   };
 
   const setSlotMaterial = (slotId: string, value: string) =>
@@ -106,6 +109,7 @@ export default function NewProjectWizardScreen() {
       started,
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
+      sizeIndex,
       slotMaterials,
       slotTools,
     });
@@ -237,6 +241,26 @@ export default function NewProjectWizardScreen() {
                 </View>
               ))}
             </>
+          )}
+
+          {current.id === 'plan' && (selectedPattern?.sizes.length ?? 0) > 1 && (
+            <View style={styles.field}>
+              <ThemedText type="smallBold" themeColor="inkSoft">
+                Which size are you making?
+              </ThemedText>
+              <View style={styles.chipRow}>
+                {selectedPattern?.sizes.map((label, i) => (
+                  <Pressable
+                    key={label + i}
+                    onPress={() => setSizeIndex(i)}
+                    style={[styles.chip, sizeIndex === i && styles.chipOn]}>
+                    <ThemedText type="smallBold" themeColor={sizeIndex === i ? 'white' : 'inkSoft'}>
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           )}
 
           {current.id === 'plan' &&
@@ -401,4 +425,13 @@ const styles = StyleSheet.create({
   nextBtn: {
     marginTop: Spacing.two,
   },
+  field: { gap: Spacing.one },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  chipOn: { backgroundColor: Colors.blushDeep },
 });

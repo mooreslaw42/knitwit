@@ -324,6 +324,7 @@ export const SEED_PROJECTS: Record<string, Project> = {
     color: '#F4C6D3',
     colorDeep: '#E58AA0',
     patternId: 'p1',
+    sizeIndex: 0,
     slotMaterials: { p1m1: 'm1', p1m2: 'm2' },
     slotTools: { p1t1: 't1' },
     sections: [
@@ -368,6 +369,7 @@ export const SEED_PROJECTS: Record<string, Project> = {
     color: '#B9CFAD',
     colorDeep: '#7FA06D',
     patternId: 'p2',
+    sizeIndex: 0,
     slotMaterials: { p2m1: 'm2' },
     slotTools: { p2t1: 't2' },
     sections: [
@@ -408,6 +410,7 @@ export const SEED_PROJECTS: Record<string, Project> = {
     color: '#D9C9EA',
     colorDeep: '#A985CC',
     patternId: null,
+    sizeIndex: 0,
     sections: [
       {
         name: 'Cable panel',

@@ -327,6 +327,61 @@ describe('createProject', () => {
     expect(projectSection.rows).toHaveLength(1);
   });
 
+  it('resolves every per-size number to the size the project is being knitted in', () => {
+    const patterns = useKnitwitStore.getState().patterns;
+    const body = patterns.p1.sections[0];
+    useKnitwitStore.setState({
+      patterns: {
+        ...patterns,
+        p1: {
+          ...patterns.p1,
+          sizes: ['S', 'M', 'L'],
+          sections: [
+            {
+              ...body,
+              castOn: [20, 30, 40],
+              totalRows: [50, 60, 70],
+              rows: [
+                {
+                  id: 'r1',
+                  label: 'Row 1',
+                  side: 'RS',
+                  marker: false,
+                  instruction: '',
+                  stitches: [
+                    {
+                      id: 'g1',
+                      type: 'knit',
+                      span: 'exact',
+                      count: [2, 4, 6],
+                      materialSlot: null,
+                      note: '',
+                    },
+                  ],
+                },
+              ],
+            },
+            ...patterns.p1.sections.slice(1),
+          ],
+        },
+      },
+    });
+
+    const key = useKnitwitStore.getState().createProject({
+      name: 'Medium',
+      started: '',
+      patternId: 'p1',
+      totalRows: 10,
+      sizeIndex: 1, // "M"
+    });
+    const project = useKnitwitStore.getState().projects[key];
+    expect(project.sizeIndex).toBe(1);
+    // From here on the project holds plain numbers — no size runs leak into a project.
+    expect(project.sections[0].castOn).toBe(30);
+    expect(project.sections[0].totalRows).toBe(60);
+    expect(project.sections[0].rows[0].stitches[0].count).toBe(4);
+  });
+
   it('falls back to a single section for a pattern that defines none', () => {
     const key = useKnitwitStore
       .getState()

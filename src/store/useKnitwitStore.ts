@@ -13,6 +13,7 @@ import {
   currentSectionIndexOf,
   deriveProjectColors,
   patternSectionMarkers,
+  sizeValue,
 } from '@/lib/knitwit-helpers';
 import type { Material, Pattern, Project, Technique, Tool } from '@/types/knitwit';
 
@@ -49,6 +50,8 @@ type KnitwitState = {
     started: string;
     patternId: string | null;
     totalRows: number;
+    // Which of the pattern's sizes this project is being knitted in.
+    sizeIndex?: number;
     // Chosen mappings from the pattern's generic material/tool slots to the user's own stash.
     slotMaterials?: Record<string, string>;
     slotTools?: Record<string, string>;
@@ -126,7 +129,15 @@ export const useKnitwitStore = create<KnitwitState>()(
       techniqueSeq: 4,
       projectSeq: 1,
 
-      createProject: ({ name, started, patternId, totalRows, slotMaterials = {}, slotTools = {} }) => {
+      createProject: ({
+        name,
+        started,
+        patternId,
+        totalRows,
+        sizeIndex = 0,
+        slotMaterials = {},
+        slotTools = {},
+      }) => {
         const { projects, patterns, projectSeq, noteSeq } = get();
         const key = `proj${projectSeq}`;
         const pattern = patternId ? (patterns[patternId] ?? null) : null;
@@ -145,7 +156,7 @@ export const useKnitwitStore = create<KnitwitState>()(
           patternSections.length > 0
             ? patternSections.map((ps) => ({
                 name: ps.name,
-                totalRows: Math.max(1, ps.totalRows || 1),
+                totalRows: Math.max(1, sizeValue(ps.totalRows, sizeIndex) || 1),
                 row: 0,
                 complete: false,
                 seconds: 0,
@@ -155,9 +166,17 @@ export const useKnitwitStore = create<KnitwitState>()(
                 // Markers flagged on charted rows count too, not just bare section markers.
                 markers: patternSectionMarkers(ps),
                 // The chart is copied, not referenced, so later pattern edits leave a project in
-                // progress alone. Deep-cloned so editing one never mutates the other.
-                castOn: ps.castOn,
-                rows: ps.rows.map((r) => ({ ...r, stitches: r.stitches.map((g) => ({ ...g })) })),
+                // progress alone. Deep-cloned so editing one never mutates the other, and every
+                // per-size number is resolved to the one size this project is being knitted in —
+                // from here on the project holds plain numbers.
+                castOn: sizeValue(ps.castOn, sizeIndex),
+                rows: ps.rows.map((r) => ({
+                  ...r,
+                  stitches: r.stitches.map((g) => ({
+                    ...g,
+                    count: g.count == null ? null : sizeValue(g.count, sizeIndex),
+                  })),
+                })),
               }))
             : [
                 {
@@ -184,6 +203,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               photo: null,
               ...deriveProjectColors(accent),
               patternId,
+              sizeIndex,
               slotMaterials,
               slotTools,
               sections,
@@ -546,7 +566,7 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      version: 12,
+      version: 13,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -611,6 +631,13 @@ export const useKnitwitStore = create<KnitwitState>()(
                 if (typeof section.castOn !== 'number') section.castOn = 0;
               }
             }
+          }
+        }
+        // v12 → v13: a project records which size it is being knitted in. Existing projects
+        // predate multi-size patterns, so they are all the first size.
+        if (version < 13 && state?.projects) {
+          for (const project of Object.values(state.projects)) {
+            if (typeof project.sizeIndex !== 'number') project.sizeIndex = 0;
           }
         }
         // v10 → v12: project sections carry their own copy of the stitch chart. Projects created

@@ -21,9 +21,13 @@ type Cell = { type: string; symbol: string; groupIndex: number };
 
 export type ChartSelection = { rowIndex: number; groupIndex: number };
 
-function rowCells(row: PatternRow, stitchesBefore: number): { cells: Cell[]; clipped: boolean } {
+function rowCells(
+  row: PatternRow,
+  stitchesBefore: number,
+  sizeIndex = 0,
+): { cells: Cell[]; clipped: boolean } {
   const cells: Cell[] = [];
-  const resolved = resolveRowGroups(row, stitchesBefore);
+  const resolved = resolveRowGroups(row, stitchesBefore, sizeIndex);
   for (let groupIndex = 0; groupIndex < resolved.length; groupIndex++) {
     const def = STITCHES[resolved[groupIndex].group.type];
     for (let i = 0; i < resolved[groupIndex].units; i++) {
@@ -41,20 +45,22 @@ export function StitchRowStrip({
   castOn,
   rowIndex,
   showStitchCount = false,
+  sizeIndex = 0,
 }: {
   rows: PatternRow[];
   castOn: number;
   rowIndex: number;
+  sizeIndex?: number;
   // The live running stitch count after this row — what you should have on the needle.
   showStitchCount?: boolean;
 }) {
   const row = rows[rowIndex];
   if (!row) return null;
 
-  const before = sectionRowCounts(rows, castOn);
-  const { cells, clipped } = rowCells(row, before[rowIndex]);
+  const before = sectionRowCounts(rows, castOn, sizeIndex);
+  const { cells, clipped } = rowCells(row, before[rowIndex], sizeIndex);
   const ws = row.side === 'WS';
-  const after = rowStitchesAfter(row, before[rowIndex]);
+  const after = rowStitchesAfter(row, before[rowIndex], sizeIndex);
 
   return (
     <View style={styles.stripWrap}>
@@ -86,19 +92,21 @@ export function StitchChart({
   castOn,
   selected,
   onSelectStitch,
+  sizeIndex = 0,
 }: {
   rows: PatternRow[];
   castOn: number;
+  sizeIndex?: number;
   selected?: ChartSelection | null;
   onSelectStitch?: (selection: ChartSelection) => void;
 }) {
   if (rows.length === 0) return null;
 
-  const before = sectionRowCounts(rows, castOn);
+  const before = sectionRowCounts(rows, castOn, sizeIndex);
   const drawn = rows.slice(0, MAX_ROWS).map((row, index) => ({
     row,
     index,
-    ...rowCells(row, before[index]),
+    ...rowCells(row, before[index], sizeIndex),
   }));
   const width = Math.max(1, ...drawn.map((d) => d.cells.length));
   const gridWidth = width * CELL;

@@ -6,7 +6,34 @@ import type {
   Project,
   ProjectSection,
   SectionStatus,
+  SizedNumber,
 } from '@/types/knitwit';
+
+// ---- Per-size numbers ----
+
+// Resolve a per-size number for one size. A plain number applies to every size. An index past the
+// end of a run clamps to the last entry rather than throwing — a short run is a data error, and
+// silently knitting the largest size beats crashing mid-pattern.
+export function sizeValue(value: SizedNumber, sizeIndex: number): number {
+  if (typeof value === 'number') return value;
+  if (value.length === 0) return 0;
+  return value[Math.max(0, Math.min(sizeIndex, value.length - 1))] ?? 0;
+}
+
+// "6 (6) 7 (7) 9" — knitting's usual way of writing one number per size.
+export function formatSizeRun(value: SizedNumber | null): string {
+  if (value == null) return '';
+  if (typeof value === 'number') return String(value);
+  return value.map((n, i) => (i === 0 ? String(n) : i % 2 === 1 ? `(${n})` : String(n))).join(' ');
+}
+
+// Forgiving on notation: "6 (6) 7 (7) 9" and "6, 6, 7, 7, 9" both mean the same run. A single
+// number comes back as a plain number, so patterns that don't vary by size stay simple.
+export function parseSizeRun(text: string): SizedNumber | null {
+  const numbers = (text.match(/\d+/g) ?? []).map((n) => parseInt(n, 10));
+  if (numbers.length === 0) return null;
+  return numbers.length === 1 ? numbers[0] : numbers;
+}
 
 // ---- Stitch-by-stitch row math (ported from reference resolveStitches / rowDelta) ----
 
@@ -22,19 +49,22 @@ function groupTakes(g: PatternStitchGroup): number {
 export function resolveRowGroups(
   row: PatternRow,
   stitchesBefore: number,
+  sizeIndex = 0,
 ): { group: PatternStitchGroup; units: number; takes: number; consumes: number }[] {
   const groups = row.stitches ?? [];
   const units = new Array(groups.length).fill(0);
   const takes = groups.map(groupTakes);
+  const countOf = (g: PatternStitchGroup) =>
+    g.count == null ? 0 : Math.max(0, sizeValue(g.count, sizeIndex));
   let fixed = 0;
   const flex: number[] = [];
   groups.forEach((g, i) => {
     if (g.span === 'exact') {
-      units[i] = Math.max(0, g.count || 0);
+      units[i] = countOf(g);
       fixed += units[i] * takes[i];
     } else if (g.span === 'to-last') {
       flex.push(i);
-      fixed += Math.max(0, g.count || 0);
+      fixed += countOf(g);
     } else {
       flex.push(i);
     }
@@ -55,8 +85,8 @@ export function resolveRowGroups(
 }
 
 // The live stitch count after working a row, given the count before it.
-export function rowStitchesAfter(row: PatternRow, stitchesBefore: number): number {
-  return resolveRowGroups(row, stitchesBefore).reduce((total, x) => {
+export function rowStitchesAfter(row: PatternRow, stitchesBefore: number, sizeIndex = 0): number {
+  return resolveRowGroups(row, stitchesBefore, sizeIndex).reduce((total, x) => {
     const def = STITCHES[x.group.type];
     return total + (def ? def.delta : 0) * x.units;
   }, stitchesBefore);
@@ -65,12 +95,16 @@ export function rowStitchesAfter(row: PatternRow, stitchesBefore: number): numbe
 // Running live-stitch count entering each row of a section, starting from `castOn`. Returns one
 // entry per row: the count as you begin that row. (Count after row i is counts[i+1], or the final
 // return for the last row.)
-export function sectionRowCounts(rows: PatternRow[], castOn: number): number[] {
+export function sectionRowCounts(
+  rows: PatternRow[],
+  castOn: SizedNumber,
+  sizeIndex = 0,
+): number[] {
   const counts: number[] = [];
-  let n = Math.max(0, castOn || 0);
+  let n = Math.max(0, sizeValue(castOn, sizeIndex) || 0);
   for (const row of rows) {
     counts.push(n);
-    n = rowStitchesAfter(row, n);
+    n = rowStitchesAfter(row, n, sizeIndex);
   }
   return counts;
 }

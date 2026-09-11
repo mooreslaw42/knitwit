@@ -3,7 +3,9 @@ import {
   darken,
   deriveProjectColors,
   formatClock,
+  formatSizeRun,
   inUseLabel,
+  parseSizeRun,
   patternSectionMarkers,
   projectProgress,
   resolveRowGroups,
@@ -11,6 +13,7 @@ import {
   sectionRowCounts,
   sectionStatus,
   todayStarted,
+  sizeValue,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
@@ -40,6 +43,7 @@ function project(sections: ProjectSection[]): Project {
     color: '#F4C6D3',
     colorDeep: '#E58AA0',
     patternId: null,
+    sizeIndex: 0,
     sections,
   };
 }
@@ -69,6 +73,52 @@ const increaseRow = () =>
     group({ type: 'm1r', span: 'all' }),
     group({ type: 'knit', span: 'exact', count: 1 }),
   ]);
+
+describe('per-size numbers', () => {
+  it('treats a plain number as the same for every size', () => {
+    expect(sizeValue(6, 0)).toBe(6);
+    expect(sizeValue(6, 4)).toBe(6);
+  });
+
+  it('picks the entry for the size, clamping past the end rather than throwing', () => {
+    const run = [6, 6, 7, 7, 9];
+    expect(sizeValue(run, 0)).toBe(6);
+    expect(sizeValue(run, 2)).toBe(7);
+    expect(sizeValue(run, 4)).toBe(9);
+    // A short run is a data error; knitting the largest size beats crashing mid-pattern.
+    expect(sizeValue(run, 99)).toBe(9);
+    expect(sizeValue([], 0)).toBe(0);
+  });
+
+  it('round-trips knitting\'s own notation', () => {
+    expect(formatSizeRun([6, 6, 7, 7, 9])).toBe('6 (6) 7 (7) 9');
+    expect(formatSizeRun(6)).toBe('6');
+    expect(parseSizeRun('6 (6) 7 (7) 9')).toEqual([6, 6, 7, 7, 9]);
+    // Comma notation means the same thing.
+    expect(parseSizeRun('6, 6, 7, 7, 9')).toEqual([6, 6, 7, 7, 9]);
+    // One number stays scalar, so patterns that don't vary by size stay simple.
+    expect(parseSizeRun('6')).toBe(6);
+    expect(parseSizeRun('')).toBeNull();
+  });
+
+  it('resolves per-size counts when working out a row', () => {
+    // "k2 (4) 6" then knit to end, on 20 sts: the fixed run differs per size.
+    const r = row([
+      group({ type: 'k2tog', span: 'exact', count: [2, 4, 6] }),
+      group({ type: 'knit', span: 'all' }),
+    ]);
+    // k2tog twice removes 2 sts; four times removes 4; six times removes 6.
+    expect(rowStitchesAfter(r, 20, 0)).toBe(18);
+    expect(rowStitchesAfter(r, 20, 1)).toBe(16);
+    expect(rowStitchesAfter(r, 20, 2)).toBe(14);
+  });
+
+  it('resolves a per-size cast-on', () => {
+    const rows = [row([group({ type: 'knit', span: 'all' })])];
+    expect(sectionRowCounts(rows, [20, 30, 40], 0)).toEqual([20]);
+    expect(sectionRowCounts(rows, [20, 30, 40], 2)).toEqual([40]);
+  });
+});
 
 describe('rowStitchesAfter', () => {
   it('grows by two on a M1L/M1R increase row regardless of width', () => {

@@ -9,8 +9,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { STITCHES, STITCH_ORDER } from '@/constants/catalogs';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
+import {
+  formatSizeRun,
+  parseSizeRun,
+  rowStitchesAfter,
+  sectionRowCounts,
+  sizeValue,
+} from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
+import { parseSectionText, reconcileRowCounts, type ParseIssue } from '@/lib/parse-pattern-text';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { PatternRow, PatternStitchGroup, StitchSide, StitchSpan } from '@/types/knitwit';
 
@@ -50,7 +57,7 @@ function toEditGroup(g: PatternStitchGroup): EditGroup {
     id: g.id,
     type: g.type,
     span: g.span,
-    count: g.count != null ? String(g.count) : '',
+    count: formatSizeRun(g.count),
     materialSlot: g.materialSlot,
     note: g.note,
   };
@@ -66,12 +73,12 @@ function toEditRow(r: PatternRow): EditRow {
   };
 }
 function toGroup(g: EditGroup): PatternStitchGroup {
-  const n = parseInt(g.count, 10);
   return {
     id: g.id,
     type: g.type,
     span: g.span,
-    count: g.span === 'all' || Number.isNaN(n) ? null : Math.max(0, n),
+    // A run like "6 (6) 7 (7) 9" becomes one number per size; a single number stays scalar.
+    count: g.span === 'all' ? null : parseSizeRun(g.count),
     materialSlot: g.materialSlot,
     note: g.note.trim(),
   };
@@ -106,18 +113,37 @@ export default function SectionStitchesScreen() {
   const section = pattern?.sections[sectionIndex];
 
   const [description, setDescription] = useState(section?.description ?? '');
-  const [castOn, setCastOn] = useState(String(section?.castOn ?? 0));
+  const [castOn, setCastOn] = useState(formatSizeRun(section?.castOn ?? 0));
   const [rows, setRows] = useState<EditRow[]>(() => (section?.rows ?? []).map(toEditRow));
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // Which stitch group the user tapped in the chart, if any.
   const [selected, setSelected] = useState<ChartSelection | null>(null);
+  // A pattern is written for every size at once; the chart can only draw one, so pick which.
+  const [sizePreview, setSizePreview] = useState(0);
+  // A pending conversion of the written text, held for review before it replaces anything.
+  const [preview, setPreview] = useState<{
+    rows: EditRow[];
+    issues: ParseIssue[];
+    ignored: string[];
+  } | null>(null);
+
+  const convert = () => {
+    const start = startCount;
+    const result = parseSectionText(description);
+    const issues = [
+      ...result.issues,
+      ...reconcileRowCounts(result.rows, result.expectedCounts, start),
+    ];
+    setPreview({ rows: result.rows.map(toEditRow), issues, ignored: result.ignoredLines });
+  };
 
   // Derived before the missing-pattern guard: everything here reads component state, not the
   // section, and an early return sitting above these declarations trips up the React Compiler's
   // memoisation (it hoists them into a block that runs regardless).
   const patternRows = rows.map(toRow);
-  const startCount = Math.max(0, parseInt(castOn, 10) || 0);
-  const before = sectionRowCounts(patternRows, startCount);
+  const castOnSized = parseSizeRun(castOn) ?? 0;
+  const startCount = Math.max(0, sizeValue(castOnSized, sizePreview));
+  const before = sectionRowCounts(patternRows, startCount, sizePreview);
   // Resolve the tapped cell back to a group; rows can change underneath a stale selection.
   const selectedGroup = selected
     ? (rows[selected.rowIndex]?.stitches[selected.groupIndex] ?? null)
@@ -153,7 +179,7 @@ export default function SectionStitchesScreen() {
       ...pattern,
       sections: pattern.sections.map((s, idx) =>
         idx === sectionIndex
-          ? { ...s, description, castOn: startCount, rows: patternRows }
+          ? { ...s, description, castOn: castOnSized, rows: patternRows }
           : s,
       ),
     });
@@ -186,13 +212,105 @@ export default function SectionStitchesScreen() {
               multiline
               style={[styles.input, styles.patternText]}
             />
+            {description.trim().length > 0 && (
+              <PillButton variant="secondary" style={styles.convertBtn} onPress={convert}>
+                <ThemedText type="smallBold" themeColor="ink">
+                  Convert to stitches
+                </ThemedText>
+              </PillButton>
+            )}
           </View>
 
+          {preview && (
+            <Card style={styles.previewCard}>
+              <ThemedText type="smallBold">
+                Found {preview.rows.length} {preview.rows.length === 1 ? 'row' : 'rows'}
+              </ThemedText>
+              <ThemedText type="small" themeColor="inkSoft">
+                {rows.length > 0
+                  ? `Applying replaces the ${rows.length} ${rows.length === 1 ? 'row' : 'rows'} already charted here.`
+                  : 'Nothing is charted yet, so this just fills it in.'}
+              </ThemedText>
+
+              {preview.issues.length > 0 && (
+                <View style={styles.issueList}>
+                  <ThemedText type="smallBold" themeColor="coralDeep">
+                    {preview.issues.length} to check
+                  </ThemedText>
+                  {preview.issues.slice(0, 6).map((issue, i) => (
+                    <ThemedText key={i} type="small" themeColor="inkSoft">
+                      · {issue.message}
+                    </ThemedText>
+                  ))}
+                  {preview.issues.length > 6 && (
+                    <ThemedText type="small" themeColor="inkSoft">
+                      · and {preview.issues.length - 6} more
+                    </ThemedText>
+                  )}
+                </View>
+              )}
+
+              {preview.ignored.length > 0 && (
+                <ThemedText type="small" themeColor="inkSoft">
+                  Skipped {preview.ignored.length} non-row{' '}
+                  {preview.ignored.length === 1 ? 'line' : 'lines'} (headings, notes).
+                </ThemedText>
+              )}
+
+              <View style={styles.inline}>
+                <PillButton
+                  style={styles.grow}
+                  onPress={() => {
+                    setRows(preview.rows);
+                    setSelected(null);
+                    setPreview(null);
+                  }}>
+                  <ThemedText type="smallBold" themeColor="white">
+                    Apply
+                  </ThemedText>
+                </PillButton>
+                <PillButton
+                  variant="secondary"
+                  style={styles.grow}
+                  onPress={() => setPreview(null)}>
+                  <ThemedText type="smallBold" themeColor="ink">
+                    Cancel
+                  </ThemedText>
+                </PillButton>
+              </View>
+            </Card>
+          )}
+
+          {pattern.sizes.length > 1 && (
+            <View style={styles.field}>
+              <ThemedText type="smallBold" themeColor="inkSoft">
+                Previewing size
+              </ThemedText>
+              <View style={styles.inline}>
+                {pattern.sizes.map((label, i) => (
+                  <Pressable
+                    key={label + i}
+                    onPress={() => setSizePreview(i)}
+                    style={[styles.chip, sizePreview === i && styles.chipOn]}>
+                    <ThemedText
+                      type="smallBold"
+                      themeColor={sizePreview === i ? 'white' : 'inkSoft'}>
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
           <FormField
-            label="Cast on (stitches to start from)"
+            label={
+              pattern.sizes.length > 1
+                ? 'Cast on — one number per size, e.g. 6 (6) 7 (7) 9'
+                : 'Cast on (stitches to start from)'
+            }
             value={castOn}
             onChangeText={setCastOn}
-            keyboardType="numeric"
             placeholder="0"
           />
 
@@ -212,6 +330,7 @@ export default function SectionStitchesScreen() {
               <StitchChart
                 rows={patternRows}
                 castOn={startCount}
+                sizeIndex={sizePreview}
                 selected={selected}
                 onSelectStitch={setSelected}
               />
@@ -263,7 +382,7 @@ export default function SectionStitchesScreen() {
           )}
 
           {rows.map((row, ri) => {
-            const after = rowStitchesAfter(patternRows[ri], before[ri]);
+            const after = rowStitchesAfter(patternRows[ri], before[ri], sizePreview);
             const delta = after - before[ri];
             const isOpen = expanded[row.id];
             return (
@@ -510,6 +629,9 @@ const styles = StyleSheet.create({
   countInput: { width: 90 },
   field: { gap: Spacing.one },
   patternText: { minHeight: 88, textAlignVertical: 'top' },
+  convertBtn: { alignSelf: 'flex-start', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  previewCard: { gap: Spacing.two },
+  issueList: { gap: Spacing.one },
   grow: { flex: 1 },
   addLink: { alignSelf: 'flex-start', paddingVertical: Spacing.one },
   addRowBtn: { marginTop: Spacing.one },

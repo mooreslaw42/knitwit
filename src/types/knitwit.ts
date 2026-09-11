@@ -113,13 +113,17 @@ export type StitchSide = 'RS' | 'WS';
 // remaining working stitches (`all`), or repeat until `count` stitches are left (`to-last`).
 export type StitchSpan = 'all' | 'exact' | 'to-last';
 
+// A number a pattern states per size — "CO 6 (6) 7 (7) 9 sts". A plain number means "the same for
+// every size"; an array lines up index-for-index with Pattern.sizes. Resolve one with sizeValue().
+export type SizedNumber = number | number[];
+
 // A run of one stitch/action within a row — e.g. "k2" (type knit, span exact, count 2) or
 // "*yo, k2tog* across" (two groups, span all). `type` is a key into the STITCHES catalog.
 export type PatternStitchGroup = {
   id: string;
   type: string;
   span: StitchSpan;
-  count: number | null;
+  count: SizedNumber | null;
   materialSlot: string | null; // pattern material slot id, or null
   note: string;
 };
@@ -137,8 +141,10 @@ export type PatternRow = {
 
 export type PatternSection = {
   name: string;
-  totalRows: number;
-  castOn: number; // live stitch count the section starts from, for the running stitch-count math
+  // Both are stated per size on real patterns. A project resolves them to plain numbers for the
+  // one size it is being knitted in.
+  totalRows: SizedNumber;
+  castOn: SizedNumber; // live stitch count the section starts from, for the running-count math
   materials: string[]; // ids of the pattern's material slots this section uses
   tools: string[]; // ids of the pattern's tool slots this section uses
   techniques: string[]; // ids of the pattern's techniques this section uses
@@ -201,6 +207,9 @@ export type Project = {
   color: string;
   colorDeep: string;
   patternId: string | null;
+  // Which of the pattern's sizes this project is being knitted in. Every per-size number is
+  // resolved against this when the project is created, so the project itself holds plain numbers.
+  sizeIndex: number;
   // Maps a pattern material/tool slot id to one of the user's own material/tool ids — how a
   // generic pattern requirement is resolved to the actual stash item for this project.
   slotMaterials?: Record<string, string>;

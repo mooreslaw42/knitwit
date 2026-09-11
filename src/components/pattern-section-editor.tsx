@@ -11,6 +11,7 @@ import type {
   PatternSection,
   PatternTechnique,
   PatternTool,
+  SizedNumber,
   ToolType,
 } from '@/types/knitwit';
 
@@ -236,7 +237,7 @@ type EditNote = { id: number; row: string; text: string };
 type EditSection = {
   name: string;
   totalRows: string;
-  castOn: number;
+  castOn: SizedNumber;
   materials: string[]; // slot ids
   tools: string[]; // slot ids
   techniques: string[]; // technique ids
