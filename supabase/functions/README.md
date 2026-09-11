@@ -6,6 +6,11 @@ called from this directory.** The app ships to the web, so anything in the clien
 
 ## `parse-pattern`
 
+Two tasks, one function — they share a provider, a cached prompt discipline, and the rule that the
+client re-validates everything that comes back.
+
+### `task: "rows"`
+
 Converts written knitting rows into charted stitch groups. It is the model half of a hybrid
 parser: `src/lib/parse-pattern-text.ts` reads the regular shorthand locally and for free, refuses
 what it can't chart faithfully, and only the refusals come here.
@@ -30,6 +35,28 @@ The client re-validates everything that comes back (`src/lib/parse-pattern-remot
 the stitch-count check over the merged section, so a bad response degrades to "flagged for review"
 rather than a wrong chart.
 
+### `task: "document"`
+
+Reads a whole pattern — pasted, or extracted from a PDF's text layer by
+`src/lib/read-pattern-file.ts` — into every field the wizard holds.
+
+```jsonc
+{ "task": "document", "text": "…the whole pattern…", "model": "glm-5.3-flash" }
+```
+
+Returns `{ model, draft, usage }`. `draft` carries metadata, yarn slots, tools, techniques, and
+sections whose `description` is the pattern's **verbatim** wording — the prompt is emphatic about
+that, because each section's text is charted row by row afterwards, so anything reworded here is
+reworded for the knitter.
+
+`src/lib/import-pattern-document.ts` normalises the draft (an unrecognised category becomes the
+default rather than a broken screen), runs each section through the deterministic parser, and
+hands the wizard a review card. Nothing is filled in until the knitter accepts it, and the source
+text is kept, so a bad read is always re-runnable.
+
+Server-side validation is deliberately thin for this task — the client normalises every field
+anyway, and duplicating that pass in a second runtime would only give it two places to drift.
+
 ### Configuration
 
 | Secret | Required | Notes |
@@ -51,9 +78,10 @@ The same file is read automatically by `supabase functions serve` for local runs
 ### Providers
 
 **GreenPT (`provider-greenpt.ts`)** is the EU-hosted provider AGENTS.md names, reached through its
-OpenAI-compatible `/v1/chat/completions` endpoint — no SDK, just fetch. Default model `glm-5.2`,
-chosen for its reasoning and agentic tool-use tuning, which is the closest available proxy for
-"will reliably fill in a strict JSON schema".
+OpenAI-compatible `/v1/chat/completions` endpoint — no SDK, just fetch. Default model
+`glm-5.3-flash` (€0.11/€0.44 per M tokens): the work is small and schema-constrained, so it does
+not want a flagship coding model — `glm-5.2` does the same job at ten times the price. Escalate
+per call if the reconcile rate justifies it.
 
 Whether that endpoint honours `response_format: {type:'json_schema'}` is **not documented**, so the
 provider discovers it at runtime: it asks for the schema, and on a 4xx retries once in plain JSON

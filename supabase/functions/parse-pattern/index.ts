@@ -1,11 +1,18 @@
-import { buildUserMessage, SYSTEM_PROMPT } from './prompt.ts';
+import {
+  buildDocumentUserMessage,
+  buildUserMessage,
+  DOCUMENT_SYSTEM_PROMPT,
+  SYSTEM_PROMPT,
+} from './prompt.ts';
 import { anthropicProvider } from './provider-anthropic.ts';
 import { greenptProvider } from './provider-greenpt.ts';
 import type { ModelProvider } from './provider.ts';
 import {
+  DOCUMENT_SCHEMA,
   ROWS_SCHEMA,
   SPANS,
   STITCH_TYPES,
+  type DocumentRequest,
   type ModelGroup,
   type ModelRow,
   type ParsePatternRequest,
@@ -60,6 +67,25 @@ function selectProvider(): ModelProvider {
   }
 
   throw new Error(`Unknown AI_PROVIDER "${name}". Known providers: anthropic, greenpt.`);
+}
+
+// A whole pattern is long, but a 1M-context model can take it; the cap is here so one paste can't
+// run up an unbounded bill on an endpoint with no rate limit in front of it.
+const MAX_DOCUMENT_CHARS = 120_000;
+
+function validateDocumentRequest(b: Record<string, unknown>): DocumentRequest {
+  const text = typeof b.text === 'string' ? b.text.trim() : '';
+  if (!text) throw new BadRequest('No pattern text to read.');
+  if (text.length > MAX_DOCUMENT_CHARS) {
+    throw new BadRequest(
+      `That pattern is too long to read in one go (over ${Math.round(MAX_DOCUMENT_CHARS / 1000)}k characters).`,
+    );
+  }
+  return {
+    task: 'document',
+    text,
+    model: typeof b.model === 'string' && b.model ? b.model : undefined,
+  };
 }
 
 function validateRequest(body: unknown): ParsePatternRequest {
@@ -169,59 +195,127 @@ function validateModelRows(parsed: unknown, sizeCount: number): ModelRow[] {
   });
 }
 
+// Every provider error carries a status when it has one, so a rate limit reaches the client as a
+// rate limit rather than a generic failure.
+function statusOf(error: unknown): number {
+  const status = (error as { status?: unknown }).status;
+  return typeof status === 'number' && status >= 400 ? status : 502;
+}
+
+// The whole-document pass has a lot more to write than a few rows, and a truncated response is a
+// silently half-imported pattern.
+const MAX_DOCUMENT_OUTPUT_TOKENS = 32_000;
+
+async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Promise<Response> {
+  const result = await provider.complete({
+    system: SYSTEM_PROMPT,
+    user: buildUserMessage(req),
+    schema: ROWS_SCHEMA,
+    model: req.model ?? provider.defaultModel,
+    maxTokens: MAX_OUTPUT_TOKENS,
+  });
+
+  const rows = validateModelRows(JSON.parse(result.text), req.sizes.length);
+
+  // Logged, not returned: enough to track cost per import and cache hit rate without putting
+  // anything the knitter wrote into the logs.
+  console.log(
+    JSON.stringify({
+      event: 'parse-pattern',
+      task: 'rows',
+      provider: provider.name,
+      model: result.model,
+      rows_requested: req.rows.length,
+      rows_returned: rows.length,
+      rows_confident: rows.filter((r) => r.confident).length,
+      usage: result.usage,
+    }),
+  );
+
+  return json({ model: result.model, rows, usage: result.usage });
+}
+
+async function handleDocument(req: DocumentRequest, provider: ModelProvider): Promise<Response> {
+  const result = await provider.complete({
+    system: DOCUMENT_SYSTEM_PROMPT,
+    user: buildDocumentUserMessage(req),
+    schema: DOCUMENT_SCHEMA,
+    model: req.model ?? provider.defaultModel,
+    maxTokens: MAX_DOCUMENT_OUTPUT_TOKENS,
+  });
+
+  const draft = JSON.parse(result.text);
+  if (typeof draft !== 'object' || draft === null || Array.isArray(draft)) {
+    throw new Error('Model returned something that is not a pattern.');
+  }
+
+  // Only a shape check here — the client normalises every field before it reaches the wizard, and
+  // duplicating that whole pass in a second runtime would just give it two places to drift.
+  const sections = Array.isArray((draft as { sections?: unknown }).sections)
+    ? (draft as { sections: unknown[] }).sections
+    : [];
+
+  console.log(
+    JSON.stringify({
+      event: 'parse-pattern',
+      task: 'document',
+      provider: provider.name,
+      model: result.model,
+      input_chars: req.text.length,
+      sections_found: sections.length,
+      usage: result.usage,
+    }),
+  );
+
+  return json({ model: result.model, draft, usage: result.usage });
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
 
-  let req: ParsePatternRequest;
-  try {
-    req = validateRequest(await request.json().catch(() => null));
-  } catch (error) {
-    return json({ error: error instanceof BadRequest ? error.message : 'Malformed request.' }, 400);
-  }
+  const body = await request.json().catch(() => null);
+  const task = (body as { task?: unknown } | null)?.task;
 
   let provider: ModelProvider;
   try {
     provider = selectProvider();
   } catch (error) {
     console.error('provider unavailable', error);
-    return json({ error: 'Pattern conversion is not configured on this server.' }, 503);
+    return json({ error: 'Pattern reading is not configured on this server.' }, 503);
+  }
+
+  if (task === 'document') {
+    let req: DocumentRequest;
+    try {
+      req = validateDocumentRequest(body as Record<string, unknown>);
+    } catch (error) {
+      return json(
+        { error: error instanceof BadRequest ? error.message : 'Malformed request.' },
+        400,
+      );
+    }
+    try {
+      return await handleDocument(req, provider);
+    } catch (error) {
+      console.error('parse-pattern document failed', error);
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      return json({ error: `Couldn't read that pattern: ${message}` }, statusOf(error));
+    }
+  }
+
+  let req: ParsePatternRequest;
+  try {
+    req = validateRequest(body);
+  } catch (error) {
+    return json({ error: error instanceof BadRequest ? error.message : 'Malformed request.' }, 400);
   }
 
   try {
-    const result = await provider.complete({
-      system: SYSTEM_PROMPT,
-      user: buildUserMessage(req),
-      schema: ROWS_SCHEMA,
-      model: req.model ?? provider.defaultModel,
-      maxTokens: MAX_OUTPUT_TOKENS,
-    });
-
-    const rows = validateModelRows(JSON.parse(result.text), req.sizes.length);
-
-    // Logged, not returned: enough to track cost per import and cache hit rate without putting
-    // anything the knitter wrote into the logs.
-    console.log(
-      JSON.stringify({
-        event: 'parse-pattern',
-        provider: provider.name,
-        model: result.model,
-        rows_requested: req.rows.length,
-        rows_returned: rows.length,
-        rows_confident: rows.filter((r) => r.confident).length,
-        usage: result.usage,
-      }),
-    );
-
-    return json({ model: result.model, rows, usage: result.usage });
+    return await handleRows(req, provider);
   } catch (error) {
-    console.error('parse-pattern failed', error);
+    console.error('parse-pattern rows failed', error);
     const message = error instanceof Error ? error.message : 'Unknown error.';
-    // Surface the status the provider gave us, so a rate limit reads as one to the client.
-    const status =
-      typeof (error as { status?: unknown }).status === 'number'
-        ? ((error as { status: number }).status as number)
-        : 502;
-    return json({ error: `Couldn't convert those rows: ${message}` }, status >= 400 ? status : 502);
+    return json({ error: `Couldn't convert those rows: ${message}` }, statusOf(error));
   }
 });

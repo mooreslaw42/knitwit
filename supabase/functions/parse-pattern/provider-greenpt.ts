@@ -6,9 +6,16 @@ import { EMPTY_USAGE, type ModelProvider, type ModelRequest, type ModelResult } 
 // easy to see.
 const BASE_URL = 'https://api.greenpt.ai/v1';
 
-// glm-5.2 is tuned for reasoning and agentic tool-use, which is the closest proxy available for
-// "will reliably fill in a strict JSON schema" — the capability this whole path leans on.
-const DEFAULT_MODEL = 'glm-5.2';
+// The job is small and tightly constrained: read one irregular row, emit a handful of stitch
+// groups against a fixed schema. That doesn't want a flagship coding model — glm-5.2 costs
+// €1.10/€4.40 per million tokens and is built for multi-file software engineering. glm-5.3-flash
+// is a tenth of that (€0.11/€0.44) and still has reasoning and tool use, and being the same
+// vendor family its schema handling should match what we've already seen work.
+//
+// This is safe to be wrong about: rowStitchesAfter() reconciles every parsed row against the
+// count the pattern states for itself, so a model that reads rows worse shows up as rows flagged
+// for review, not as a silently bad chart. Override per call to compare.
+const DEFAULT_MODEL = 'glm-5.3-flash';
 
 // Whether this endpoint honours `response_format: {type:'json_schema'}` is not documented, so we
 // find out at runtime rather than assume: ask for the schema, and if the API rejects the

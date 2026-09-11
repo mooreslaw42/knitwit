@@ -28,6 +28,34 @@ export const STITCH_TYPES = [
 
 export const SPANS = ['exact', 'all', 'to-last'] as const;
 
+// Mirrors PatternCategory / PatternLevel / ToolType in src/types/knitwit.ts. Constraining the
+// model to these means the wizard never has to cope with a category it has no label for.
+export const CATEGORIES = [
+  'sweaters',
+  'accessories',
+  'hats',
+  'scarves',
+  'socks',
+  'blankets',
+  'toys',
+  'home',
+  'baby',
+  'queue',
+] as const;
+
+export const LEVELS = ['beginner', 'easy', 'intermediate', 'advanced'] as const;
+
+export const TOOL_TYPES = [
+  'straight',
+  'circular',
+  'dpn',
+  'interchangeable',
+  'crochet-hook',
+  'cable-needle',
+  'cable-pin',
+  'other',
+] as const;
+
 export type ParsePatternRequest = {
   task: 'rows';
   // The whole section, for context — the model reads it but only charts the rows listed below.
@@ -70,6 +98,131 @@ export type ParsePatternResponse = {
     cache_creation_input_tokens: number;
   };
 };
+
+// ---- Whole-document import (task: 'document') ----
+
+export type DocumentRequest = {
+  task: 'document';
+  // The whole pattern as text — pasted, or extracted from a PDF's text layer.
+  text: string;
+  model?: string;
+};
+
+export const DOCUMENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'The pattern\'s title. Empty string if not stated.' },
+    category: { type: 'string', enum: [...CATEGORIES, ''] },
+    level: { type: 'string', enum: [...LEVELS, ''] },
+    needleSize: {
+      type: 'string',
+      description: 'Recommended needle or hook size as written, e.g. "4.5mm" or "4.5mm / US 7".',
+    },
+    gaugeStitches: {
+      type: 'string',
+      description: 'Stitches per 10cm/4in from the gauge statement. Digits only, or empty.',
+    },
+    gaugeRows: { type: 'string', description: 'Rows per 10cm/4in. Digits only, or empty.' },
+    sizes: {
+      type: 'array',
+      description:
+        'Size names in the order the pattern grades them, e.g. ["S","M","L"]. Empty if unsized.',
+      items: { type: 'string' },
+    },
+    materials: {
+      type: 'array',
+      description:
+        'The yarns the pattern calls for, as generic slots — "Yarn A, DK weight wool" — never a ' +
+        'brand the knitter must own.',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string' },
+          short: { type: 'string', description: 'One letter for charts: A, B, C…' },
+        },
+        required: ['label', 'short'],
+        additionalProperties: false,
+      },
+    },
+    tools: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: [...TOOL_TYPES] },
+          thickness: { type: 'string', description: 'e.g. "4.5mm"' },
+          note: { type: 'string', description: 'e.g. "US 7, 80cm cable"' },
+        },
+        required: ['type', 'thickness', 'note'],
+        additionalProperties: false,
+      },
+    },
+    techniques: {
+      type: 'array',
+      description: 'Named techniques the pattern assumes, e.g. "German short rows".',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          note: { type: 'string' },
+        },
+        required: ['name', 'note'],
+        additionalProperties: false,
+      },
+    },
+    sections: {
+      type: 'array',
+      description:
+        'The pattern split into the pieces it is worked in — Back, Front, Sleeve, Collar. Each ' +
+        "carries its own instructions verbatim, so they can be charted later.",
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          castOn: {
+            type: 'array',
+            description:
+              'Cast-on stitches, one per size in the order given above. Empty if not stated.',
+            items: { type: 'integer', minimum: 0 },
+          },
+          totalRows: {
+            type: 'array',
+            description: 'Row count, one per size. Empty if not stated.',
+            items: { type: 'integer', minimum: 0 },
+          },
+          description: {
+            type: 'string',
+            description:
+              "This section's instructions, copied verbatim from the pattern. Do not summarise, " +
+              'reword, or renumber — this text is charted row by row afterwards, and anything ' +
+              'you change is changed for the knitter too.',
+          },
+        },
+        required: ['name', 'castOn', 'totalRows', 'description'],
+        additionalProperties: false,
+      },
+    },
+    notes: {
+      type: 'string',
+      description: 'Anything important that did not fit above. One or two sentences, or empty.',
+    },
+  },
+  required: [
+    'name',
+    'category',
+    'level',
+    'needleSize',
+    'gaugeStitches',
+    'gaugeRows',
+    'sizes',
+    'materials',
+    'tools',
+    'techniques',
+    'sections',
+    'notes',
+  ],
+  additionalProperties: false,
+} as const;
 
 // Strict JSON schema — `additionalProperties: false` and a fully `required` object at every level
 // is what "strict" means to the API, and it's what lets a smaller model be reliable here.

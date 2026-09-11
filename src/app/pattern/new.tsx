@@ -1,15 +1,16 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { importPatternDocument, type ImportedPattern } from '@/lib/import-pattern-document';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
+import { pickPatternFile } from '@/lib/read-pattern-file';
 import { CATEGORY_LABELS, CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -63,6 +64,25 @@ function blankPattern(): Pattern {
   };
 }
 
+// "3 sections · 48 rows charted · 2 sizes · 1 yarn, 2 tools" — what was actually found, so the
+// knitter can tell at a glance whether the read was any good before accepting it.
+function describeImport(imported: ImportedPattern): string {
+  const { pattern, summary } = imported;
+  const parts = [
+    `${summary.sections} ${summary.sections === 1 ? 'section' : 'sections'}`,
+    `${summary.rowsCharted} ${summary.rowsCharted === 1 ? 'row' : 'rows'} charted`,
+  ];
+  if (pattern.sizes.length) parts.push(pattern.sizes.join(', '));
+  if (pattern.materials.length) {
+    parts.push(`${pattern.materials.length} ${pattern.materials.length === 1 ? 'yarn' : 'yarns'}`);
+  }
+  if (pattern.tools.length) {
+    parts.push(`${pattern.tools.length} ${pattern.tools.length === 1 ? 'tool' : 'tools'}`);
+  }
+  if (pattern.techniques.length) parts.push(`${pattern.techniques.length} techniques`);
+  return parts.join(' · ');
+}
+
 export default function NewPatternWizardScreen() {
   const router = useRouter();
   const savePattern = useKnitwitStore((state) => state.savePattern);
@@ -71,6 +91,11 @@ export default function NewPatternWizardScreen() {
   const [form, setForm] = useState<Pattern>(blankPattern);
   const [nameTouched, setNameTouched] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  // A pattern read from the source text, held for review — nothing is filled in until accepted.
+  const [imported, setImported] = useState<ImportedPattern | null>(null);
+  const [reading, setReading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const choosePhoto = async () => {
     const result = await pickImage();
@@ -97,16 +122,49 @@ export default function NewPatternWizardScreen() {
   const isLast = step === STEPS.length - 1;
   const nameMissing = STEPS[step] === 'Basics' && !form.name.trim();
 
+  // Reading the file puts its text straight into the paste box, so the knitter can see exactly
+  // what was picked up — a PDF whose text layer came out scrambled is obvious rather than silently
+  // fed to the model.
   const pickFile = async () => {
-    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: false });
-    const file = res.assets?.[0];
-    if (!file) return; // cancelled
-    set('sourceName', file.name);
+    setFileError(null);
+    const result = await pickPatternFile();
+    if (result.status === 'cancelled') return;
+    if (result.status === 'refused') {
+      setFileError(result.message);
+      set('sourceName', result.name);
+      return;
+    }
+    setImported(null);
+    setForm((f) => ({ ...f, sourceName: result.name, sourceText: result.text }));
+  };
+
+  const readPattern = async () => {
+    const text = form.sourceText.trim();
+    if (!text) return;
+    setReading(true);
+    setImportError(null);
+    try {
+      setImported(await importPatternDocument(text));
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Something went wrong.');
+    } finally {
+      setReading(false);
+    }
+  };
+
+  // Applying fills in the rest of the wizard, which the knitter then steps through and corrects.
+  // The original text is kept either way, so a bad read is always re-runnable.
+  const applyImport = () => {
+    if (!imported) return;
+    setForm((f) => ({ ...f, ...imported.pattern }));
+    setImported(null);
+    setStep((s) => s + 1);
   };
 
   const skipImport = () => {
     // Nothing to carry forward — clear anything captured and move on to the manual details.
     setForm((f) => ({ ...f, sourceName: '', sourceText: '' }));
+    setImported(null);
     setStep((s) => s + 1);
   };
 
@@ -167,9 +225,14 @@ export default function NewPatternWizardScreen() {
                 </ThemedText>
                 <Pressable style={styles.uploadBtn} onPress={pickFile}>
                   <ThemedText type="smallBold" themeColor="inkSoft" numberOfLines={1}>
-                    {form.sourceName ? `📄 ${form.sourceName}` : 'Choose a file…'}
+                    {form.sourceName ? `📄 ${form.sourceName}` : 'Choose a PDF or text file…'}
                   </ThemedText>
                 </Pressable>
+                {fileError && (
+                  <ThemedText type="small" themeColor="coralDeep">
+                    {fileError}
+                  </ThemedText>
+                )}
               </View>
               <View style={styles.field}>
                 <ThemedText type="smallBold" themeColor="inkSoft">
@@ -177,14 +240,80 @@ export default function NewPatternWizardScreen() {
                 </ThemedText>
                 <TextInput
                   value={form.sourceText}
-                  onChangeText={(v) => set('sourceText', v)}
+                  onChangeText={(v) => {
+                    set('sourceText', v);
+                    setImported(null);
+                  }}
                   placeholder="Paste the pattern here…"
                   placeholderTextColor={Colors.inkSoft}
                   multiline
                   style={styles.pasteBox}
                 />
               </View>
-              <PillButton variant="secondary" style={styles.skipBtn} onPress={skipImport}>
+
+              {form.sourceText.trim().length > 0 && !imported && (
+                <View style={styles.field}>
+                  <PillButton style={styles.readBtn} loading={reading} onPress={readPattern}>
+                    <ThemedText type="smallBold" themeColor="white">
+                      {reading ? 'Reading the pattern…' : 'Read this pattern for me'}
+                    </ThemedText>
+                  </PillButton>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    Fills in the rest of these steps — sizes, yarn, tools, techniques and sections.
+                    You review everything before it&apos;s saved.
+                  </ThemedText>
+                  {importError && (
+                    <ThemedText type="small" themeColor="coralDeep">
+                      {importError}
+                    </ThemedText>
+                  )}
+                </View>
+              )}
+
+              {imported && (
+                <Card style={styles.importCard}>
+                  <ThemedText type="smallBold">
+                    {imported.pattern.name || 'Untitled pattern'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {describeImport(imported)}
+                  </ThemedText>
+                  {imported.summary.rowsUnparsed > 0 && (
+                    <ThemedText type="small" themeColor="inkSoft">
+                      {imported.summary.rowsUnparsed}{' '}
+                      {imported.summary.rowsUnparsed === 1 ? 'row was' : 'rows were'} too irregular
+                      to chart — open the section afterwards to read{' '}
+                      {imported.summary.rowsUnparsed === 1 ? 'it' : 'them'} with AI.
+                    </ThemedText>
+                  )}
+                  {imported.notes ? (
+                    <ThemedText type="small" themeColor="coralDeep">
+                      {imported.notes}
+                    </ThemedText>
+                  ) : null}
+                  <View style={styles.importActions}>
+                    <PillButton style={styles.grow} onPress={applyImport}>
+                      <ThemedText type="smallBold" themeColor="white">
+                        Use this
+                      </ThemedText>
+                    </PillButton>
+                    <PillButton
+                      variant="secondary"
+                      style={styles.grow}
+                      onPress={() => setImported(null)}>
+                      <ThemedText type="smallBold" themeColor="ink">
+                        Discard
+                      </ThemedText>
+                    </PillButton>
+                  </View>
+                </Card>
+              )}
+
+              <PillButton
+                variant="secondary"
+                style={styles.skipBtn}
+                disabled={reading}
+                onPress={skipImport}>
                 <ThemedText type="smallBold" themeColor="ink">
                   Skip
                 </ThemedText>
@@ -421,6 +550,19 @@ const styles = StyleSheet.create({
     minHeight: 72,
     textAlignVertical: 'top',
   },
+  readBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.four,
+  },
+  importCard: {
+    gap: Spacing.two,
+  },
+  importActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  grow: { flex: 1 },
   skipBtn: {
     marginTop: Spacing.one,
   },
