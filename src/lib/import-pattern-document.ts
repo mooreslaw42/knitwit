@@ -1,4 +1,5 @@
 import { CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
+import { MaxNameLength } from '@/constants/theme';
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import { parseSectionText } from '@/lib/parse-pattern-text';
 import type {
@@ -95,7 +96,7 @@ function normaliseMaterials(v: unknown): PatternMaterial[] {
       const m = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
       return {
         id: nextId('pm'),
-        label: str(m.label, 120) || `Yarn ${String.fromCharCode(65 + i)}`,
+        label: str(m.label, MaxNameLength) || `Yarn ${String.fromCharCode(65 + i)}`,
         // One letter is all the chart has room for.
         short: (str(m.short, 2) || String.fromCharCode(65 + i)).slice(0, 1).toUpperCase(),
       };
@@ -122,7 +123,7 @@ function normaliseTechniques(v: unknown): PatternTechnique[] {
     .slice(0, 20)
     .map((raw) => {
       const t = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-      return { id: nextId('tq'), name: str(t.name, 80), note: str(t.note, 300) };
+      return { id: nextId('tq'), name: str(t.name, MaxNameLength), note: str(t.note, 300) };
     })
     .filter((t) => t.name);
 }
@@ -154,7 +155,7 @@ function normaliseSections(
       const castOn = toSized(s.castOn, 0);
 
       return {
-        name: str(s.name, 80) || `Section ${i + 1}`,
+        name: str(s.name, MaxNameLength) || `Section ${i + 1}`,
         castOn,
         // Fall back to the number of rows we actually read, so the counter has something sane.
         totalRows: toSized(s.totalRows, Math.max(1, rows.length)),

@@ -55,3 +55,11 @@ export const Radii = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+// Cap on a free-text name the app later shows in a chip, a swatch caption or a card title.
+// Enforced where the text is entered and where it's imported, so nothing longer ever reaches a
+// layout that can't hold it. An imported yarn slot arrived at over a hundred characters — the
+// model had packed the weight, fibre and per-size yardage into the name — and ran off the card.
+// Truncation at render is still the backstop (a chip is narrower than 60 characters on a phone);
+// this stops the data being unreasonable in the first place.
+export const MaxNameLength = 60;

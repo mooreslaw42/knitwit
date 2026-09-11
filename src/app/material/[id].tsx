@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
@@ -69,6 +69,7 @@ export default function MaterialEditScreen() {
           <FormField
             label="Color name"
             value={form.colorName}
+            maxLength={MaxNameLength}
             onChangeText={(v) => set('colorName', v)}
           />
           <FormField

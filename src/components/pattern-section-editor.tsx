@@ -5,7 +5,7 @@ import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-u
 import { StitchChart } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
-import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
 import type {
   PatternMaterial,
@@ -125,6 +125,7 @@ export function PatternKitEditor({
               label="Colour name"
               value={m.label}
               onChangeText={(v) => updateMaterial(i, { label: v })}
+              maxLength={MaxNameLength}
               placeholder="e.g. Main colour, Contrast"
             />
             <FormField
@@ -207,6 +208,7 @@ export function PatternKitEditor({
             }>
             <FormField
               label="Name"
+              maxLength={MaxNameLength}
               value={t.name}
               onChangeText={(v) => updateTechnique(i, { name: v })}
               placeholder="e.g. Kitchener stitch"
@@ -437,7 +439,11 @@ export function PatternSectionsEditor({
                         })
                       }
                       style={[styles.chip, on && styles.chipOn]}>
-                      <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                      <ThemedText
+                        type="smallBold"
+                        numberOfLines={1}
+                        style={styles.chipText}
+                        themeColor={on ? 'white' : 'inkSoft'}>
                         {(m.short || '•') + ' · ' + (m.label || 'Yarn')}
                       </ThemedText>
                     </Pressable>
@@ -495,7 +501,11 @@ export function PatternSectionsEditor({
                         })
                       }
                       style={[styles.chip, on && styles.chipOn]}>
-                      <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                      <ThemedText
+                        type="smallBold"
+                        numberOfLines={1}
+                        style={styles.chipText}
+                        themeColor={on ? 'white' : 'inkSoft'}>
                         {t.name || 'Technique'}
                       </ThemedText>
                     </Pressable>
@@ -685,6 +695,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingVertical: Spacing.one,
+  },
+  // A chip grows to its text; without a ceiling one long name pushes past the card edge.
+  chipText: {
+    maxWidth: 260,
   },
   chipRow: {
     flexDirection: 'row',

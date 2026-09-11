@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
@@ -115,12 +115,14 @@ export default function NewMaterialWizardScreen() {
               <FormField
                 label="Brand"
                 value={form.brand}
+                maxLength={MaxNameLength}
                 onChangeText={(v) => set('brand', v)}
                 placeholder="e.g. Rico Design"
               />
               <FormField
                 label="Color name"
                 value={form.colorName}
+                maxLength={MaxNameLength}
                 onChangeText={(v) => set('colorName', v)}
                 placeholder="e.g. Blossom Pink"
               />

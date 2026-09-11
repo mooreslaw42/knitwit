@@ -1,3 +1,4 @@
+import { MaxNameLength } from '@/constants/theme';
 import { toImportedPattern } from '@/lib/import-pattern-document';
 
 // Stubbed to keep AsyncStorage out of this suite — importing it under Jest reaches for a native
@@ -54,6 +55,31 @@ describe('toImportedPattern', () => {
   it('gives every yarn slot a single-letter chart tag, inventing one when missing', () => {
     const { pattern } = toImportedPattern(wrap(full));
     expect(pattern.materials.map((m) => m.short)).toEqual(['A', 'B']);
+  });
+
+  // A real import produced this: the model packed weight, fibre and per-size yardage into the
+  // slot name, and the chip it lands on ran off the edge of the card.
+  it('caps an over-long yarn name rather than letting it overflow', () => {
+    const long =
+      'Yarn A — fingering weight merino, cotton-merino or silk, 50 g / 250 m: 150 (150) 150 (200) 200 (250) 250 (250)';
+    const { pattern } = toImportedPattern(
+      wrap({ ...full, materials: [{ label: long, short: 'A' }] }),
+    );
+    expect(pattern.materials[0].label.length).toBeLessThanOrEqual(MaxNameLength);
+    expect(pattern.materials[0].label).toContain('Yarn A');
+  });
+
+  it('caps technique and section names too', () => {
+    const long = 'x'.repeat(200);
+    const { pattern } = toImportedPattern(
+      wrap({
+        ...full,
+        techniques: [{ name: long, note: '' }],
+        sections: [{ ...full.sections[0], name: long }],
+      }),
+    );
+    expect(pattern.techniques[0].name.length).toBeLessThanOrEqual(MaxNameLength);
+    expect(pattern.sections[0].name.length).toBeLessThanOrEqual(MaxNameLength);
   });
 
   it('drops a technique with no name', () => {

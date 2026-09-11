@@ -137,7 +137,12 @@ export const DOCUMENT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          label: { type: 'string' },
+          label: {
+            type: 'string',
+            description:
+              'A short name, under 50 characters — "Yarn A — DK weight wool". It is shown on a ' +
+              'chip, so do not pack the fibre, the ball weight and the per-size yardage into it.',
+          },
           short: { type: 'string', description: 'One letter for charts: A, B, C…' },
         },
         required: ['label', 'short'],
