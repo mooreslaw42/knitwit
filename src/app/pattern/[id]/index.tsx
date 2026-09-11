@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
+import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -17,6 +18,7 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { patternSectionMarkers } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
+import { formatGauge } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Pattern, PatternCategory, PatternLevel } from '@/types/knitwit';
 
@@ -185,20 +187,7 @@ export default function PatternDetailScreen() {
                 onChangeText={(v) => set('needleSize', v)}
                 placeholder="e.g. 4.5mm"
               />
-              <FormField
-                label="Stitches / 10cm"
-                value={draft.gaugeStitches}
-                onChangeText={(v) => set('gaugeStitches', v)}
-                keyboardType="numeric"
-                placeholder="22"
-              />
-              <FormField
-                label="Rows / 10cm"
-                value={draft.gaugeRows}
-                onChangeText={(v) => set('gaugeRows', v)}
-                keyboardType="numeric"
-                placeholder="30"
-              />
+              <GaugeField value={draft.gauge} onChange={(g) => set('gauge', g)} />
               <FormField
                 label="Instruction video (optional)"
                 value={draft.video}
@@ -263,14 +252,7 @@ export default function PatternDetailScreen() {
               />
               <Field label="Sizes" value={(pattern.sizes ?? []).join(', ')} />
               <Field label="Needle / hook size" value={pattern.needleSize || pattern.weight} />
-              <Field
-                label="Gauge"
-                value={
-                  pattern.gaugeStitches || pattern.gaugeRows
-                    ? `${pattern.gaugeStitches || '?'}×${pattern.gaugeRows || '?'} sts/rows · 10cm`
-                    : ''
-                }
-              />
+              <Field label="Gauge" value={formatGauge(pattern.gauge)} />
               <Field label="Instruction video" value={pattern.video} />
               <Field label="Imported file" value={pattern.sourceName} />
               <Field label="Imported text" value={pattern.sourceText} numberOfLines={4} />

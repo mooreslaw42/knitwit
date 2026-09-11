@@ -4,10 +4,29 @@
 
 export type CraftType = 'knit' | 'crochet';
 
+export type LengthUnit = 'cm' | 'inch';
+
+// Gauge — how many stitches and rows a knitter gets over a measured window of fabric. The window
+// is stored rather than assumed, which is what lets one type hold every convention: metric
+// patterns state it per 10cm, US patterns per 4in, older ones per 1in, and some give a different
+// height from width.
+//
+// Stored exactly as the pattern states it, never normalised on entry. That matters more than it
+// looks: 4 inches is 10.16cm, so "22 sts / 4in" is 21.65 sts/10cm, and a pattern printing
+// "22 sts to 4in (10cm)" is rounding. The two readings differ by 1.6% — half a stitch on a
+// cast-on, more across a body — so the conversion happens where it's computed, not where it's
+// typed. See src/lib/gauge.ts.
+export type Gauge = {
+  stitches: number;
+  rows: number;
+  width: number;
+  height: number;
+  unit: LengthUnit;
+};
+
 export type Craft = {
   thickness: string;
-  gaugeStitches: string;
-  gaugeRows: string;
+  gauge: Gauge | null;
 };
 
 export type Material = {
@@ -23,8 +42,7 @@ export type Material = {
   strands: string;
   craftType: CraftType;
   washing: string;
-  gaugeStitches: string;
-  gaugeRows: string;
+  gauge: Gauge | null;
   link: string;
   photo: string | null;
   crafts?: Partial<Record<CraftType, Craft>>;
@@ -172,8 +190,7 @@ export type Pattern = {
   sourceText: string; // pasted pattern text, if any
   accentColor: string;
   photo: string | null;
-  gaugeStitches: string;
-  gaugeRows: string;
+  gauge: Gauge | null;
   favorited: boolean;
   level: PatternLevel;
   sizes: string[];

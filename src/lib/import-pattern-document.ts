@@ -3,6 +3,8 @@ import { MaxNameLength } from '@/constants/theme';
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import { parseSectionText } from '@/lib/parse-pattern-text';
 import type {
+  Gauge,
+  LengthUnit,
   Pattern,
   PatternCategory,
   PatternLevel,
@@ -56,10 +58,27 @@ const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${uid++}`
 const str = (v: unknown, max = 200): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
-// "24" out of "24 sts per 10cm" — the gauge fields are numeric inputs in the wizard.
-function digits(v: unknown): string {
-  const match = str(v).match(/\d+/);
-  return match ? match[0] : '';
+// The schema asks for numbers, but this crosses a runtime boundary and older drafts (and a
+// provider that isn't honouring the schema) can still send "22 sts per 10cm". Take either.
+function num(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) && v > 0 ? v : 0;
+  const match = str(v).replace(',', '.').match(/\d+(?:\.\d+)?/);
+  return match ? parseFloat(match[0]) : 0;
+}
+
+// The window a gauge was measured over is part of the gauge, not decoration. Reading "22 sts to 4
+// inches" and storing a bare 22 silently records it as metric, which is a different fabric by
+// 1.6% — and that was happening to every US pattern before gauge had a unit.
+function normaliseGauge(v: unknown): Gauge | null {
+  const g = (typeof v === 'object' && v !== null ? v : {}) as Record<string, unknown>;
+  const stitches = num(g.stitches);
+  const rows = num(g.rows);
+  if (stitches <= 0 && rows <= 0) return null;
+  const unit: LengthUnit = g.unit === 'inch' ? 'inch' : 'cm';
+  // Fall back to the convention of whichever unit was stated: 10cm, or 4in.
+  const fallback = unit === 'inch' ? 4 : 10;
+  const width = num(g.width) || fallback;
+  return { stitches, rows, width, height: num(g.height) || width, unit };
 }
 
 function oneOf<T extends string>(v: unknown, allowed: T[], fallback: T): T {
@@ -229,8 +248,7 @@ export function toImportedPattern(data: unknown): ImportedPattern {
       // Legacy field, superseded by needleSize — imports never set it.
       weight: '',
       video: '',
-      gaugeStitches: digits(draft.gaugeStitches),
-      gaugeRows: digits(draft.gaugeRows),
+      gauge: normaliseGauge(draft.gauge),
       sizes,
       materials,
       tools,

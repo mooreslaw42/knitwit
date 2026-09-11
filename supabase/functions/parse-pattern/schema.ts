@@ -196,11 +196,26 @@ export const DOCUMENT_SCHEMA = {
       type: 'string',
       description: 'Recommended needle or hook size as written, e.g. "4.5mm" or "4.5mm / US 7".',
     },
-    gaugeStitches: {
-      type: 'string',
-      description: 'Stitches per 10cm/4in from the gauge statement. Digits only, or empty.',
+    gauge: {
+      type: 'object',
+      description:
+        'The gauge statement, with the window it was measured over. The window matters: "22 sts ' +
+        'to 4 inches" is not the same fabric as "22 sts to 10cm", so report the unit the pattern ' +
+        'actually used rather than converting. All zeros if no gauge is stated.',
+      properties: {
+        stitches: { type: 'number', minimum: 0, description: '0 if not stated.' },
+        rows: { type: 'number', minimum: 0, description: '0 if not stated.' },
+        width: { type: 'number', minimum: 0, description: 'e.g. 10 for 10cm, 4 for 4in.' },
+        height: {
+          type: 'number',
+          minimum: 0,
+          description: 'Usually the same as width. Only differs if the pattern says so.',
+        },
+        unit: { type: 'string', enum: ['cm', 'inch'] },
+      },
+      required: ['stitches', 'rows', 'width', 'height', 'unit'],
+      additionalProperties: false,
     },
-    gaugeRows: { type: 'string', description: 'Rows per 10cm/4in. Digits only, or empty.' },
     sizes: {
       type: 'array',
       description:
@@ -324,8 +339,7 @@ export const DOCUMENT_SCHEMA = {
     'category',
     'level',
     'needleSize',
-    'gaugeStitches',
-    'gaugeRows',
+    'gauge',
     'sizes',
     'materials',
     'tools',

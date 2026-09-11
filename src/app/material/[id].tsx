@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
@@ -25,8 +26,7 @@ const BLANK: Material = {
   strands: '1',
   craftType: 'knit',
   washing: 'hand-wash',
-  gaugeStitches: '',
-  gaugeRows: '',
+  gauge: null,
   link: '',
   photo: null,
 };
@@ -119,18 +119,7 @@ export default function MaterialEditScreen() {
             onChangeText={(v) => set('thickness', v)}
             placeholder="e.g. 4.5mm"
           />
-          <FormField
-            label="Gauge — stitches / 10cm"
-            value={form.gaugeStitches}
-            onChangeText={(v) => set('gaugeStitches', v)}
-            keyboardType="numeric"
-          />
-          <FormField
-            label="Gauge — rows / 10cm"
-            value={form.gaugeRows}
-            onChangeText={(v) => set('gaugeRows', v)}
-            keyboardType="numeric"
-          />
+          <GaugeField value={form.gauge} onChange={(g) => set('gauge', g)} />
           <SelectField
             label="Washing"
             options={WASHING_OPTIONS}

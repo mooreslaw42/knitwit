@@ -566,9 +566,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v14 repairs patterns whose list fields went missing — see the unconditional back-fill in
-      // migrate(). The bump is what makes it run at all on a store already at 13.
-      version: 14,
+      // v15 gives gauge a unit — see the back-fill in migrate().
+      version: 15,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -577,8 +576,31 @@ export const useKnitwitStore = create<KnitwitState>()(
       // straight at a stash item. v3 → v4 added Tool.quantity (how many the user owns). Backfill
       // the new fields (and drop the old per-section pointers) so nothing reads an undefined field.
       migrate: (persisted, version) => {
+        // Shared by patterns, materials and a material's per-craft gauges, which all carried the
+        // same pair of strings.
+        const migrateGauge = (holder: Record<string, unknown>) => {
+          if ('gauge' in holder) return;
+          const stitches = parseFloat(String(holder.gaugeStitches ?? ''));
+          const rows = parseFloat(String(holder.gaugeRows ?? ''));
+          const hasStitches = Number.isFinite(stitches) && stitches > 0;
+          const hasRows = Number.isFinite(rows) && rows > 0;
+          holder.gauge =
+            hasStitches || hasRows
+              ? {
+                  stitches: hasStitches ? stitches : 0,
+                  rows: hasRows ? rows : 0,
+                  width: 10,
+                  height: 10,
+                  unit: 'cm',
+                }
+              : null;
+          delete holder.gaugeStitches;
+          delete holder.gaugeRows;
+        };
+
         const state = persisted as {
           patterns?: Record<string, Record<string, unknown>>;
+          materials?: Record<string, Record<string, unknown>>;
           tools?: Record<string, Record<string, unknown>>;
           projects?: Record<string, Record<string, unknown>>;
         } | undefined;
@@ -597,6 +619,10 @@ export const useKnitwitStore = create<KnitwitState>()(
                 if (!Array.isArray(section[key])) section[key] = [];
               }
             }
+            // v14 → v15: gauge gains a unit. The bare strings always meant "per 10cm" — that was
+            // the label printed next to the field — so that is what they become. An empty pair
+            // meant "not stated", which is now null rather than a gauge of zero.
+            if (version < 15) migrateGauge(pattern);
             if (version < 3) {
               if (!pattern.materials) pattern.materials = [];
               if (!pattern.tools) pattern.tools = [];
@@ -645,6 +671,14 @@ export const useKnitwitStore = create<KnitwitState>()(
                 if (typeof section.castOn !== 'number') section.castOn = 0;
               }
             }
+          }
+        }
+        // v14 → v15: materials carry gauge too, both at the top level and per craft.
+        if (version < 15 && state?.materials) {
+          for (const material of Object.values(state.materials)) {
+            migrateGauge(material);
+            const crafts = material.crafts as Record<string, Record<string, unknown>> | undefined;
+            for (const craft of Object.values(crafts ?? {})) migrateGauge(craft);
           }
         }
         // v12 → v13: a project records which size it is being knitted in. Existing projects

@@ -115,6 +115,8 @@ export const DOCUMENT_SYSTEM_PROMPT = `You read a knitting or crochet pattern an
 
 **Metadata** — title, category, difficulty, recommended needle or hook size, gauge, and the sizes the pattern is graded for.
 
+For gauge, report the window the pattern measured over, not a converted one. "22 sts and 30 rows to 4 inches" is \`{stitches: 22, rows: 30, width: 4, height: 4, unit: "inch"}\`. Do not turn inches into centimetres — 4 inches is 10.16cm, so converting and rounding changes the fabric. A pattern with no stated gauge gets all zeros.
+
 **Yarn** — as generic slots, not shopping. A pattern saying "Rowan Felted Tweed, 4 balls" becomes a slot labelled something like "Yarn A — DK weight wool"; the knitter maps it to what is actually in their stash later. Give each slot a one-letter tag: A, B, C.
 
 **Tools** — needles and hooks with their sizes, plus anything else the pattern requires (cable needle, stitch markers as a tool only if sized).

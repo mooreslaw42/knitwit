@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
@@ -27,8 +28,7 @@ const BLANK: Material = {
   strands: '1',
   craftType: 'knit',
   washing: 'hand-wash',
-  gaugeStitches: '',
-  gaugeRows: '',
+  gauge: null,
   link: '',
   photo: null,
 };
@@ -223,19 +223,10 @@ export default function NewMaterialWizardScreen() {
                 onChangeText={(v) => set('thickness', v)}
                 placeholder={form.craftType === 'crochet' ? 'e.g. 5.5mm' : 'e.g. 4.5mm'}
               />
-              <FormField
-                label="Stitches / 10cm"
-                value={form.gaugeStitches}
-                onChangeText={(v) => set('gaugeStitches', v)}
-                keyboardType="numeric"
-                placeholder="22"
-              />
-              <FormField
-                label="Rows / 10cm"
-                value={form.gaugeRows}
-                onChangeText={(v) => set('gaugeRows', v)}
-                keyboardType="numeric"
-                placeholder="30"
+              <GaugeField
+                value={form.gauge}
+                onChange={(g) => set('gauge', g)}
+                hint="What the ball band says, or what you got on a swatch."
               />
             </>
           )}

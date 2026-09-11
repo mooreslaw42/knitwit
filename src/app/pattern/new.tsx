@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
+import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
@@ -51,8 +52,7 @@ function blankPattern(): Pattern {
     // Auto-assigned so the library grid stays varied without asking the user to pick.
     accentColor: ACCENT_SWATCHES[Math.floor(Math.random() * ACCENT_SWATCHES.length)],
     photo: null,
-    gaugeStitches: '',
-    gaugeRows: '',
+    gauge: null,
     favorited: false,
     level: 'intermediate',
     sizes: [],
@@ -469,19 +469,10 @@ export default function NewPatternWizardScreen() {
                 onChangeText={(v) => set('needleSize', v)}
                 placeholder="e.g. 4.5mm"
               />
-              <FormField
-                label="Stitches / 10cm"
-                value={form.gaugeStitches}
-                onChangeText={(v) => set('gaugeStitches', v)}
-                keyboardType="numeric"
-                placeholder="22"
-              />
-              <FormField
-                label="Rows / 10cm"
-                value={form.gaugeRows}
-                onChangeText={(v) => set('gaugeRows', v)}
-                keyboardType="numeric"
-                placeholder="30"
+              <GaugeField
+                value={form.gauge}
+                onChange={(g) => set('gauge', g)}
+                hint="Measure your swatch over the window the pattern uses — they are not interchangeable."
               />
             </>
           )}

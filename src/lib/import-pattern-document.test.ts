@@ -12,8 +12,7 @@ const full = {
   category: 'sweaters',
   level: 'easy',
   needleSize: '4.5mm',
-  gaugeStitches: '22 sts per 10cm',
-  gaugeRows: '30',
+  gauge: { stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' },
   sizes: ['s', 'M', '6 months'],
   materials: [{ label: 'Yarn A — DK wool', short: 'aa' }, { label: 'Yarn B', short: '' }],
   tools: [{ type: 'circular', thickness: '4.5mm', note: 'US 7' }],
@@ -41,10 +40,36 @@ describe('toImportedPattern', () => {
     expect(pattern.needleSize).toBe('4.5mm');
   });
 
-  it('pulls the number out of a gauge written as prose', () => {
+  it('keeps the window a gauge was measured over', () => {
     const { pattern } = toImportedPattern(wrap(full));
-    expect(pattern.gaugeStitches).toBe('22');
-    expect(pattern.gaugeRows).toBe('30');
+    expect(pattern.gauge).toEqual({ stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' });
+  });
+
+  // Before gauge had a unit this was coerced to a bare number, so every US pattern was recorded as
+  // if it were metric — a 1.6% error in every stitch count the rescale would later produce.
+  it('keeps an imperial gauge imperial instead of silently calling it metric', () => {
+    const { pattern } = toImportedPattern(
+      wrap({ ...full, gauge: { stitches: 22, rows: 30, width: 4, height: 4, unit: 'inch' } }),
+    );
+    expect(pattern.gauge).toMatchObject({ width: 4, unit: 'inch' });
+  });
+
+  it('defaults the window to the convention of whichever unit was stated', () => {
+    expect(
+      toImportedPattern(wrap({ ...full, gauge: { stitches: 22, rows: 30, unit: 'inch' } })).pattern
+        .gauge,
+    ).toMatchObject({ width: 4, height: 4 });
+    expect(
+      toImportedPattern(wrap({ ...full, gauge: { stitches: 22, rows: 30, unit: 'cm' } })).pattern
+        .gauge,
+    ).toMatchObject({ width: 10, height: 10 });
+  });
+
+  it('treats an all-zero gauge as not stated rather than as a gauge of zero', () => {
+    const { pattern } = toImportedPattern(
+      wrap({ ...full, gauge: { stitches: 0, rows: 0, width: 10, height: 10, unit: 'cm' } }),
+    );
+    expect(pattern.gauge).toBeNull();
   });
 
   it("canonicalises sizes it recognises and keeps the pattern's own wording otherwise", () => {
