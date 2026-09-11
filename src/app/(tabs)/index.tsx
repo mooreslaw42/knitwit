@@ -13,10 +13,37 @@ export default function HomeScreen() {
   const router = useRouter();
   const projects = useKnitwitStore((state) => state.projects);
   const patterns = useKnitwitStore((state) => state.patterns);
+  const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
+  const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
+  const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
 
   const entries = Object.entries(projects);
-  const activeCount = entries.filter(([, p]) => projectProgress(p).pct < 1).length;
-  const doneCount = entries.filter(([, p]) => projectProgress(p).pct >= 1).length;
+  // Home is a "what's on the needles" view — only projects still in progress. The full list,
+  // including finished ones, lives on the Projects tab.
+  const incomplete = entries.filter(([, p]) => projectProgress(p).pct < 1);
+  const activeCount = incomplete.length;
+  const doneCount = entries.length - incomplete.length;
+
+  // Where "Continue" picks up: the section last counted, or — if that project has since been
+  // deleted — the current section of the first project still on the needles.
+  const lastProject = projects[activeProjectKey];
+  const lastSection = lastProject?.sections[activeSectionIndex];
+  const resume = (() => {
+    if (lastProject && lastSection) {
+      return {
+        key: activeProjectKey,
+        index: activeSectionIndex,
+        project: lastProject,
+        section: lastSection,
+      };
+    }
+    const fallback = incomplete[0];
+    if (!fallback) return null;
+    const [key, project] = fallback;
+    const index = currentSectionIndexOf(project);
+    const section = project.sections[index];
+    return section ? { key, index, project, section } : null;
+  })();
 
   return (
     <ThemedView style={styles.container}>
@@ -32,8 +59,28 @@ export default function HomeScreen() {
             <MiniStat num={doneCount} label="Done" />
           </View>
 
+          {resume && (
+            <PillButton
+              onPress={() => {
+                // Only re-point the counter when resuming somewhere else — re-selecting the
+                // current section would also clear a marker the knitter already dismissed.
+                if (resume.key !== activeProjectKey || resume.index !== activeSectionIndex) {
+                  setActiveSection(resume.key, resume.index);
+                }
+                router.push('/counter');
+              }}>
+              <ThemedText type="smallBold" themeColor="white">
+                Continue where you left off →
+              </ThemedText>
+              <ThemedText type="small" themeColor="white" numberOfLines={1}>
+                {resume.project.name} · {resume.section.name} · row {resume.section.row} of{' '}
+                {resume.section.totalRows}
+              </ThemedText>
+            </PillButton>
+          )}
+
           <View style={styles.sectionHeader}>
-            <ThemedText type="subtitle">Your projects</ThemedText>
+            <ThemedText type="subtitle">Your WIP</ThemedText>
             <PillButton style={styles.newBtn} onPress={() => router.push('/project/new')}>
               <ThemedText type="smallBold" themeColor="white">
                 + New project
@@ -41,17 +88,21 @@ export default function HomeScreen() {
             </PillButton>
           </View>
 
-          {entries.length === 0 && (
+          {incomplete.length === 0 && (
             <Card style={styles.emptyCard}>
-              <ThemedText type="smallBold">No projects yet</ThemedText>
+              <ThemedText type="smallBold">
+                {entries.length === 0 ? 'No projects yet' : 'Nothing on the needles'}
+              </ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
-                Tap “+ New project” to cast on your first one.
+                {entries.length === 0
+                  ? 'Tap “+ New project” to cast on your first one.'
+                  : 'Every project is finished — start a new one, or see them all on the Projects tab.'}
               </ThemedText>
             </Card>
           )}
 
           <View style={styles.projList}>
-            {entries.map(([key, p]) => {
+            {incomplete.map(([key, p]) => {
               const pct = projectProgress(p).pct;
               const cur = p.sections[currentSectionIndexOf(p)];
               return (

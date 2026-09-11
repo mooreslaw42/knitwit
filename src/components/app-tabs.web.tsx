@@ -7,6 +7,7 @@ import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 
 const TABS = [
   { name: 'home', href: '/', label: 'Home' },
+  { name: 'projects', href: '/projects', label: 'Projects' },
   { name: 'library', href: '/library', label: 'Library' },
   { name: 'counter', href: '/counter', label: 'Counter' },
   { name: 'materials', href: '/materials', label: 'Materials' },

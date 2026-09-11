@@ -3,11 +3,17 @@ import {
   darken,
   deriveProjectColors,
   formatClock,
+  inUseLabel,
+  patternSectionMarkers,
   projectProgress,
+  resolveRowGroups,
+  rowStitchesAfter,
+  sectionRowCounts,
   sectionStatus,
   todayStarted,
+  toolInUseCount,
 } from '@/lib/knitwit-helpers';
-import type { Project, ProjectSection } from '@/types/knitwit';
+import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
 
 function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
   return {
@@ -20,6 +26,8 @@ function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
     materialId: null,
     toolId: null,
     markers: [],
+    castOn: 0,
+    rows: [],
     ...overrides,
   };
 }
@@ -35,6 +43,116 @@ function project(sections: ProjectSection[]): Project {
     sections,
   };
 }
+
+let gid = 0;
+function group(overrides: Partial<PatternStitchGroup> = {}): PatternStitchGroup {
+  return {
+    id: `g${gid++}`,
+    type: 'knit',
+    span: 'all',
+    count: null,
+    materialSlot: null,
+    note: '',
+    ...overrides,
+  };
+}
+function row(stitches: PatternStitchGroup[], overrides: Partial<PatternRow> = {}): PatternRow {
+  return { id: `r${gid++}`, label: '', side: 'RS', marker: false, instruction: '', stitches, ...overrides };
+}
+
+// A classic sleeve increase: K1, M1L, knit to last st, M1R, K1 → grows by 2.
+const increaseRow = () =>
+  row([
+    group({ type: 'knit', span: 'exact', count: 1 }),
+    group({ type: 'm1l', span: 'all' }),
+    group({ type: 'knit', span: 'to-last', count: 1 }),
+    group({ type: 'm1r', span: 'all' }),
+    group({ type: 'knit', span: 'exact', count: 1 }),
+  ]);
+
+describe('rowStitchesAfter', () => {
+  it('grows by two on a M1L/M1R increase row regardless of width', () => {
+    expect(rowStitchesAfter(increaseRow(), 20)).toBe(22);
+    expect(rowStitchesAfter(increaseRow(), 61)).toBe(63);
+  });
+
+  it('leaves a plain knit/purl row unchanged', () => {
+    expect(rowStitchesAfter(row([group({ type: 'purl', span: 'all' })]), 40)).toBe(40);
+  });
+
+  it('halves the count on k2tog across, and doubles on kfb across', () => {
+    expect(rowStitchesAfter(row([group({ type: 'k2tog', span: 'all' })]), 40)).toBe(20);
+    expect(rowStitchesAfter(row([group({ type: 'kfb', span: 'all' })]), 20)).toBe(40);
+  });
+
+  it('adds one per yarn-over in a lace repeat, netting zero with matching decreases', () => {
+    // *yo, k2tog* across 40 sts: 20 yo (+20) and the k2tog run (−20) net to 40.
+    const lace = row([
+      group({ type: 'yo', span: 'exact', count: 20 }),
+      group({ type: 'k2tog', span: 'all' }),
+    ]);
+    expect(rowStitchesAfter(lace, 40)).toBe(40);
+  });
+});
+
+describe('resolveRowGroups', () => {
+  it('reserves fixed spans and gives the pool to the flexible consuming group', () => {
+    const resolved = resolveRowGroups(increaseRow(), 20);
+    // K1, M1L, (knit to last 1), M1R, K1 → the "knit to last" absorbs 17, M1s do 1 each.
+    expect(resolved.map((r) => r.units)).toEqual([1, 1, 17, 1, 1]);
+  });
+});
+
+describe('patternSectionMarkers', () => {
+  it('merges bare section markers with rows flagged in the stitch editor', () => {
+    const rows = [
+      row([group()], { marker: false }),
+      row([group()], { marker: true }), // row 2
+      row([group()], { marker: false }),
+      row([group()], { marker: true }), // row 4
+    ];
+    expect(patternSectionMarkers({ markers: [3], rows })).toEqual([2, 3, 4]);
+  });
+
+  it('de-duplicates when a row is flagged and also listed, and copes with no rows', () => {
+    const rows = [row([group()], { marker: true })];
+    expect(patternSectionMarkers({ markers: [1], rows })).toEqual([1]);
+    expect(patternSectionMarkers({ markers: [5, 2], rows: [] })).toEqual([2, 5]);
+  });
+});
+
+describe('sectionRowCounts', () => {
+  it('reports the live stitch count entering each row from the cast-on', () => {
+    const rows = [increaseRow(), row([group({ type: 'purl', span: 'all' })]), increaseRow()];
+    // enter row1 at 20 → after 22; row2 plain → 22; row3 → after 24.
+    expect(sectionRowCounts(rows, 20)).toEqual([20, 22, 22]);
+  });
+});
+
+describe('toolInUseCount', () => {
+  it('counts one per unfinished section that calls for the tool, across projects', () => {
+    const projects = {
+      a: project([
+        section({ toolId: 't1', complete: false }),
+        section({ toolId: 't1', complete: true }), // finished — releases the tool
+      ]),
+      b: project([section({ toolId: 't1', complete: false })]),
+      c: project([section({ toolId: 't2', complete: false })]),
+    };
+    expect(toolInUseCount(projects, 't1')).toBe(2);
+    expect(toolInUseCount(projects, 't2')).toBe(1);
+    expect(toolInUseCount(projects, 't3')).toBe(0);
+  });
+});
+
+describe('inUseLabel', () => {
+  it('agrees subject and verb with the count', () => {
+    expect(inUseLabel(0)).toBe('None in use');
+    expect(inUseLabel(1)).toBe('1 in use');
+    expect(inUseLabel(2)).toBe('2 are in use');
+    expect(inUseLabel(3)).toBe('3 are in use');
+  });
+});
 
 describe('formatClock', () => {
   it('formats under an hour without an hour part', () => {

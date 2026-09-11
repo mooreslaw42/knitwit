@@ -7,12 +7,13 @@ import { DeleteButton, FormField, PillButton, SelectField } from '@/components/k
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
+import { inUseLabel } from '@/lib/knitwit-helpers';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Tool, ToolType } from '@/types/knitwit';
 
-const BLANK: Tool = { type: 'circular', thickness: '', length: '' };
+const BLANK: Tool = { type: 'circular', thickness: '', length: '', quantity: 1 };
 
 const TYPE_OPTIONS: { value: ToolType; label: string }[] = Object.entries(TOOL_TYPE_LABELS).map(
   ([value, label]) => ({ value: value as ToolType, label }),
@@ -43,6 +44,11 @@ export default function ToolEditScreen() {
   const [form, setForm] = useState<Tool>(existing ?? BLANK);
   const set = <K extends keyof Tool>(key: K, value: Tool[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+  // Quantity is edited as free text so it can be cleared mid-typing; it is parsed on save.
+  const [qty, setQty] = useState(String(existing?.quantity ?? 1));
+
+  const inUse = activeUsage.length;
+  const owned = Math.max(1, parseInt(qty, 10) || 1);
 
   return (
     <ThemedView style={styles.container}>
@@ -68,13 +74,27 @@ export default function ToolEditScreen() {
             onChangeText={(v) => set('length', v)}
             placeholder="e.g. 80cm, or set of 5"
           />
+          <FormField
+            label="How many you have"
+            value={qty}
+            onChangeText={setQty}
+            keyboardType="numeric"
+            placeholder="1"
+          />
 
           {!isNew && (
-            <ThemedText type="small" themeColor={activeUsage.length ? 'coralDeep' : 'sageDeep'}>
-              {activeUsage.length
-                ? `In use — ${activeUsage.map((u) => `${u.projectName} (${u.sectionName})`).join(', ')}`
-                : 'Available'}
-            </ThemedText>
+            <>
+              <ThemedText type="smallBold" themeColor={inUse ? 'coralDeep' : 'sageDeep'}>
+                {inUse >= owned && inUse > 0
+                  ? `${inUseLabel(inUse)} — all of your ${owned}`
+                  : `${owned} in your stash · ${inUseLabel(inUse)}`}
+              </ThemedText>
+              {inUse > 0 && (
+                <ThemedText type="small" themeColor="inkSoft">
+                  {activeUsage.map((u) => `${u.projectName} (${u.sectionName})`).join(', ')}
+                </ThemedText>
+              )}
+            </>
           )}
 
           <PillButton
@@ -84,6 +104,7 @@ export default function ToolEditScreen() {
                 ...form,
                 thickness: form.thickness || '—',
                 length: form.length || '—',
+                quantity: owned,
               });
               goBackOr(router, '/materials');
             }}>

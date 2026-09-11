@@ -13,6 +13,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="projects">
+        <NativeTabs.Trigger.Label>Projects</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'folder', selected: 'folder.fill' }} />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="library">
         <NativeTabs.Trigger.Label>Library</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'book', selected: 'book.fill' }} />

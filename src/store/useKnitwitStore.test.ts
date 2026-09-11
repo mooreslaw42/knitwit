@@ -193,6 +193,149 @@ describe('createProject', () => {
     expect(p.sections[0].totalRows).toBe(60);
   });
 
+  it('inherits the pattern sections, reset to zero progress with re-issued note ids', () => {
+    const { patterns, noteSeq } = useKnitwitStore.getState();
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+    const project = useKnitwitStore.getState().projects[key];
+
+    // p1 defines two sections; the manual totalRows is ignored in favour of them.
+    expect(project.sections.map((s) => s.name)).toEqual(
+      patterns.p1.sections.map((s) => s.name),
+    );
+    project.sections.forEach((s) => {
+      expect(s).toMatchObject({ row: 0, complete: false, seconds: 0 });
+    });
+    // Stitch markers come across from the template.
+    expect(project.sections[0].markers).toEqual(patterns.p1.sections[0].markers);
+
+    // The single inherited note is re-keyed from the store's own sequence, not the template id.
+    const inheritedNote = project.sections[1].notes[0];
+    expect(inheritedNote.text).toBe(patterns.p1.sections[1].notes[0].text);
+    expect(inheritedNote.id).toBe(noteSeq);
+    expect(useKnitwitStore.getState().noteSeq).toBe(noteSeq + 1);
+  });
+
+  it('resolves single-slot sections to the mapped stash item, and stores the slot maps', () => {
+    // p1's sections each use exactly the p1m1 yarn slot and p1t1 tool slot.
+    const key = useKnitwitStore.getState().createProject({
+      name: 'Cardi',
+      started: '',
+      patternId: 'p1',
+      totalRows: 10,
+      slotMaterials: { p1m1: 'm3', p1m2: 'm1' },
+      slotTools: { p1t1: 't3' },
+    });
+    const project = useKnitwitStore.getState().projects[key];
+    // Body/Sleeve both call for p1m1 (→ m3) and p1t1 (→ t3).
+    expect(project.sections[0].materialId).toBe('m3');
+    expect(project.sections[0].toolId).toBe('t3');
+    // The full mapping is kept on the project for later reference.
+    expect(project.slotMaterials).toEqual({ p1m1: 'm3', p1m2: 'm1' });
+    expect(project.slotTools).toEqual({ p1t1: 't3' });
+  });
+
+  it('leaves an unmapped slot section without a concrete stash item', () => {
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+    const project = useKnitwitStore.getState().projects[key];
+    expect(project.sections[0].materialId).toBeNull();
+    expect(project.sections[0].toolId).toBeNull();
+  });
+
+  it('carries stitch markers flagged on charted rows into the project the counter reads', () => {
+    // Flag row 3 of p1's Body section in the stitch editor, alongside its existing markers.
+    const patterns = useKnitwitStore.getState().patterns;
+    const body = patterns.p1.sections[0];
+    useKnitwitStore.setState({
+      patterns: {
+        ...patterns,
+        p1: {
+          ...patterns.p1,
+          sections: [
+            {
+              ...body,
+              rows: [
+                { id: 'r1', label: '', side: 'RS', marker: false, instruction: '', stitches: [] },
+                { id: 'r2', label: '', side: 'WS', marker: false, instruction: '', stitches: [] },
+                { id: 'r3', label: '', side: 'RS', marker: true, instruction: '', stitches: [] },
+              ],
+            },
+            ...patterns.p1.sections.slice(1),
+          ],
+        },
+      },
+    });
+
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+    // The counter prompts off section.markers, so the flagged row must land there (row 3),
+    // merged with the section's own markers (20, 40).
+    expect(useKnitwitStore.getState().projects[key].sections[0].markers).toEqual([3, 20, 40]);
+  });
+
+  it('snapshots the pattern chart onto the project, so later pattern edits leave it alone', () => {
+    const patterns = useKnitwitStore.getState().patterns;
+    const body = patterns.p1.sections[0];
+    const row = {
+      id: 'r1',
+      label: 'Row 1',
+      side: 'RS' as const,
+      marker: false,
+      instruction: 'Knit all.',
+      stitches: [
+        { id: 'g1', type: 'knit', span: 'all' as const, count: null, materialSlot: null, note: '' },
+      ],
+    };
+    useKnitwitStore.setState({
+      patterns: {
+        ...patterns,
+        p1: {
+          ...patterns.p1,
+          sections: [
+            { ...body, castOn: 20, rows: [row] },
+            ...patterns.p1.sections.slice(1),
+          ],
+        },
+      },
+    });
+
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+    expect(useKnitwitStore.getState().projects[key].sections[0]).toMatchObject({
+      castOn: 20,
+      rows: [expect.objectContaining({ instruction: 'Knit all.' })],
+    });
+
+    // Now rewrite the pattern's chart; the in-progress project must not change.
+    const after = useKnitwitStore.getState().patterns;
+    useKnitwitStore.setState({
+      patterns: {
+        ...after,
+        p1: {
+          ...after.p1,
+          sections: [{ ...after.p1.sections[0], castOn: 99, rows: [] }, ...after.p1.sections.slice(1)],
+        },
+      },
+    });
+    const projectSection = useKnitwitStore.getState().projects[key].sections[0];
+    expect(projectSection.castOn).toBe(20);
+    expect(projectSection.rows).toHaveLength(1);
+  });
+
+  it('falls back to a single section for a pattern that defines none', () => {
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'Mitts', started: '', patternId: 'p3', totalRows: 24 });
+    const project = useKnitwitStore.getState().projects[key];
+    expect(project.sections).toHaveLength(1);
+    expect(project.sections[0]).toMatchObject({ name: 'Main', totalRows: 24 });
+  });
+
   it('gives each project a distinct key', () => {
     const a = useKnitwitStore
       .getState()

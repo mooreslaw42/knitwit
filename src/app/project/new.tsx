@@ -3,20 +3,22 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FormField, PillButton } from '@/components/knitwit-ui';
+import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CATEGORY_LABELS } from '@/constants/catalogs';
+import { CATEGORY_LABELS, TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { todayStarted } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
-const STEPS = ['Basics', 'Pattern', 'Rows'] as const;
+type StepId = 'basics' | 'pattern' | 'match' | 'plan';
 
 export default function NewProjectWizardScreen() {
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
+  const materials = useKnitwitStore((state) => state.materials);
+  const tools = useKnitwitStore((state) => state.tools);
   const createProject = useKnitwitStore((state) => state.createProject);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
 
@@ -26,11 +28,69 @@ export default function NewProjectWizardScreen() {
   const [patternId, setPatternId] = useState<string | null>(null);
   const [totalRows, setTotalRows] = useState('60');
   const [nameTouched, setNameTouched] = useState(false);
+  // Chosen mappings from the pattern's generic slots to the user's own stash.
+  const [slotMaterials, setSlotMaterials] = useState<Record<string, string>>({});
+  const [slotTools, setSlotTools] = useState<Record<string, string>>({});
 
-  const isLast = step === STEPS.length - 1;
+  const selectedPattern = patternId ? patterns[patternId] : null;
+  const patternMaterials = selectedPattern?.materials ?? [];
+  const patternTools = selectedPattern?.tools ?? [];
+  const inheritedSections = selectedPattern?.sections ?? [];
+  const hasSlots = patternMaterials.length + patternTools.length > 0;
+  const hasSections = inheritedSections.length > 0;
+
+  // The stash-matching step only exists when the chosen pattern actually names yarn or tools, and
+  // the final step is either the inherited-section review or the manual row count.
+  const steps: { id: StepId; label: string }[] = [
+    { id: 'basics', label: 'Basics' },
+    { id: 'pattern', label: 'Pattern' },
+    ...(hasSlots ? [{ id: 'match' as const, label: 'Materials' }] : []),
+    { id: 'plan', label: hasSections ? 'Sections' : 'Rows' },
+  ];
+  const current = steps[step] ?? steps[steps.length - 1];
+  const isLast = step === steps.length - 1;
+
   // The original refuses to leave the first step without a name, since an unnamed project is
   // impossible to find again in the list.
-  const nameMissing = step === 0 && !name.trim();
+  const nameMissing = current.id === 'basics' && !name.trim();
+
+  const choosePattern = (id: string | null) => {
+    if (id === patternId) return;
+    setPatternId(id);
+    // The old mappings belonged to a different pattern's slots — clear them.
+    setSlotMaterials({});
+    setSlotTools({});
+  };
+
+  const setSlotMaterial = (slotId: string, value: string) =>
+    setSlotMaterials((prev) => {
+      const next = { ...prev };
+      if (value) next[slotId] = value;
+      else delete next[slotId];
+      return next;
+    });
+  const setSlotTool = (slotId: string, value: string) =>
+    setSlotTools((prev) => {
+      const next = { ...prev };
+      if (value) next[slotId] = value;
+      else delete next[slotId];
+      return next;
+    });
+
+  const materialOptions = [
+    { value: '', label: '— choose from your stash —' },
+    ...Object.entries(materials).map(([id, m]) => ({
+      value: id,
+      label: `${m.brand} — ${m.colorName}`,
+    })),
+  ];
+  const toolOptions = [
+    { value: '', label: '— choose from your stash —' },
+    ...Object.entries(tools).map(([id, t]) => ({
+      value: id,
+      label: `${t.thickness} ${TOOL_TYPE_LABELS[t.type]} · ${t.length}`,
+    })),
+  ];
 
   const handleNext = () => {
     if (nameMissing) {
@@ -46,6 +106,8 @@ export default function NewProjectWizardScreen() {
       started,
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
+      slotMaterials,
+      slotTools,
     });
     setActiveSection(key, 0);
     router.replace(`/project/${key}`);
@@ -65,9 +127,9 @@ export default function NewProjectWizardScreen() {
               <ThemedText type="default">←</ThemedText>
             </Pressable>
             <View style={styles.dots}>
-              {STEPS.map((s, i) => (
+              {steps.map((s, i) => (
                 <View
-                  key={s}
+                  key={s.id}
                   style={[styles.dot, i === step && styles.dotActive, i < step && styles.dotDone]}
                 />
               ))}
@@ -75,10 +137,10 @@ export default function NewProjectWizardScreen() {
             <View style={styles.topbarSpacer} />
           </View>
           <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
+            Step {step + 1} of {steps.length} · {current.label}
           </ThemedText>
 
-          {step === 0 && (
+          {current.id === 'basics' && (
             <>
               <ThemedText type="subtitle">What are you making?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
@@ -104,7 +166,7 @@ export default function NewProjectWizardScreen() {
             </>
           )}
 
-          {step === 1 && (
+          {current.id === 'pattern' && (
             <>
               <ThemedText type="subtitle">Working from a pattern?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
@@ -115,9 +177,13 @@ export default function NewProjectWizardScreen() {
                   key={id}
                   swatch={pattern.accentColor}
                   title={pattern.name}
-                  meta={`${CATEGORY_LABELS[pattern.category]} · ${pattern.weight}`}
+                  meta={`${CATEGORY_LABELS[pattern.category]}${
+                    pattern.needleSize || pattern.weight
+                      ? ` · ${pattern.needleSize || pattern.weight}`
+                      : ''
+                  }`}
                   selected={patternId === id}
-                  onPress={() => setPatternId(id)}
+                  onPress={() => choosePattern(id)}
                 />
               ))}
               <ChoiceCard
@@ -125,26 +191,89 @@ export default function NewProjectWizardScreen() {
                 title="No pattern — I'll improvise"
                 meta="Just count rows"
                 selected={patternId === null}
-                onPress={() => setPatternId(null)}
+                onPress={() => choosePattern(null)}
               />
             </>
           )}
 
-          {step === 2 && (
+          {current.id === 'match' && (
             <>
-              <ThemedText type="subtitle">How many rows?</ThemedText>
+              <ThemedText type="subtitle">Match your stash</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
-                This makes a single section you can count through.
+                {selectedPattern?.name} asks for these — pick which of your own yarn and tools to
+                use. You can leave any unset for now.
               </ThemedText>
-              <FormField
-                label="Target rows"
-                value={totalRows}
-                onChangeText={setTotalRows}
-                keyboardType="numeric"
-                placeholder="60"
-              />
+              {patternMaterials.map((slot) => (
+                <View key={slot.id} style={styles.slotMap}>
+                  <View style={styles.slotLabel}>
+                    <View style={[styles.slotDot, { backgroundColor: Colors.creamDeep }]} />
+                    <ThemedText type="smallBold">
+                      {slot.short ? `${slot.short} · ${slot.label}` : slot.label}
+                    </ThemedText>
+                  </View>
+                  <SelectField
+                    label="Yarn"
+                    options={materialOptions}
+                    value={slotMaterials[slot.id] ?? ''}
+                    onChange={(v) => setSlotMaterial(slot.id, v)}
+                  />
+                </View>
+              ))}
+              {patternTools.map((slot) => (
+                <View key={slot.id} style={styles.slotMap}>
+                  <View style={styles.slotLabel}>
+                    <View style={[styles.slotDot, { backgroundColor: Colors.creamDeep }]} />
+                    <ThemedText type="smallBold">
+                      {slot.thickness} {TOOL_TYPE_LABELS[slot.type]}
+                      {slot.note ? ` · ${slot.note}` : ''}
+                    </ThemedText>
+                  </View>
+                  <SelectField
+                    label="Tool"
+                    options={toolOptions}
+                    value={slotTools[slot.id] ?? ''}
+                    onChange={(v) => setSlotTool(slot.id, v)}
+                  />
+                </View>
+              ))}
             </>
           )}
+
+          {current.id === 'plan' &&
+            (hasSections ? (
+              <>
+                <ThemedText type="subtitle">Sections from the pattern</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  {selectedPattern?.name} brings its own sections — they&apos;ll be added ready to
+                  count.
+                </ThemedText>
+                {inheritedSections.map((s, i) => (
+                  <View key={s.name + i} style={styles.choiceCard}>
+                    <View style={styles.choiceInfo}>
+                      <ThemedText type="smallBold">{s.name}</ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft">
+                        {s.totalRows} rows
+                        {s.markers.length ? ` · ${s.markers.length} markers` : ''}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <>
+                <ThemedText type="subtitle">How many rows?</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  This makes a single section you can count through.
+                </ThemedText>
+                <FormField
+                  label="Target rows"
+                  value={totalRows}
+                  onChangeText={setTotalRows}
+                  keyboardType="numeric"
+                  placeholder="60"
+                />
+              </>
+            ))}
 
           <PillButton style={styles.nextBtn} onPress={handleNext}>
             <ThemedText type="smallBold" themeColor="white">
@@ -252,6 +381,22 @@ const styles = StyleSheet.create({
   choiceInfo: {
     flex: 1,
     gap: 2,
+  },
+  slotMap: {
+    gap: Spacing.two,
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    padding: Spacing.three,
+  },
+  slotLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  slotDot: {
+    width: 20,
+    height: 20,
+    borderRadius: Radii.small,
   },
   nextBtn: {
     marginTop: Spacing.two,

@@ -8,12 +8,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TOOL_ICONS, TOOL_TYPE_LABELS, yarnWeightLabel } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { toolInUseCount } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function MaterialsScreen() {
   const router = useRouter();
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
+  const projects = useKnitwitStore((state) => state.projects);
   const [view, setView] = useState<'materials' | 'tools'>('materials');
 
   return (
@@ -71,21 +73,30 @@ export default function MaterialsScreen() {
             </View>
           ) : (
             <View style={styles.list}>
-              {Object.entries(tools).map(([id, t]) => (
-                <Pressable key={id} style={styles.row} onPress={() => router.push(`/tool/${id}`)}>
-                  <View style={[styles.thumb, styles.iconThumb]}>
-                    <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
-                  </View>
-                  <View style={styles.rowInfo}>
-                    <ThemedText type="smallBold">
-                      {t.thickness} {TOOL_TYPE_LABELS[t.type]}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="inkSoft">
-                      {t.length}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              ))}
+              {Object.entries(tools).map(([id, t]) => {
+                const owned = t.quantity ?? 1;
+                const inUse = toolInUseCount(projects, id);
+                return (
+                  <Pressable key={id} style={styles.row} onPress={() => router.push(`/tool/${id}`)}>
+                    <View style={[styles.thumb, styles.iconThumb]}>
+                      <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
+                    </View>
+                    <View style={styles.rowInfo}>
+                      <ThemedText type="smallBold">
+                        {t.thickness} {TOOL_TYPE_LABELS[t.type]}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft">
+                        {t.length}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.qtyPill, inUse > 0 && styles.qtyPillActive]}>
+                      <ThemedText type="small" themeColor={inUse > 0 ? 'coralDeep' : 'inkSoft'}>
+                        {inUse > 0 ? `${owned} · ${inUse} in use` : `${owned} in stash`}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -176,5 +187,14 @@ const styles = StyleSheet.create({
   rowInfo: {
     flex: 1,
     gap: 2,
+  },
+  qtyPill: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  qtyPillActive: {
+    backgroundColor: Colors.butter,
   },
 });

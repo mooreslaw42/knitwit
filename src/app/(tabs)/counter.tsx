@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PillButton } from '@/components/knitwit-ui';
+import { StitchRowStrip } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -17,6 +19,16 @@ export default function CounterScreen() {
   const project = useKnitwitStore((state) => state.projects[activeProjectKey]);
   // Every project can be deleted, which leaves nothing to count.
   const section = project?.sections[activeSectionIndex];
+
+  // The chart was copied onto the project section when it was created, so counting is unaffected
+  // by later edits to the pattern it came from.
+  const chartRows = section?.rows ?? [];
+  // `row` counts rows completed, so it names the row just worked; before anything is worked, show
+  // the first row that's coming up.
+  const chartRowIndex = chartRows.length
+    ? Math.min(chartRows.length - 1, Math.max(0, (section?.row ?? 0) - 1))
+    : -1;
+  const chartRow = chartRowIndex >= 0 ? chartRows[chartRowIndex] : null;
 
   const dismissedMarkerRow = useKnitwitStore((state) => state.dismissedMarkerRow);
   const castOffDismissed = useKnitwitStore((state) => state.castOffDismissed);
@@ -86,14 +98,16 @@ export default function CounterScreen() {
               {isTimerRunning ? '⏸' : '▶'} {formatClock(liveSeconds)}
             </ThemedText>
           </Pressable>
-          <Pressable
+          <PillButton
+            style={styles.noteBtn}
             onPress={() => {
               setNoteText('');
               openNoteForm();
-            }}
-            hitSlop={8}>
-            <ThemedText type="default">📝</ThemedText>
-          </Pressable>
+            }}>
+            <ThemedText type="smallBold" themeColor="white">
+              + Add note
+            </ThemedText>
+          </PillButton>
         </View>
 
         <Pressable
@@ -165,6 +179,25 @@ export default function CounterScreen() {
 
         {!hideMain && (
           <View style={styles.counterArea}>
+            {chartRowIndex >= 0 && (
+              <View style={styles.rowStrip}>
+                <StitchRowStrip
+                  rows={chartRows}
+                  castOn={section.castOn}
+                  rowIndex={chartRowIndex}
+                  showStitchCount
+                />
+                {chartRow?.instruction ? (
+                  <ThemedText
+                    type="small"
+                    themeColor="inkSoft"
+                    numberOfLines={2}
+                    style={styles.rowInstruction}>
+                    {chartRow.instruction}
+                  </ThemedText>
+                ) : null}
+              </View>
+            )}
             <ThemedText style={styles.cntNumber}>{section.row}</ThemedText>
             <ThemedText type="small" themeColor="inkSoft" style={styles.cntOf}>
               of {section.totalRows} rows
@@ -288,6 +321,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
   },
+  // Matches the "+ New pattern" pill used on the Library/Materials/Projects headers.
+  noteBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
   sectionLink: {
     alignItems: 'center',
     marginBottom: Spacing.three,
@@ -301,6 +339,15 @@ const styles = StyleSheet.create({
   counterArea: {
     alignItems: 'center',
     marginTop: Spacing.five,
+  },
+  rowStrip: {
+    maxWidth: '100%',
+    marginBottom: Spacing.three,
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  rowInstruction: {
+    textAlign: 'center',
   },
   cntNumber: {
     fontFamily: Fonts.headingBold,
