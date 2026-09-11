@@ -1,5 +1,6 @@
 import { Picker } from '@react-native-picker/picker';
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   TextInput,
@@ -10,7 +11,7 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Spacing, type ThemeColor } from '@/constants/theme';
 import type { SectionStatus } from '@/types/knitwit';
 
 export function Card({ style, ...props }: ViewProps) {
@@ -46,22 +47,53 @@ export function StatusBadge({ status }: { status: SectionStatus }) {
   );
 }
 
+// The app's one waiting indicator. Anything that makes the user wait should use this rather than
+// rolling its own, so a pause always looks the same wherever it happens.
+export function Spinner({
+  color = 'ink',
+  size = 'small',
+}: {
+  color?: ThemeColor;
+  size?: 'small' | 'large';
+}) {
+  return <ActivityIndicator size={size} color={Colors[color]} />;
+}
+
 export function PillButton({
   style,
   children,
   variant = 'primary',
+  loading = false,
+  disabled,
   ...props
-}: PressableProps & { children: React.ReactNode; variant?: 'primary' | 'secondary' }) {
+}: PressableProps & {
+  children: React.ReactNode;
+  variant?: 'primary' | 'secondary';
+  // Shows the spinner and disables the button — a button that's working shouldn't be pressable
+  // twice, and the two states should never drift apart.
+  loading?: boolean;
+}) {
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       style={({ pressed }) => [
         styles.pill,
         variant === 'primary' ? styles.pillPrimary : styles.pillSecondary,
-        pressed && styles.pressed,
+        // No press feedback when there's nothing to press.
+        pressed && !isDisabled && styles.pressed,
+        isDisabled && styles.pillDisabled,
         typeof style === 'function' ? undefined : style,
       ]}
-      {...props}>
-      {children}
+      {...props}
+      disabled={isDisabled}>
+      {loading ? (
+        <View style={styles.pillLoading}>
+          <Spinner color={variant === 'primary' ? 'white' : 'ink'} />
+          {children}
+        </View>
+      ) : (
+        children
+      )}
     </Pressable>
   );
 }
@@ -166,6 +198,16 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  // Greyed rather than recoloured: the palette has no disabled tone, and fading keeps the button
+  // recognisable as the same control that will come back.
+  pillDisabled: {
+    opacity: 0.45,
+  },
+  pillLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   field: {
     gap: Spacing.one,

@@ -271,7 +271,11 @@ export default function SectionStitchesScreen() {
               style={[styles.input, styles.patternText]}
             />
             {description.trim().length > 0 && (
-              <PillButton variant="secondary" style={styles.convertBtn} onPress={convert}>
+              <PillButton
+                variant="secondary"
+                style={styles.convertBtn}
+                disabled={asking}
+                onPress={convert}>
                 <ThemedText type="smallBold" themeColor="ink">
                   Convert to stitches
                 </ThemedText>
@@ -328,10 +332,12 @@ export default function SectionStitchesScreen() {
                   <PillButton
                     variant="secondary"
                     style={styles.convertBtn}
-                    disabled={asking}
+                    loading={asking}
                     onPress={askModel}>
                     <ThemedText type="smallBold" themeColor="ink">
-                      {asking ? 'Reading…' : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
+                      {asking
+                        ? 'Reading…'
+                        : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
                     </ThemedText>
                   </PillButton>
                 </View>
@@ -350,8 +356,11 @@ export default function SectionStitchesScreen() {
               )}
 
               <View style={styles.inline}>
+                {/* Locked while the model is working: applying or cancelling mid-request would
+                    land the merge on rows that are no longer on screen. */}
                 <PillButton
                   style={styles.grow}
+                  disabled={asking}
                   onPress={() => {
                     setRows(preview.rows);
                     setSelected(null);
@@ -365,6 +374,7 @@ export default function SectionStitchesScreen() {
                 <PillButton
                   variant="secondary"
                   style={styles.grow}
+                  disabled={asking}
                   onPress={() => {
                     setPreview(null);
                     setAskError(null);
