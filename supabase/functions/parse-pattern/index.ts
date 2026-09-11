@@ -1,5 +1,6 @@
 import { buildUserMessage, SYSTEM_PROMPT } from './prompt.ts';
 import { anthropicProvider } from './provider-anthropic.ts';
+import { greenptProvider } from './provider-greenpt.ts';
 import type { ModelProvider } from './provider.ts';
 import {
   ROWS_SCHEMA,
@@ -41,18 +42,24 @@ class BadRequest extends Error {}
 
 function selectProvider(): ModelProvider {
   const name = Deno.env.get('AI_PROVIDER') ?? 'anthropic';
+
+  if (name === 'greenpt') {
+    const apiKey = Deno.env.get('GREENPT_API_KEY');
+    if (!apiKey) {
+      throw new Error('GREENPT_API_KEY is not set. Set it as a Supabase secret.');
+    }
+    return greenptProvider(apiKey);
+  }
+
   if (name === 'anthropic') {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      throw new Error(
-        'ANTHROPIC_API_KEY is not set. Set it as a Supabase secret: ' +
-          'supabase secrets set ANTHROPIC_API_KEY=sk-ant-…',
-      );
+      throw new Error('ANTHROPIC_API_KEY is not set. Set it as a Supabase secret.');
     }
     return anthropicProvider(apiKey);
   }
-  // GreenPT slots in here when it's wired up — see provider.ts.
-  throw new Error(`Unknown AI_PROVIDER "${name}". Known providers: anthropic.`);
+
+  throw new Error(`Unknown AI_PROVIDER "${name}". Known providers: anthropic, greenpt.`);
 }
 
 function validateRequest(body: unknown): ParsePatternRequest {

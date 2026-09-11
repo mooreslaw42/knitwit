@@ -52,6 +52,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "typecheck:functions": "npx -y deno@latest check --config supabase/functions/parse-pattern/deno.json supabase/functions/parse-pattern/index.ts",
     "test": "jest"
   },
   "jest": {

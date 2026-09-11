@@ -19,8 +19,9 @@ export type ModelRequest = {
   system: string;
   // Varies per call.
   user: string;
-  // JSON schema the response must satisfy.
-  schema: unknown;
+  // JSON schema the response must satisfy. Always an object — the Anthropic SDK's
+  // `output_config.format.schema` won't accept a bare `unknown`.
+  schema: Record<string, unknown>;
   model: string;
   maxTokens: number;
 };
