@@ -146,6 +146,10 @@ export default function SectionStitchesScreen() {
       ...reconcileRowCounts(result.rows, result.expectedCounts, startCount),
     ];
     setAskError(null);
+    // Descriptive patterns state the cast-on in prose ("Cast on 6 (6) 7 sts using 3mm needles")
+    // rather than in a field. If the text said so, take it — it's what the chart counts from, and
+    // leaving it at 0 makes every row after it wrong.
+    if (result.castOn != null) setCastOn(formatSizeRun(result.castOn));
     setPreview({
       rows: result.rows.map(toEditRow),
       issues,

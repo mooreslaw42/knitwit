@@ -65,6 +65,8 @@ A stitch that genuinely has no entry — a cable cross, a 3-into-1 decrease, a b
 
 **Never invent.** Instructions like "work as for the left front, reversing all shaping" or "continue in pattern" can't be charted from the text alone. Return no stitches for that row, \`confident: false\`, and a note saying what it refers to. The app keeps the original wording either way, so refusing loses the knitter nothing; a wrong chart costs them a frogged sleeve.
 
+**Descriptive patterns.** Many patterns, particularly European ones, are written as prose rather than shorthand: rows numbered as ordinals ("1st row (WS row): Purl all sts."), blocks defined once and then repeated ("Work 1st – 4th row a total of 7 (8) 8 times."), and stitch counts stated in sentences ("You now have 13 (14) 15 sts on your needles."). Read "purl all sts", "knit across" and "k to end of row" as working every remaining stitch — span \`all\`, not a count. The deterministic parser handles most of this now, so a descriptive row reaching you is one it still couldn't place; read it the same careful way, and refuse rather than approximate.
+
 **Return one entry per row you were asked about**, with the same \`index\`, even when you are refusing it.`;
 
 // The variable half — this sits after the cache breakpoint, so it can differ freely per request.
@@ -117,6 +119,8 @@ export const DOCUMENT_SYSTEM_PROMPT = `You read a knitting or crochet pattern an
 **Front matter is not a section.** Materials lists, gauge statements, abbreviation keys, finishing notes and schematics are not sections. A section is something you cast on for and work. If finishing instructions are substantial ("Seaming", "Blocking"), they may be their own section.
 
 **Be careful with text extracted from a PDF.** Columns may be interleaved, headers and page numbers may appear mid-sentence, and a size run may be split across lines. Read past that. If a section's instructions are too garbled to reproduce faithfully, return the section with whatever text you can salvage rather than inventing the rest, and say so in \`notes\`.
+
+**Keep the prose that carries instructions.** Many patterns are written descriptively rather than as shorthand: "Cast on 6 (6) 7 sts using 3 mm needles.", "1st row (WS row): Purl all sts.", "Work 1st – 4th row a total of 7 (8) 8 times.", "You now have 13 (14) 15 sts on your needles." Every one of those lines is load-bearing — the cast-on, the repeat count and the running stitch count are all read and checked downstream. Copy them into the section's \`description\` exactly as written. Do not convert them to shorthand, do not drop the sentences between the numbered rows, and do not expand the repeats yourself.
 
 **\`notes\` is for the knitter**, not a log: anything important you noticed that the fields above could not hold, or anything you were unsure about. One or two sentences, or empty.`;
 

@@ -1,4 +1,10 @@
-import { parseSizeRun, rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
+import {
+  formatSizeRun,
+  parseSizeRun,
+  rowStitchesAfter,
+  sectionRowCounts,
+  sizeValue,
+} from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup, SizedNumber, StitchSide } from '@/types/knitwit';
 
 // Deterministic parser for written knitting rows — phase 5a of the stitch engine.
@@ -21,6 +27,9 @@ export type ParseResult = {
   issues: ParseIssue[];
   // Lines that didn't look like rows at all (headings, prose). Kept so a caller can show them.
   ignoredLines: string[];
+  // A cast-on the prose stated ("Cast on 6 (6) 7 sts"), if it did. Null means the caller should
+  // keep whatever it already had.
+  castOn: SizedNumber | null;
 };
 
 let uid = 0;
@@ -43,6 +52,33 @@ const group = (
 // parenthetical (which usually carries the side), and the instruction body.
 const ROW_HEADER =
   /^\s*(?:rows?|rnds?|rounds?)\s+(\d+)\s*(?:[-–—to]+\s*(\d+))?\s*(?:\(([^)]*)\))?\s*[:.]\s*(.*)$/i;
+
+// The other common convention, and the one most European patterns use: `1st row (WS row): …`,
+// `2nd row (RS row): …`. Same capture order as ROW_HEADER, minus the range — an ordinal header
+// names a single row.
+const ORDINAL_ROW_HEADER =
+  /^\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?|rounds?)\s*(?:\(([^)]*)\))?\s*[:.]\s*(.*)$/i;
+
+// `Work 1st – 4th row a total of 7 (8) 8 (8) 9 times.` / `Repeat 1st – 2nd row … 4 times.`
+// The block being repeated was just defined above it, so these lines multiply what came before
+// rather than adding anything of their own.
+const BLOCK_REPEAT_TIMES =
+  /^\s*(?:work|repeat|rep)\s+(\d+)(?:st|nd|rd|th)\s*(?:[-–—]|to)\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?)\b[^.]*?\b(?:a\s+total\s+of\s+)?([\d()\s,]+?)\s*times/i;
+
+// `Repeat 1st – 2nd row until you have worked a total of 23 (25) 25 rows.` — the same thing
+// expressed as a row count rather than a repeat count.
+const BLOCK_REPEAT_UNTIL =
+  /^\s*(?:work|repeat|rep)\s+(\d+)(?:st|nd|rd|th)\s*(?:[-–—]|to)\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?)\b[^.]*?\btotal\s+of\s+([\d()\s,]+?)\s*rows/i;
+
+// `Cast on 6 (6) 7 (7) 9 sts using 3 mm needles.` — a section's starting stitch count, stated in
+// prose rather than in a field. Worth picking up: it's what the whole chart counts from.
+const CAST_ON_LINE =
+  /^\s*(?:cast\s+on|co)\s+([\d()\s,]+?)\s*(?:sts?|stitches)\b/i;
+
+// `You now have 13 (14) 15 sts on your needles.` — the pattern checking itself mid-prose, the same
+// job as a trailing "(48 sts)". Free accuracy check, so it's worth reading.
+const RUNNING_COUNT_LINE =
+  /^\s*(?:you\s+(?:now\s+)?have|there\s+(?:are|will\s+be))\s+([\d()\s,]+?)\s*(?:sts?|stitches)\b/i;
 
 // A trailing "(48 sts)" / "48 sts" the pattern states as a check on itself.
 const STATED_COUNT = /\(?\b(\d+)\s*(?:sts?|stitches)\b\)?\s*[.]?\s*$/i;
@@ -81,12 +117,19 @@ function parseToken(raw: string): PatternStitchGroup | null {
     return group(type, 'to-last', parseSizeRun(toLast[2]) ?? 1);
   }
 
-  // "knit to end" / "purl to end" / bare "knit" / bare "purl" — work across everything left.
-  if (/^(?:k|knit)\s+to\s+(?:the\s+)?end$/i.test(t) || /^knit(?:\s+all)?$/i.test(t)) {
-    return group('knit', 'all', null);
-  }
-  if (/^(?:p|purl)\s+to\s+(?:the\s+)?end$/i.test(t) || /^purl(?:\s+all)?$/i.test(t)) {
-    return group('purl', 'all', null);
+  // Work across everything left, however the pattern phrases it: "knit to end", "k to end of row",
+  // "purl all sts", "knit across", bare "knit". The trailing "sts"/"stitches" is common in
+  // descriptive patterns ("Purl all sts.") and would otherwise sink the whole row.
+  const END = /^(?:to\s+(?:the\s+)?end(?:\s+of\s+(?:the\s+)?rows?)?|across|all)(?:\s+(?:sts?|stitches))?$/i;
+  const verb = t.match(/^(k|knit|p|purl)\b/i);
+  if (verb) {
+    const rest = t.slice(verb[0].length).trim();
+    // A spelled-out verb on its own means the whole row ("Knit."); the abbreviation on its own
+    // means a single stitch ("k, p, k"), so it falls through to the plain-run rule below.
+    const wholeRow = END.test(rest) || (rest === '' && verb[1].length > 1);
+    if (wholeRow) {
+      return group(/^(k|knit)$/i.test(verb[1]) ? 'knit' : 'purl', 'all', null);
+    }
   }
 
   // "sl1" / "sl 2" / "slip"
@@ -148,21 +191,119 @@ export function parseSectionText(text: string): ParseResult {
   const expectedCounts: (number | null)[] = [];
   const issues: ParseIssue[] = [];
   const ignoredLines: string[] = [];
+  let castOn: SizedNumber | null = null;
+
+  // Descriptive patterns define a short block of numbered rows and then say how many times to work
+  // it ("Work 1st – 4th row a total of 7 (8) 8 times."). The definition itself isn't worked, so
+  // rows are held here until we know whether a repeat instruction follows.
+  let pending: { row: PatternRow; expected: number | null; ordinal: number }[] = [];
+  let expandedARepeat = false;
+
+  const flush = () => {
+    for (const p of pending) {
+      rows.push(p.row);
+      expectedCounts.push(p.expected);
+    }
+    pending = [];
+  };
+
+  // Append `copies` passes over the rows numbered `from`..`to` in the pending block, renumbering
+  // as they land. Fresh ids throughout: two rows must never share one.
+  const expand = (from: number, to: number, copies: number, cycleTo?: number) => {
+    const block = pending.filter((p) => p.ordinal >= from && p.ordinal <= to);
+    if (block.length === 0) {
+      flush();
+      return false;
+    }
+    const kept = pending.filter((p) => p.ordinal < from || p.ordinal > to);
+    for (const p of kept) {
+      rows.push(p.row);
+      expectedCounts.push(p.expected);
+    }
+    const total = cycleTo ?? block.length * copies;
+    for (let i = 0; i < Math.min(total, 400); i++) {
+      const src = block[i % block.length];
+      rows.push({
+        ...src.row,
+        id: nextId('r'),
+        label: `Row ${rows.length + 1}`,
+        stitches: src.row.stitches.map((g) => ({ ...g, id: nextId('g') })),
+      });
+      // Only the final pass lands on the stated count; the intermediate ones are mid-repeat.
+      expectedCounts.push(i === total - 1 ? src.expected : null);
+    }
+    pending = [];
+    expandedARepeat = true;
+    return true;
+  };
 
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    const header = trimmed.match(ROW_HEADER);
+    // A repeat instruction multiplies the block above it, so it's handled before anything else.
+    const repeatTimes = trimmed.match(BLOCK_REPEAT_TIMES);
+    const repeatUntil = trimmed.match(BLOCK_REPEAT_UNTIL);
+    if (repeatTimes || repeatUntil) {
+      const m = (repeatUntil ?? repeatTimes)!;
+      const from = parseInt(m[1], 10);
+      const to = parseInt(m[2], 10);
+      const run = parseSizeRun(m[3]);
+      const first = run == null ? 1 : sizeValue(run, 0);
+      const ok = repeatUntil
+        ? expand(from, to, 0, Math.max(1, first))
+        : expand(from, to, Math.max(1, first));
+      if (!ok) {
+        ignoredLines.push(trimmed);
+      } else if (Array.isArray(run)) {
+        // The chart is one list of rows, but this repeat is a different length per size. Charting
+        // the first size and saying so beats charting nothing, and beats silently charting a
+        // length that's wrong for whoever is knitting it.
+        issues.push({
+          rowIndex: null,
+          message: `"${trimmed}" — the repeat differs per size; charted for the first size (${formatSizeRun(run)}).`,
+        });
+      }
+      continue;
+    }
+
+    // "Cast on 6 (6) 7 sts" — the count the whole chart starts from, stated in prose.
+    const co = trimmed.match(CAST_ON_LINE);
+    if (co && castOn == null) {
+      castOn = parseSizeRun(co[1]);
+      ignoredLines.push(trimmed);
+      continue;
+    }
+
+    // "You now have 13 (14) 15 sts" — the pattern checking itself. Attach it to the last row so
+    // reconcileRowCounts can use it, exactly like a trailing "(48 sts)".
+    const running = trimmed.match(RUNNING_COUNT_LINE);
+    if (running) {
+      const run = parseSizeRun(running[1]);
+      const value = run == null ? null : sizeValue(run, 0);
+      if (pending.length > 0) pending[pending.length - 1].expected = value;
+      else if (expectedCounts.length > 0) expectedCounts[expectedCounts.length - 1] = value;
+      ignoredLines.push(trimmed);
+      continue;
+    }
+
+    const header = trimmed.match(ROW_HEADER) ?? trimmed.match(ORDINAL_ROW_HEADER);
     if (!header) {
       ignoredLines.push(trimmed);
       continue;
     }
 
+    // The ordinal form has no range, so its capture groups sit one to the left. Normalise.
+    const isOrdinal = header.length === 4;
     const from = parseInt(header[1], 10);
-    const to = header[2] ? parseInt(header[2], 10) : from;
-    const parenthetical = header[3];
-    let body = header[4].trim();
+    const to = isOrdinal ? from : header[2] ? parseInt(header[2], 10) : from;
+    const parenthetical = isOrdinal ? header[2] : header[3];
+    const rawBody = (isOrdinal ? header[3] : header[4]).trim();
+    let body = rawBody;
+
+    // Numbering restarting at 1 means a new block began, and whatever was pending was never
+    // repeated — emit it as written.
+    if (from === 1 && pending.length > 0) flush();
 
     // Pull off a stated stitch count before tokenising, so it isn't mistaken for a stitch.
     let expected: number | null = null;
@@ -177,7 +318,7 @@ export function parseSectionText(text: string): ParseResult {
 
     for (let i = 0; i < span; i++) {
       const rowNumber = from + i;
-      const rowIndex = rows.length;
+      const rowIndex = rows.length + pending.length;
       const stitches: PatternStitchGroup[] = [];
       let refused: string | null = null;
 
@@ -217,24 +358,41 @@ export function parseSectionText(text: string): ParseResult {
         issues.push({ rowIndex, message: `Row ${rowNumber}: ${refused}` });
       }
 
-      rows.push({
-        id: nextId('r'),
-        label: `Row ${rowNumber}`,
-        side: sideFor(parenthetical, rowNumber),
-        marker: false,
-        // Always keep the original wording, whether or not we charted it.
-        instruction: header[4].trim(),
-        stitches: refused ? [] : stitches,
+      pending.push({
+        ordinal: rowNumber,
+        expected,
+        row: {
+          id: nextId('r'),
+          label: `Row ${rowNumber}`,
+          side: sideFor(parenthetical, rowNumber),
+          marker: false,
+          // Always keep the original wording, whether or not we charted it.
+          instruction: rawBody,
+          stitches: refused ? [] : stitches,
+        },
       });
-      expectedCounts.push(expected);
     }
   }
 
-  if (rows.length === 0) {
-    issues.push({ rowIndex: null, message: 'No rows found. Lines should start with "Row 1:" etc.' });
+  flush();
+
+  // Only renumber when a repeat was expanded. A block worked seven times would otherwise label its
+  // rows 1,2,3,4,1,2,3,4… — but when nothing repeated, the pattern's own numbering ("Rows 5-8")
+  // is what the knitter sees on the page, so it's left alone.
+  if (expandedARepeat) {
+    rows.forEach((row, i) => {
+      row.label = `Row ${i + 1}`;
+    });
   }
 
-  return { rows, expectedCounts, issues, ignoredLines };
+  if (rows.length === 0) {
+    issues.push({
+      rowIndex: null,
+      message: 'No rows found. Rows should start with "Row 1:" or "1st row:".',
+    });
+  }
+
+  return { rows, expectedCounts, issues, ignoredLines, castOn };
 }
 
 // Check the parse against the counts the pattern states about itself. This is the safety net that
