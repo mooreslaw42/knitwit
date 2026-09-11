@@ -1,6 +1,6 @@
 import { CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
+import { invokeEdgeFunction } from '@/lib/edge-function';
 import { parseSectionText } from '@/lib/parse-pattern-text';
-import { getSupabase } from '@/lib/supabase';
 import type {
   Pattern,
   PatternCategory,
@@ -26,6 +26,8 @@ export type ImportedPattern = {
   pattern: Omit<Pattern, 'accentColor' | 'photo' | 'favorited' | 'sourceName' | 'sourceText'>;
   // What the model said it was unsure about, shown to the knitter before they accept.
   notes: string;
+  // Problems we found ourselves, rather than ones the model owned up to.
+  warnings: string[];
   model: string;
   // Counts for the review summary — cheaper to compute here than to recount in the UI.
   summary: {
@@ -125,10 +127,23 @@ function normaliseTechniques(v: unknown): PatternTechnique[] {
     .filter((t) => t.name);
 }
 
+// The model refers to slots by position; the app refers to them by id. Translate, dropping any
+// index that points past the end of the list rather than producing a dangling reference.
+function slotIds(v: unknown, slots: { id: string }[]): string[] {
+  const ids = arr(v)
+    .filter((n): n is number => typeof n === 'number' && Number.isInteger(n))
+    .map((i) => slots[i]?.id)
+    .filter((id): id is string => Boolean(id));
+  return Array.from(new Set(ids));
+}
+
 // Each section's instructions go straight through the deterministic parser, so the knitter lands
 // on a pattern that is already charted wherever charting was possible — and the rows it refused
 // are exactly the ones the per-section "Read it with AI" button exists for.
-function normaliseSections(v: unknown): PatternSection[] {
+function normaliseSections(
+  v: unknown,
+  slots: { materials: PatternMaterial[]; tools: PatternTool[]; techniques: PatternTechnique[] },
+): PatternSection[] {
   return arr(v)
     .slice(0, 40)
     .map((raw, i) => {
@@ -143,9 +158,9 @@ function normaliseSections(v: unknown): PatternSection[] {
         castOn,
         // Fall back to the number of rows we actually read, so the counter has something sane.
         totalRows: toSized(s.totalRows, Math.max(1, rows.length)),
-        materials: [],
-        tools: [],
-        techniques: [],
+        materials: slotIds(s.usesMaterials, slots.materials),
+        tools: slotIds(s.usesTools, slots.tools),
+        techniques: slotIds(s.usesTechniques, slots.techniques),
         description,
         rows,
         notes: [],
@@ -153,6 +168,25 @@ function normaliseSections(v: unknown): PatternSection[] {
       };
     })
     .filter((s) => s.description || s.rows.length > 0);
+}
+
+// A per-size run that doesn't have one entry per size means the sizes were misread — and every
+// number in the pattern is then attributed to the wrong size, which is worse than a missing value
+// because it looks right. Surfaced in the review card rather than silently corrected.
+function sizeMismatches(sections: PatternSection[], sizeCount: number): string[] {
+  if (sizeCount < 2) return [];
+  const out: string[] = [];
+  for (const section of sections) {
+    for (const [field, value] of [
+      ['cast-on', section.castOn],
+      ['row count', section.totalRows],
+    ] as const) {
+      if (Array.isArray(value) && value.length !== sizeCount) {
+        out.push(`${section.name}: ${value.length} ${field} numbers for ${sizeCount} sizes`);
+      }
+    }
+  }
+  return out;
 }
 
 export function toImportedPattern(data: unknown): ImportedPattern {
@@ -168,7 +202,14 @@ export function toImportedPattern(data: unknown): ImportedPattern {
   > | null;
   if (!draft) throw new Error("The server didn't send back a pattern.");
 
-  const sections = normaliseSections(draft.sections);
+  // Slots are normalised first: sections refer to them by position, so the ids must exist before
+  // the sections can point at them.
+  const materials = normaliseMaterials(draft.materials);
+  const tools = normaliseTools(draft.tools);
+  const techniques = normaliseTechniques(draft.techniques);
+  const sizes = normaliseSizes(draft.sizes);
+
+  const sections = normaliseSections(draft.sections, { materials, tools, techniques });
   const rowsCharted = sections.reduce(
     (n, s) => n + s.rows.filter((r) => r.stitches.length > 0).length,
     0,
@@ -189,41 +230,34 @@ export function toImportedPattern(data: unknown): ImportedPattern {
       video: '',
       gaugeStitches: digits(draft.gaugeStitches),
       gaugeRows: digits(draft.gaugeRows),
-      sizes: normaliseSizes(draft.sizes),
-      materials: normaliseMaterials(draft.materials),
-      tools: normaliseTools(draft.tools),
-      techniques: normaliseTechniques(draft.techniques),
+      sizes,
+      materials,
+      tools,
+      techniques,
       sections,
     },
     notes: str(draft.notes, 600),
     model: typeof d.model === 'string' ? d.model : 'unknown',
+    warnings: sizeMismatches(sections, sizes.length),
     summary: { sections: sections.length, rowsCharted, rowsUnparsed },
   };
 }
 
-export async function importPatternDocument(text: string, model?: string): Promise<ImportedPattern> {
-  const { data, error } = await getSupabase().functions.invoke('parse-pattern', {
-    body: { task: 'document', text, model },
-  });
-  if (error) {
-    const body = await readErrorBody(error);
-    throw new Error(body ?? "Couldn't reach the pattern reader. Check your connection and retry.");
-  }
-  return toImportedPattern(data);
-}
+// A whole pattern is a big job — a long PDF measured over a minute in practice, since the model
+// reproduces every section's instructions verbatim. The ceiling is generous for that reason, and
+// is there to end a hang, not to police a slow read.
+const DOCUMENT_TIMEOUT_MS = 180_000;
 
-// supabase-js hides the function's own error message behind a generic FunctionsHttpError; the
-// useful text is in the response body.
-async function readErrorBody(error: unknown): Promise<string | null> {
-  const context = (error as { context?: unknown }).context;
-  if (typeof context !== 'object' || context === null) return null;
-  const response = context as { json?: () => Promise<unknown> };
-  if (typeof response.json !== 'function') return null;
-  try {
-    const body = await response.json();
-    const message = (body as Record<string, unknown> | null)?.error;
-    return typeof message === 'string' ? message : null;
-  } catch {
-    return null;
-  }
+export async function importPatternDocument(text: string, model?: string): Promise<ImportedPattern> {
+  const data = await invokeEdgeFunction(
+    'parse-pattern',
+    { task: 'document', text, model },
+    {
+      timeoutMs: DOCUMENT_TIMEOUT_MS,
+      timeoutMessage:
+        'Reading this pattern is taking longer than expected. Try again, or import one section at ' +
+        'a time by pasting it into a section instead.',
+    },
+  );
+  return toImportedPattern(data);
 }

@@ -261,7 +261,7 @@ export default function PatternDetailScreen() {
                 label="Difficulty"
                 value={LEVEL_OPTIONS.find((l) => l.value === pattern.level)?.label ?? pattern.level}
               />
-              <Field label="Sizes" value={pattern.sizes.join(', ')} />
+              <Field label="Sizes" value={(pattern.sizes ?? []).join(', ')} />
               <Field label="Needle / hook size" value={pattern.needleSize || pattern.weight} />
               <Field
                 label="Gauge"
@@ -277,13 +277,13 @@ export default function PatternDetailScreen() {
 
               <Field
                 label="Yarn"
-                value={pattern.materials
+                value={(pattern.materials ?? [])
                   .map((m) => `${m.short ? `${m.short} · ` : ''}${m.label}`)
                   .join('\n')}
               />
               <Field
                 label="Tools"
-                value={pattern.tools
+                value={(pattern.tools ?? [])
                   .map((t) =>
                     [t.thickness, TOOL_TYPE_LABELS[t.type], t.note].filter(Boolean).join(' · '),
                   )
@@ -291,7 +291,7 @@ export default function PatternDetailScreen() {
               />
               <Field
                 label="Techniques"
-                value={pattern.techniques
+                value={(pattern.techniques ?? [])
                   .map((t) => (t.note ? `${t.name} — ${t.note}` : t.name))
                   .join('\n')}
               />
@@ -299,13 +299,13 @@ export default function PatternDetailScreen() {
               <ThemedText type="subtitle" style={styles.blockTitle}>
                 Sections
               </ThemedText>
-              {pattern.sections.length === 0 ? (
+              {(pattern.sections ?? []).length === 0 ? (
                 <ThemedText type="small" themeColor="inkSoft">
                   This pattern has no sections.
                 </ThemedText>
               ) : (
                 <View style={styles.sectionsList}>
-                  {pattern.sections.map((s, i) => {
+                  {(pattern.sections ?? []).map((s, i) => {
                     const markers = patternSectionMarkers(s);
                     const meta = [
                       s.rows.length > 0 ? `${s.rows.length} rows charted` : 'No stitches yet',

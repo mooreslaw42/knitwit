@@ -18,7 +18,15 @@ const full = {
   tools: [{ type: 'circular', thickness: '4.5mm', note: 'US 7' }],
   techniques: [{ name: 'German short rows', note: '' }, { name: '', note: 'dropped' }],
   sections: [
-    { name: 'Back', castOn: [30, 30, 40], totalRows: [60, 60, 60], description: 'Row 1: knit\nRow 2: purl' },
+    {
+      name: 'Back',
+      castOn: [30, 30, 40],
+      totalRows: [60, 60, 60],
+      description: 'Row 1: knit\nRow 2: purl',
+      usesMaterials: [0],
+      usesTools: [0],
+      usesTechniques: [0],
+    },
   ],
   notes: 'Gauge was given in inches.',
 };
@@ -95,6 +103,41 @@ describe('toImportedPattern', () => {
       wrap({ ...full, sections: [{ name: 'Ghost', castOn: [], totalRows: [], description: '  ' }] }),
     );
     expect(pattern.sections).toEqual([]);
+  });
+
+  // The model refers to slots by position; the app refers to them by id. Without this a section
+  // imports with nothing selected, which is what a real import turned out to do.
+  it('links each section to the yarn, tool and technique slots it uses', () => {
+    const { pattern } = toImportedPattern(wrap(full));
+    const section = pattern.sections[0];
+    expect(section.materials).toEqual([pattern.materials[0].id]);
+    expect(section.tools).toEqual([pattern.tools[0].id]);
+    expect(section.techniques).toEqual([pattern.techniques[0].id]);
+  });
+
+  it('drops a slot index that points past the end rather than dangling', () => {
+    const { pattern } = toImportedPattern(
+      wrap({ ...full, sections: [{ ...full.sections[0], usesMaterials: [0, 9] }] }),
+    );
+    expect(pattern.sections[0].materials).toEqual([pattern.materials[0].id]);
+  });
+
+  it('warns when a per-size run does not have one number per size', () => {
+    // Three sizes, two cast-on numbers: every number is now against the wrong size.
+    const { warnings } = toImportedPattern(
+      wrap({ ...full, sections: [{ ...full.sections[0], castOn: [30, 40] }] }),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('2 cast-on numbers for 3 sizes');
+  });
+
+  it('does not warn when the runs line up', () => {
+    expect(toImportedPattern(wrap(full)).warnings).toEqual([]);
+  });
+
+  it('does not warn about a one-size pattern, where runs are meaningless', () => {
+    const { warnings } = toImportedPattern(wrap({ ...full, sizes: ['One size'] }));
+    expect(warnings).toEqual([]);
   });
 
   it('surfaces an error body as an error', () => {

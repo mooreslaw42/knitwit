@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { StitchChart } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
+import { parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
 import type {
   PatternMaterial,
   PatternRow,
@@ -296,6 +298,46 @@ const BLANK_SECTION: EditSection = {
   markers: [],
 };
 
+// What the parser made of a section, shown where the knitter is reviewing an import: how many
+// rows were charted, how many were too irregular, and the chart itself behind a tap. Collapsed by
+// default — ten sections of open charts would bury the rest of the form.
+function SectionRowsPreview({ section }: { section: EditSection }) {
+  const [open, setOpen] = useState(false);
+  const rows = section.rows;
+  if (rows.length === 0) return null;
+
+  const charted = rows.filter((r) => r.stitches.length > 0).length;
+  const unread = rows.length - charted;
+  const castOn = Math.max(0, sizeValue(parseSizeRun(String(section.castOn)) ?? 0, 0));
+
+  return (
+    <View style={styles.field}>
+      <Pressable style={styles.previewHead} onPress={() => setOpen((o) => !o)} hitSlop={6}>
+        <ThemedText type="smallBold" themeColor="inkSoft">
+          {open ? '▾' : '▸'}
+        </ThemedText>
+        <ThemedText type="smallBold" themeColor="sageDeep">
+          {charted} of {rows.length} {rows.length === 1 ? 'row' : 'rows'} charted
+        </ThemedText>
+        {unread > 0 && (
+          <ThemedText type="small" themeColor="inkSoft">
+            · {unread} too irregular to read
+          </ThemedText>
+        )}
+      </Pressable>
+      {open && (
+        <>
+          {charted > 0 && <StitchChart rows={rows} castOn={castOn} />}
+          <ThemedText type="small" themeColor="inkSoft">
+            Save the pattern, then open this section to edit the stitches or read the remaining
+            rows with AI.
+          </ThemedText>
+        </>
+      )}
+    </View>
+  );
+}
+
 export function PatternSectionsEditor({
   initial,
   materials,
@@ -358,8 +400,8 @@ export function PatternSectionsEditor({
               Pattern text
             </ThemedText>
             <ThemedText type="small" themeColor="inkSoft">
-              Write or paste this section&apos;s instructions. We&apos;ll turn this into a
-              stitch-by-stitch view you can edit and count from — coming soon.
+              Write or paste this section&apos;s instructions. Save the pattern and open the section
+              to chart them stitch by stitch.
             </ThemedText>
             <TextInput
               value={section.description}
@@ -370,6 +412,11 @@ export function PatternSectionsEditor({
               style={[styles.input, styles.patternText]}
             />
           </View>
+
+          {/* Rows that were already charted — from an import, or from a previous edit. Read-only
+              here: this is the review, and the stitch editor is where they're changed. Without it
+              there was no way to see what an import had actually understood before saving. */}
+          <SectionRowsPreview section={section} />
 
           {materials.length > 0 && (
             <View style={styles.field}>
@@ -632,6 +679,12 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: Spacing.one,
+  },
+  previewHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
   },
   chipRow: {
     flexDirection: 'row',

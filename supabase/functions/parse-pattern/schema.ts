@@ -197,8 +197,37 @@ export const DOCUMENT_SCHEMA = {
               'reword, or renumber — this text is charted row by row afterwards, and anything ' +
               'you change is changed for the knitter too.',
           },
+          usesMaterials: {
+            type: 'array',
+            description:
+              'Which yarns this section uses, as indices into the materials list above (0 is the ' +
+              'first). A section worked in one yarn throughout still lists it. Empty only if the ' +
+              'pattern genuinely does not say.',
+            items: { type: 'integer', minimum: 0 },
+          },
+          usesTools: {
+            type: 'array',
+            description:
+              'Which tools this section uses, as indices into the tools list above — the needle ' +
+              'size this piece is worked on, which often differs from the main one (ribbing, ' +
+              'edgings).',
+            items: { type: 'integer', minimum: 0 },
+          },
+          usesTechniques: {
+            type: 'array',
+            description: 'Which techniques this section calls for, as indices into the list above.',
+            items: { type: 'integer', minimum: 0 },
+          },
         },
-        required: ['name', 'castOn', 'totalRows', 'description'],
+        required: [
+          'name',
+          'castOn',
+          'totalRows',
+          'description',
+          'usesMaterials',
+          'usesTools',
+          'usesTechniques',
+        ],
         additionalProperties: false,
       },
     },

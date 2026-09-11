@@ -566,7 +566,9 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      version: 13,
+      // v14 repairs patterns whose list fields went missing — see the unconditional back-fill in
+      // migrate(). The bump is what makes it run at all on a store already at 13.
+      version: 14,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -582,7 +584,19 @@ export const useKnitwitStore = create<KnitwitState>()(
         } | undefined;
         if (state?.patterns) {
           for (const pattern of Object.values(state.patterns)) {
-            if (!pattern.sections) pattern.sections = [];
+            // Run unconditionally, not behind a version gate. That these lists exist is an
+            // invariant every screen reads as one — `pattern.techniques.map(…)` with no guard.
+            // The original back-fill sat behind `version < 5`, so a pattern that reached a later
+            // version still missing one was never repaired, and the detail screen crashed on it.
+            // Repairing the shape every time is idempotent and costs nothing.
+            for (const key of ['sections', 'materials', 'tools', 'techniques', 'sizes'] as const) {
+              if (!Array.isArray(pattern[key])) pattern[key] = [];
+            }
+            for (const section of pattern.sections as Record<string, unknown>[]) {
+              for (const key of ['materials', 'tools', 'techniques', 'notes', 'markers', 'rows'] as const) {
+                if (!Array.isArray(section[key])) section[key] = [];
+              }
+            }
             if (version < 3) {
               if (!pattern.materials) pattern.materials = [];
               if (!pattern.tools) pattern.tools = [];

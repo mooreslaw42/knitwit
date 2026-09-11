@@ -1,4 +1,4 @@
-import { getSupabase } from '@/lib/supabase';
+import { invokeEdgeFunction } from '@/lib/edge-function';
 import type { ParseIssue } from '@/lib/parse-pattern-text';
 import type { PatternRow, PatternStitchGroup, SizedNumber } from '@/types/knitwit';
 
@@ -26,6 +26,9 @@ export type RemoteParseResult = {
     cache_creation_input_tokens: number;
   };
 };
+
+// A handful of rows is a small job; if it hasn't come back by now something is wrong.
+const ROWS_TIMEOUT_MS = 90_000;
 
 let uid = 0;
 const nextId = () => `g${Date.now().toString(36)}${uid++}`;
@@ -172,29 +175,9 @@ export async function convertRowsRemotely(params: {
     })),
   };
 
-  const { data, error } = await getSupabase().functions.invoke('parse-pattern', { body: payload });
-  if (error) {
-    // The function's own error message is in the response body, which supabase-js hides behind a
-    // generic FunctionsHttpError — dig it out, since "not configured on this server" is far more
-    // actionable than "Edge Function returned a non-2xx status code". With no body at all the
-    // request never arrived, and supabase-js's wording ("Failed to send a request to the Edge
-    // Function") means nothing to a knitter.
-    const body = await readErrorBody(error);
-    throw new Error(body ?? "Couldn't reach the pattern reader. Check your connection and retry.");
-  }
+  const data = await invokeEdgeFunction('parse-pattern', payload, {
+    timeoutMs: ROWS_TIMEOUT_MS,
+    timeoutMessage: "That took too long. Try again, or chart the row yourself — it's still here.",
+  });
   return toRemoteParseResult(data);
-}
-
-async function readErrorBody(error: unknown): Promise<string | null> {
-  const context = (error as { context?: unknown }).context;
-  if (typeof context !== 'object' || context === null) return null;
-  const response = context as { json?: () => Promise<unknown> };
-  if (typeof response.json !== 'function') return null;
-  try {
-    const body = await response.json();
-    const message = (body as Record<string, unknown> | null)?.error;
-    return typeof message === 'string' ? message : null;
-  } catch {
-    return null;
-  }
 }

@@ -286,6 +286,14 @@ export default function NewPatternWizardScreen() {
                       {imported.summary.rowsUnparsed === 1 ? 'it' : 'them'} with AI.
                     </ThemedText>
                   )}
+                  {/* Per-size runs that don't line up with the size list mean every number in the
+                      pattern is attributed to the wrong size — worth saying out loud, because it
+                      looks right on the page. */}
+                  {imported.warnings.map((w, i) => (
+                    <ThemedText key={i} type="small" themeColor="coralDeep">
+                      ⚠ {w}
+                    </ThemedText>
+                  ))}
                   {imported.notes ? (
                     <ThemedText type="small" themeColor="coralDeep">
                       {imported.notes}
