@@ -30,8 +30,12 @@ import is built.
   ported directly from `reference/index.html`'s CSS `:root` variables. Single fixed palette, no
   dark mode (the original never had one) — don't reintroduce light/dark branching.
 - `supabase/migrations/` — versioned SQL schema, applied identically across local/staging/prod
-  Supabase projects. `supabase/functions/` — Edge Functions (e.g. the future GreenPT-backed
-  AI pattern generation/import endpoints — must stay server-side, never call GreenPT from the client).
+  Supabase projects. `supabase/functions/` — Edge Functions, including the AI pattern parser.
+  **The model is only ever called server-side**; the app ships to the web, so a client-side key
+  would be public. The provider is currently the **Anthropic API (`claude-sonnet-5`)** rather than
+  GreenPT (EU Router) as originally planned — a deliberate deviation, behind a provider seam
+  (`supabase/functions/parse-pattern/provider.ts`) so swapping back is a config change. The
+  server-side rule is unchanged either way. See `supabase/functions/README.md`.
 
 ## Conventions
 

@@ -17,6 +17,11 @@ import {
   sizeValue,
 } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
+import {
+  convertRowsRemotely,
+  mergeRemoteRows,
+  unparsedRowIndexes,
+} from '@/lib/parse-pattern-remote';
 import { parseSectionText, reconcileRowCounts, type ParseIssue } from '@/lib/parse-pattern-text';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { PatternRow, PatternStitchGroup, StitchSide, StitchSpan } from '@/types/knitwit';
@@ -125,16 +130,67 @@ export default function SectionStitchesScreen() {
     rows: EditRow[];
     issues: ParseIssue[];
     ignored: string[];
+    // The counts the pattern states about itself, kept so the check can be re-run after the model
+    // fills in rows the tokenizer refused.
+    expectedCounts: (number | null)[];
+    // Set once the model has been asked, so the card can say what read the rows.
+    model: string | null;
   } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const convert = () => {
-    const start = startCount;
     const result = parseSectionText(description);
     const issues = [
       ...result.issues,
-      ...reconcileRowCounts(result.rows, result.expectedCounts, start),
+      ...reconcileRowCounts(result.rows, result.expectedCounts, startCount),
     ];
-    setPreview({ rows: result.rows.map(toEditRow), issues, ignored: result.ignoredLines });
+    setAskError(null);
+    setPreview({
+      rows: result.rows.map(toEditRow),
+      issues,
+      ignored: result.ignoredLines,
+      expectedCounts: result.expectedCounts,
+      model: null,
+    });
+  };
+
+  // The model half of the hybrid: hand it only the rows the tokenizer refused, merge what comes
+  // back, then re-run the stitch-count check over the whole section. Nothing is applied by this —
+  // it updates the same review card, which the knitter still has to accept.
+  const askModel = async () => {
+    if (!preview) return;
+    const previewRows = preview.rows.map(toRow);
+    const indexes = unparsedRowIndexes(previewRows);
+    if (indexes.length === 0) return;
+
+    setAsking(true);
+    setAskError(null);
+    try {
+      const result = await convertRowsRemotely({
+        sectionText: description,
+        rows: previewRows,
+        indexes,
+        sizes: pattern?.sizes ?? [],
+        stitchesBefore: startCount,
+      });
+      const merged = mergeRemoteRows(previewRows, result.rows);
+      setPreview({
+        ...preview,
+        rows: merged.rows.map(toEditRow),
+        // Recomputed rather than appended: the old refusal issues are superseded by whatever the
+        // model did with those rows, and the counts change once rows are filled in.
+        issues: [
+          ...merged.issues,
+          ...reconcileRowCounts(merged.rows, preview.expectedCounts, startCount),
+        ],
+        model: result.model,
+      });
+    } catch (error) {
+      setAskError(error instanceof Error ? error.message : 'Something went wrong.');
+    } finally {
+      setAsking(false);
+    }
   };
 
   // Derived before the missing-pattern guard: everything here reads component state, not the
@@ -148,6 +204,8 @@ export default function SectionStitchesScreen() {
   const selectedGroup = selected
     ? (rows[selected.rowIndex]?.stitches[selected.groupIndex] ?? null)
     : null;
+  // Rows in the pending preview that still have no stitches — what the model would be asked about.
+  const previewUnparsed = preview ? unparsedRowIndexes(preview.rows.map(toRow)) : [];
 
   const updateRow = (i: number, patch: Partial<EditRow>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -257,6 +315,40 @@ export default function SectionStitchesScreen() {
                 </ThemedText>
               )}
 
+              {/* Rows the tokenizer wouldn't guess at. Asking the model is opt-in and costs a
+                  request, so it's a button rather than something that happens automatically. */}
+              {previewUnparsed.length > 0 && (
+                <View style={styles.field}>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {previewUnparsed.length}{' '}
+                    {previewUnparsed.length === 1 ? 'row was' : 'rows were'} too irregular to read
+                    here — {previewUnparsed.length === 1 ? 'its' : 'their'} wording is kept either
+                    way.
+                  </ThemedText>
+                  <PillButton
+                    variant="secondary"
+                    style={styles.convertBtn}
+                    disabled={asking}
+                    onPress={askModel}>
+                    <ThemedText type="smallBold" themeColor="ink">
+                      {asking ? 'Reading…' : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
+                    </ThemedText>
+                  </PillButton>
+                </View>
+              )}
+
+              {preview.model && previewUnparsed.length === 0 && (
+                <ThemedText type="small" themeColor="sageDeep">
+                  Every row is charted.
+                </ThemedText>
+              )}
+
+              {askError && (
+                <ThemedText type="small" themeColor="coralDeep">
+                  {askError}
+                </ThemedText>
+              )}
+
               <View style={styles.inline}>
                 <PillButton
                   style={styles.grow}
@@ -264,6 +356,7 @@ export default function SectionStitchesScreen() {
                     setRows(preview.rows);
                     setSelected(null);
                     setPreview(null);
+                    setAskError(null);
                   }}>
                   <ThemedText type="smallBold" themeColor="white">
                     Apply
@@ -272,7 +365,10 @@ export default function SectionStitchesScreen() {
                 <PillButton
                   variant="secondary"
                   style={styles.grow}
-                  onPress={() => setPreview(null)}>
+                  onPress={() => {
+                    setPreview(null);
+                    setAskError(null);
+                  }}>
                   <ThemedText type="smallBold" themeColor="ink">
                     Cancel
                   </ThemedText>
