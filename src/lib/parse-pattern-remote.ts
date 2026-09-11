@@ -160,6 +160,7 @@ export async function convertRowsRemotely(params: {
   sizes: string[];
   stitchesBefore: number;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<RemoteParseResult> {
   const payload = {
     task: 'rows' as const,
@@ -177,6 +178,7 @@ export async function convertRowsRemotely(params: {
 
   const data = await invokeEdgeFunction('parse-pattern', payload, {
     timeoutMs: ROWS_TIMEOUT_MS,
+    signal: params.signal,
     timeoutMessage: "That took too long. Try again, or chart the row yourself — it's still here.",
   });
   return toRemoteParseResult(data);

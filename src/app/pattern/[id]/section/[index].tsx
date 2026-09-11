@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,6 +17,7 @@ import {
   sizeValue,
 } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
+import { EdgeFunctionAborted } from '@/lib/edge-function';
 import {
   convertRowsRemotely,
   mergeRemoteRows,
@@ -138,6 +139,10 @@ export default function SectionStitchesScreen() {
   } | null>(null);
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+  // A ref, not state: the unmount cleanup below never sees a re-render's state, and leaving the
+  // screen has to actually stop the request rather than just ignore its answer.
+  const askRef = useRef<AbortController | null>(null);
+  useEffect(() => () => askRef.current?.abort(), []);
 
   const convert = () => {
     const result = parseSectionText(description);
@@ -168,6 +173,8 @@ export default function SectionStitchesScreen() {
     const indexes = unparsedRowIndexes(previewRows);
     if (indexes.length === 0) return;
 
+    const controller = new AbortController();
+    askRef.current = controller;
     setAsking(true);
     setAskError(null);
     try {
@@ -177,6 +184,7 @@ export default function SectionStitchesScreen() {
         indexes,
         sizes: pattern?.sizes ?? [],
         stitchesBefore: startCount,
+        signal: controller.signal,
       });
       const merged = mergeRemoteRows(previewRows, result.rows);
       setPreview({
@@ -191,8 +199,11 @@ export default function SectionStitchesScreen() {
         model: result.model,
       });
     } catch (error) {
+      // Stopping on purpose isn't a failure; the review card just goes back to how it was.
+      if (error instanceof EdgeFunctionAborted) return;
       setAskError(error instanceof Error ? error.message : 'Something went wrong.');
     } finally {
+      if (askRef.current === controller) askRef.current = null;
       setAsking(false);
     }
   };
@@ -333,17 +344,26 @@ export default function SectionStitchesScreen() {
                     here — {previewUnparsed.length === 1 ? 'its' : 'their'} wording is kept either
                     way.
                   </ThemedText>
-                  <PillButton
-                    variant="secondary"
-                    style={styles.convertBtn}
-                    loading={asking}
-                    onPress={askModel}>
-                    <ThemedText type="smallBold" themeColor="ink">
-                      {asking
-                        ? 'Reading…'
-                        : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
-                    </ThemedText>
-                  </PillButton>
+                  <View style={styles.inline}>
+                    <PillButton
+                      variant="secondary"
+                      style={styles.convertBtn}
+                      loading={asking}
+                      onPress={askModel}>
+                      <ThemedText type="smallBold" themeColor="ink">
+                        {asking
+                          ? 'Reading…'
+                          : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
+                      </ThemedText>
+                    </PillButton>
+                    {asking && (
+                      <Pressable hitSlop={8} onPress={() => askRef.current?.abort()}>
+                        <ThemedText type="smallBold" themeColor="coralDeep">
+                          Stop
+                        </ThemedText>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               )}
 

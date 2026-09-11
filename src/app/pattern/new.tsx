@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-u
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { EdgeFunctionAborted } from '@/lib/edge-function';
 import { importPatternDocument, type ImportedPattern } from '@/lib/import-pattern-document';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
@@ -95,7 +96,11 @@ export default function NewPatternWizardScreen() {
   // A pattern read from the source text, held for review — nothing is filled in until accepted.
   const [imported, setImported] = useState<ImportedPattern | null>(null);
   const [reading, setReading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
+  // Held in a ref, not state: aborting must work from an unmount cleanup, which never sees a
+  // re-render's state.
+  const readRef = useRef<AbortController | null>(null);
 
   const choosePhoto = async () => {
     const result = await pickImage();
@@ -141,16 +146,38 @@ export default function NewPatternWizardScreen() {
   const readPattern = async () => {
     const text = form.sourceText.trim();
     if (!text) return;
+    const controller = new AbortController();
+    readRef.current = controller;
     setReading(true);
     setImportError(null);
+    setElapsed(0);
     try {
-      setImported(await importPatternDocument(text));
+      setImported(await importPatternDocument(text, { signal: controller.signal }));
     } catch (error) {
+      // Stopping on purpose isn't a failure — leave the screen as it was rather than
+      // reporting something went wrong.
+      if (error instanceof EdgeFunctionAborted) return;
       setImportError(error instanceof Error ? error.message : 'Something went wrong.');
     } finally {
+      if (readRef.current === controller) readRef.current = null;
       setReading(false);
     }
   };
+
+  // Leaving the screen has to actually stop the request: an abandoned read goes on costing money
+  // until the call is aborted, and the draft it would have filled in is gone anyway.
+  useEffect(() => {
+    return () => readRef.current?.abort();
+  }, []);
+
+  // A read of a long pattern runs well past a minute, so a spinner alone gives no way to tell
+  // "working" from "stuck". The count is what makes that judgement possible.
+  useEffect(() => {
+    if (!reading) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [reading]);
 
   // Applying fills in the rest of the wizard, which the knitter then steps through and corrects.
   // The original text is kept either way, so a bad read is always re-runnable.
@@ -253,14 +280,31 @@ export default function NewPatternWizardScreen() {
 
               {form.sourceText.trim().length > 0 && !imported && (
                 <View style={styles.field}>
-                  <PillButton style={styles.readBtn} loading={reading} onPress={readPattern}>
-                    <ThemedText type="smallBold" themeColor="white">
-                      {reading ? 'Reading the pattern…' : 'Read this pattern for me'}
-                    </ThemedText>
-                  </PillButton>
+                  <View style={styles.inline}>
+                    <PillButton style={styles.readBtn} loading={reading} onPress={readPattern}>
+                      <ThemedText type="smallBold" themeColor="white">
+                        {reading
+                          ? `Reading the pattern… ${elapsed}s`
+                          : 'Read this pattern for me'}
+                      </ThemedText>
+                    </PillButton>
+                    {/* A long pattern runs past a minute, so stopping has to be possible without
+                        abandoning the whole wizard. */}
+                    {reading && (
+                      <PillButton
+                        variant="secondary"
+                        style={styles.readBtn}
+                        onPress={() => readRef.current?.abort()}>
+                        <ThemedText type="smallBold" themeColor="ink">
+                          Stop
+                        </ThemedText>
+                      </PillButton>
+                    )}
+                  </View>
                   <ThemedText type="small" themeColor="inkSoft">
-                    Fills in the rest of these steps — sizes, yarn, tools, techniques and sections.
-                    You review everything before it&apos;s saved.
+                    {reading
+                      ? 'A long pattern can take a couple of minutes. Stopping — or leaving this screen — cancels it.'
+                      : 'Fills in the rest of these steps — sizes, yarn, tools, techniques and sections. You review everything before it’s saved.'}
                   </ThemedText>
                   {importError && (
                     <ThemedText type="small" themeColor="coralDeep">
@@ -561,6 +605,12 @@ const styles = StyleSheet.create({
   readBtn: {
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.four,
+  },
+  inline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
   importCard: {
     gap: Spacing.two,

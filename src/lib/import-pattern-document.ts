@@ -248,12 +248,16 @@ export function toImportedPattern(data: unknown): ImportedPattern {
 // is there to end a hang, not to police a slow read.
 const DOCUMENT_TIMEOUT_MS = 180_000;
 
-export async function importPatternDocument(text: string, model?: string): Promise<ImportedPattern> {
+export async function importPatternDocument(
+  text: string,
+  options: { model?: string; signal?: AbortSignal } = {},
+): Promise<ImportedPattern> {
   const data = await invokeEdgeFunction(
     'parse-pattern',
-    { task: 'document', text, model },
+    { task: 'document', text, model: options.model },
     {
       timeoutMs: DOCUMENT_TIMEOUT_MS,
+      signal: options.signal,
       timeoutMessage:
         'Reading this pattern is taking longer than expected. Try again, or import one section at ' +
         'a time by pasting it into a section instead.',
