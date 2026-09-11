@@ -10,6 +10,7 @@ import type { ModelProvider } from './provider.ts';
 import {
   DOCUMENT_SCHEMA,
   ROWS_SCHEMA,
+  SECTION_SCHEMA,
   SPANS,
   STITCH_TYPES,
   type DocumentRequest,
@@ -99,8 +100,11 @@ function validateRequest(body: unknown): ParsePatternRequest {
     throw new BadRequest(`Section text is too long (max ${MAX_SECTION_CHARS} characters).`);
   }
 
-  if (!Array.isArray(b.rows) || b.rows.length === 0) {
-    throw new BadRequest('No rows to convert.');
+  // An empty list is section mode — the parser read nothing, so there are no refusals to name and
+  // the model charts the section itself. That needs text to work from.
+  if (!Array.isArray(b.rows)) throw new BadRequest('No rows to convert.');
+  if (b.rows.length === 0 && !sectionText.trim()) {
+    throw new BadRequest('Nothing to convert — the section has no text.');
   }
   if (b.rows.length > MAX_ROWS) {
     throw new BadRequest(`Too many rows in one call (max ${MAX_ROWS}).`);
@@ -206,13 +210,19 @@ function statusOf(error: unknown): number {
 // silently half-imported pattern.
 const MAX_DOCUMENT_OUTPUT_TOKENS = 32_000;
 
+// A section with its repeats expanded can run to a few hundred rows.
+const MAX_SECTION_OUTPUT_TOKENS = 24_000;
+
 async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Promise<Response> {
+  // Section mode returns a whole section rather than a handful of rows, so it needs the richer
+  // schema and more room to write.
+  const wholeSection = req.rows.length === 0;
   const result = await provider.complete({
     system: SYSTEM_PROMPT,
     user: buildUserMessage(req),
-    schema: ROWS_SCHEMA,
+    schema: wholeSection ? SECTION_SCHEMA : ROWS_SCHEMA,
     model: req.model ?? provider.defaultModel,
-    maxTokens: MAX_OUTPUT_TOKENS,
+    maxTokens: wholeSection ? MAX_SECTION_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
   });
 
   const rows = validateModelRows(JSON.parse(result.text), req.sizes.length);
@@ -222,7 +232,7 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
   console.log(
     JSON.stringify({
       event: 'parse-pattern',
-      task: 'rows',
+      task: wholeSection ? 'section' : 'rows',
       provider: provider.name,
       model: result.model,
       rows_requested: req.rows.length,

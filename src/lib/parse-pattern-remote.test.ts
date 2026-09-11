@@ -3,8 +3,10 @@
 // charted? The network call itself is the one part with nothing to assert.
 import {
   mergeRemoteRows,
+  sectionRowsFrom,
   toRemoteParseResult,
   unparsedRowIndexes,
+  type RemoteRowResult,
 } from '@/lib/parse-pattern-remote';
 import type { PatternRow } from '@/types/knitwit';
 
@@ -124,5 +126,59 @@ describe('mergeRemoteRows', () => {
     ]);
     expect(merged).toHaveLength(3);
     expect(issues[0]).toMatchObject({ rowIndex: null });
+  });
+});
+
+// Section mode: the parser read nothing at all, so there are no refused rows to name and the
+// model charts the section from scratch. Its reading replaces whatever was there — which is only
+// ever nothing, since this path exists precisely because the parser produced nothing.
+describe('sectionRowsFrom', () => {
+  const modelRow = (i: number, over: Partial<RemoteRowResult> = {}): RemoteRowResult => ({
+    index: i,
+    stitches: [{ ...knit, id: `g${i}` }],
+    confident: true,
+    note: '',
+    label: `Row ${i + 1}`,
+    side: i % 2 === 0 ? 'RS' : 'WS',
+    instruction: 'knit all',
+    ...over,
+  });
+
+  it('builds rows from what the model named, keeping the wording', () => {
+    const { rows } = sectionRowsFrom([modelRow(0), modelRow(1)]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ label: 'Row 1', side: 'RS', instruction: 'knit all' });
+    expect(rows[1].side).toBe('WS');
+  });
+
+  it('puts rows in index order however they arrived', () => {
+    const { rows } = sectionRowsFrom([modelRow(2), modelRow(0), modelRow(1)]);
+    expect(rows.map((r) => r.label)).toEqual(['Row 1', 'Row 2', 'Row 3']);
+  });
+
+  it('falls back to alternating sides when the model did not say', () => {
+    const { rows } = sectionRowsFrom([
+      modelRow(0, { side: undefined }),
+      modelRow(1, { side: undefined }),
+    ]);
+    expect(rows.map((r) => r.side)).toEqual(['RS', 'WS']);
+  });
+
+  it('names a row the model left unlabelled', () => {
+    const { rows } = sectionRowsFrom([modelRow(0, { label: undefined })]);
+    expect(rows[0].label).toBe('Row 1');
+  });
+
+  it('raises an unconfident row for review but still charts it', () => {
+    const { rows, issues } = sectionRowsFrom([
+      modelRow(0, { confident: false, note: 'the repeat is uneven' }),
+    ]);
+    expect(rows[0].stitches).toHaveLength(1);
+    expect(issues[0].message).toContain('the repeat is uneven');
+  });
+
+  it('gives every row a distinct id', () => {
+    const { rows } = sectionRowsFrom([modelRow(0), modelRow(1), modelRow(2)]);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(3);
   });
 });

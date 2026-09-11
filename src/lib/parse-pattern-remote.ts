@@ -1,6 +1,6 @@
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import type { ParseIssue } from '@/lib/parse-pattern-text';
-import type { PatternRow, PatternStitchGroup, SizedNumber } from '@/types/knitwit';
+import type { PatternRow, PatternStitchGroup, SizedNumber, StitchSide } from '@/types/knitwit';
 
 // The model half of the hybrid parser. `parse-pattern-text.ts` handles the regular shorthand and
 // refuses what it can't chart faithfully; this asks the model for exactly those refusals, and
@@ -14,6 +14,10 @@ export type RemoteRowResult = {
   stitches: PatternStitchGroup[];
   confident: boolean;
   note: string;
+  // Only present in section mode, where the rows don't exist yet and the model has to name them.
+  label?: string;
+  side?: StitchSide;
+  instruction?: string;
 };
 
 export type RemoteParseResult = {
@@ -92,6 +96,9 @@ export function toRemoteParseResult(data: unknown): RemoteParseResult {
       stitches,
       confident: r.confident === true && stitches.length > 0,
       note: typeof r.note === 'string' ? r.note : '',
+      label: typeof r.label === 'string' ? r.label : undefined,
+      side: r.side === 'WS' ? 'WS' : r.side === 'RS' ? 'RS' : undefined,
+      instruction: typeof r.instruction === 'string' ? r.instruction : undefined,
     });
   }
 
@@ -152,6 +159,35 @@ export function mergeRemoteRows(
   return { rows: merged, issues };
 }
 
+// Turn a section-mode response into rows. These don't exist yet, so everything about them comes
+// from the model — including the wording, which has to survive so the knitter can still read what
+// the pattern said when the chart can't express it.
+export function sectionRowsFrom(remote: RemoteRowResult[]): {
+  rows: PatternRow[];
+  issues: ParseIssue[];
+} {
+  const issues: ParseIssue[] = [];
+  const ordered = [...remote].sort((a, b) => a.index - b.index);
+  const rows = ordered.map((r, i) => {
+    if (!r.confident) {
+      issues.push({
+        rowIndex: i,
+        message: `Row ${i + 1}: check it — ${r.note || 'the wording was ambiguous.'}`,
+      });
+    }
+    return {
+      id: nextId(),
+      label: r.label?.trim() || `Row ${i + 1}`,
+      // Patterns conventionally start on the right side and alternate; used only if unstated.
+      side: r.side ?? (i % 2 === 0 ? 'RS' : 'WS'),
+      marker: false,
+      instruction: r.instruction?.trim() ?? '',
+      stitches: r.stitches,
+    };
+  });
+  return { rows, issues };
+}
+
 // Ask the model to chart the rows the tokenizer refused.
 export async function convertRowsRemotely(params: {
   sectionText: string;
@@ -168,6 +204,7 @@ export async function convertRowsRemotely(params: {
     sizes: params.sizes,
     stitchesBefore: params.stitchesBefore,
     model: params.model,
+    // An empty list is section mode: the parser read nothing, so there are no refusals to name.
     rows: params.indexes.map((index) => ({
       index,
       label: params.rows[index]?.label ?? `Row ${index + 1}`,

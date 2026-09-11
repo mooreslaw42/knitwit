@@ -21,6 +21,7 @@ import { EdgeFunctionAborted } from '@/lib/edge-function';
 import {
   convertRowsRemotely,
   mergeRemoteRows,
+  sectionRowsFrom,
   unparsedRowIndexes,
 } from '@/lib/parse-pattern-remote';
 import { parseSectionText, reconcileRowCounts, type ParseIssue } from '@/lib/parse-pattern-text';
@@ -171,7 +172,10 @@ export default function SectionStitchesScreen() {
     if (!preview) return;
     const previewRows = preview.rows.map(toRow);
     const indexes = unparsedRowIndexes(previewRows);
-    if (indexes.length === 0) return;
+    // Nothing parsed at all — there are no refusals to name, so the model charts the whole
+    // section instead and its reading replaces what little is there.
+    const wholeSection = previewRows.length === 0;
+    if (indexes.length === 0 && !wholeSection) return;
 
     const controller = new AbortController();
     askRef.current = controller;
@@ -186,15 +190,27 @@ export default function SectionStitchesScreen() {
         stitchesBefore: startCount,
         signal: controller.signal,
       });
-      const merged = mergeRemoteRows(previewRows, result.rows);
+      const merged = wholeSection
+        ? sectionRowsFrom(result.rows)
+        : mergeRemoteRows(previewRows, result.rows);
       setPreview({
         ...preview,
         rows: merged.rows.map(toEditRow),
         // Recomputed rather than appended: the old refusal issues are superseded by whatever the
         // model did with those rows, and the counts change once rows are filled in.
+        //
+        // The stitch-count check runs over the model's rows too. It's the same free validator the
+        // parser gets, and it's the reason a whole-section replacement is safe to offer: if the
+        // model's reading contradicts what the pattern says about itself, that shows up here
+        // rather than in a chart the knitter trusts. Section mode has no per-row expected counts
+        // to check against, so it reconciles against nothing and simply passes.
         issues: [
           ...merged.issues,
-          ...reconcileRowCounts(merged.rows, preview.expectedCounts, startCount),
+          ...reconcileRowCounts(
+            merged.rows,
+            wholeSection ? [] : preview.expectedCounts,
+            startCount,
+          ),
         ],
         model: result.model,
       });
@@ -336,13 +352,16 @@ export default function SectionStitchesScreen() {
 
               {/* Rows the tokenizer wouldn't guess at. Asking the model is opt-in and costs a
                   request, so it's a button rather than something that happens automatically. */}
-              {previewUnparsed.length > 0 && (
+              {(previewUnparsed.length > 0 || preview.rows.length === 0) && (
                 <View style={styles.field}>
                   <ThemedText type="small" themeColor="inkSoft">
-                    {previewUnparsed.length}{' '}
-                    {previewUnparsed.length === 1 ? 'row was' : 'rows were'} too irregular to read
-                    here — {previewUnparsed.length === 1 ? 'its' : 'their'} wording is kept either
-                    way.
+                    {preview.rows.length === 0
+                      ? "This section isn't written in a form Knitwit can read on its own. The AI can chart it — your text is kept either way."
+                      : `${previewUnparsed.length} ${
+                          previewUnparsed.length === 1 ? 'row was' : 'rows were'
+                        } too irregular to read here — ${
+                          previewUnparsed.length === 1 ? 'its' : 'their'
+                        } wording is kept either way.`}
                   </ThemedText>
                   <View style={styles.inline}>
                     <PillButton
@@ -353,7 +372,9 @@ export default function SectionStitchesScreen() {
                       <ThemedText type="smallBold" themeColor="ink">
                         {asking
                           ? 'Reading…'
-                          : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
+                          : preview.rows.length === 0
+                            ? 'Read this section with AI'
+                            : `Read ${previewUnparsed.length === 1 ? 'it' : 'them'} with AI`}
                       </ThemedText>
                     </PillButton>
                     {asking && (

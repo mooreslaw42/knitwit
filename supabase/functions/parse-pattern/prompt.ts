@@ -7,7 +7,11 @@ import type { DocumentRequest, ParsePatternRequest } from './schema.ts';
 // above the breakpoint invalidates it.)
 export const SYSTEM_PROMPT = `You convert written knitting and crochet row instructions into a structured stitch-by-stitch form, for a knitting companion app that draws them as a chart and counts them off row by row.
 
-You are given the full text of one section for context, and a short list of specific rows to chart. A deterministic parser already handled every other row in the section; the rows you are given are the ones it refused. Chart only the rows you are asked for.
+You work in one of two modes, and the message will say which.
+
+**Fill mode** — you are given the full text of one section for context, and a short list of specific rows to chart. A deterministic parser already handled every other row; the ones you are given are the rows it refused. Chart only those, and return one entry per row you were asked about, with the same \`index\`, even when refusing it.
+
+**Section mode** — the parser could not read the section at all, so you are given only its text and asked to chart the whole thing. Return every row the section works, in order, numbering \`index\` from 0 with no gaps. **Expand repeats**: if a block of four rows is worked seven times, that is twenty-eight rows, not four. Each row also needs its \`label\` (what the pattern calls it), its \`side\`, and its \`instruction\` — the row's own wording, copied from the pattern, because nothing else in the app has it and it is what the knitter reads when the chart can't express something.
 
 # The model you emit
 
@@ -72,21 +76,32 @@ A stitch that genuinely has no entry — a cable cross, a 3-into-1 decrease, a b
 // The variable half — this sits after the cache breakpoint, so it can differ freely per request.
 export function buildUserMessage(req: ParsePatternRequest): string {
   const sizes = req.sizes.length > 0 ? req.sizes : ['One size'];
-  const rows = req.rows
-    .map((r) => `- index ${r.index} · ${r.label} · ${r.side}: ${r.instruction}`)
-    .join('\n');
+  const preamble = [
+    `Sizes (${sizes.length}), in order: ${sizes.join(', ')}. Every non-empty count array must have exactly ${sizes.length} ${sizes.length === 1 ? 'entry' : 'entries'}.`,
+    `Stitches on the needle when this section begins: ${req.stitchesBefore}.`,
+    '',
+  ];
+
+  if (req.rows.length === 0) {
+    return [
+      'SECTION MODE. Chart this whole section.',
+      ...preamble,
+      '"""',
+      req.sectionText.trim(),
+      '"""',
+    ].join('\n');
+  }
 
   return [
-    `Sizes (${sizes.length}), in order: ${sizes.join(', ')}. Every non-empty count array must have exactly ${sizes.length} ${sizes.length === 1 ? 'entry' : 'entries'}.`,
-    `Stitches on the needle before the first row listed below: ${req.stitchesBefore}.`,
-    '',
+    'FILL MODE. Chart only the rows listed at the end.',
+    ...preamble,
     'Full section text, for context:',
     '"""',
     req.sectionText.trim(),
     '"""',
     '',
     `Chart these ${req.rows.length} ${req.rows.length === 1 ? 'row' : 'rows'} only:`,
-    rows,
+    req.rows.map((r) => `- index ${r.index} · ${r.label} · ${r.side}: ${r.instruction}`).join('\n'),
   ].join('\n');
 }
 

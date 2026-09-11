@@ -58,10 +58,14 @@ export const TOOL_TYPES = [
 
 export type ParsePatternRequest = {
   task: 'rows';
-  // The whole section, for context — the model reads it but only charts the rows listed below.
+  // The whole section. In fill mode the model reads it for context only; in section mode it is
+  // the thing being charted.
   sectionText: string;
   // Exactly the rows the deterministic parser refused. Sending the refusals rather than the whole
   // section keeps the call small and stops the model second-guessing rows we already got right.
+  //
+  // Empty means **section mode**: the parser couldn't read this section at all, so there are no
+  // refusals to list and the model charts the section from scratch.
   rows: { index: number; label: string; side: 'RS' | 'WS'; instruction: string }[];
   // The pattern's size names. Per-size counts must come back with one entry per size.
   sizes: string[];
@@ -98,6 +102,80 @@ export type ParsePatternResponse = {
     cache_creation_input_tokens: number;
   };
 };
+
+// One row's worth of stitch groups. Shared by both row schemas below — the stitch vocabulary and
+// the per-size count rule are the same whether the model is filling a gap or charting a whole
+// section, and duplicating them would let the two drift.
+const STITCHES_PROPERTY = {
+  type: 'array',
+  description: 'The row worked left to right, in the order the knitter works it.',
+  items: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: [...STITCH_TYPES] },
+      span: {
+        type: 'string',
+        enum: [...SPANS],
+        description:
+          "'exact' works `count` stitches; 'all' works every remaining stitch; " +
+          "'to-last' works up to the last `count` stitches.",
+      },
+      count: {
+        type: 'array',
+        items: { type: 'integer', minimum: 0 },
+        description:
+          'One entry per size, in the order the sizes were given. Use an empty array ' +
+          "only when span is 'all'. If the pattern gives one number for all sizes, " +
+          'repeat it for every size.',
+      },
+      note: { type: 'string' },
+    },
+    required: ['type', 'span', 'count', 'note'],
+    additionalProperties: false,
+  },
+} as const;
+
+// Section mode needs each row's identity back as well as its stitches, because these rows don't
+// exist yet — nothing on the client can supply a label, a side or the original wording. Kept as a
+// separate schema from ROWS_SCHEMA so the far more common fill mode isn't billed for three extra
+// string fields per row that it would only throw away.
+const SECTION_ROW_PROPERTIES = {
+  index: {
+    type: 'integer',
+    description: 'Position of this row in the section, starting at 0 and counting up with no gaps.',
+  },
+  label: { type: 'string', description: 'What the pattern calls this row, e.g. "Row 7".' },
+  side: { type: 'string', enum: ['RS', 'WS'] },
+  instruction: {
+    type: 'string',
+    description:
+      "The row's wording, copied from the pattern. This is what the knitter reads when the chart " +
+      "can't express something, so it must survive verbatim.",
+  },
+  stitches: STITCHES_PROPERTY,
+  confident: { type: 'boolean' },
+  note: { type: 'string' },
+} as const;
+
+export const SECTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    rows: {
+      type: 'array',
+      description:
+        'Every row this section works, in order, with repeats expanded — if a block of four rows ' +
+        'is worked seven times, that is twenty-eight rows, not four.',
+      items: {
+        type: 'object',
+        properties: SECTION_ROW_PROPERTIES,
+        required: ['index', 'label', 'side', 'instruction', 'stitches', 'confident', 'note'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['rows'],
+  additionalProperties: false,
+} as const;
 
 // ---- Whole-document import (task: 'document') ----
 
@@ -272,34 +350,7 @@ export const ROWS_SCHEMA = {
             type: 'integer',
             description: 'The index of the row being charted, copied from the request.',
           },
-          stitches: {
-            type: 'array',
-            description: 'The row worked left to right, in the order the knitter works it.',
-            items: {
-              type: 'object',
-              properties: {
-                type: { type: 'string', enum: [...STITCH_TYPES] },
-                span: {
-                  type: 'string',
-                  enum: [...SPANS],
-                  description:
-                    "'exact' works `count` stitches; 'all' works every remaining stitch; " +
-                    "'to-last' works up to the last `count` stitches.",
-                },
-                count: {
-                  type: 'array',
-                  items: { type: 'integer', minimum: 0 },
-                  description:
-                    'One entry per size, in the order the sizes were given. Use an empty array ' +
-                    "only when span is 'all'. If the pattern gives one number for all sizes, " +
-                    'repeat it for every size.',
-                },
-                note: { type: 'string' },
-              },
-              required: ['type', 'span', 'count', 'note'],
-              additionalProperties: false,
-            },
-          },
+          stitches: STITCHES_PROPERTY,
           confident: {
             type: 'boolean',
             description:
