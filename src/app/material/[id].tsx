@@ -8,7 +8,9 @@ import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
-import { WASHING_LABELS, YARN_WEIGHTS } from '@/constants/catalogs';
+import { WASHING_LABELS, YARN_WEIGHTS,
+  toolSizeOptions,
+} from '@/constants/catalogs';
 import { MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
@@ -113,11 +115,11 @@ export default function MaterialEditScreen() {
             value={form.craftType}
             onChange={(v) => set('craftType', v)}
           />
-          <FormField
+          <SelectField
             label={form.craftType === 'crochet' ? 'Hook size' : 'Needle size'}
+            options={toolSizeOptions(form.thickness)}
             value={form.thickness}
-            onChangeText={(v) => set('thickness', v)}
-            placeholder="e.g. 4.5mm"
+            onChange={(v) => set('thickness', v)}
           />
           <GaugeField value={form.gauge} onChange={(g) => set('gauge', g)} />
           <SelectField

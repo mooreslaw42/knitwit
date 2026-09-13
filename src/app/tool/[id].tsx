@@ -8,7 +8,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { inUseLabel } from '@/lib/knitwit-helpers';
-import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { TOOL_TYPE_LABELS,
+  toolSizeOptions,
+} from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Tool, ToolType } from '@/types/knitwit';
@@ -62,11 +64,11 @@ export default function ToolEditScreen() {
             value={form.type}
             onChange={(v) => set('type', v)}
           />
-          <FormField
+          <SelectField
             label="Thickness"
+            options={toolSizeOptions(form.thickness)}
             value={form.thickness}
-            onChangeText={(v) => set('thickness', v)}
-            placeholder="e.g. 4.5mm"
+            onChange={(v) => set('thickness', v)}
           />
           <FormField
             label="Length / set"

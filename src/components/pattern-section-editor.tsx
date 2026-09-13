@@ -5,7 +5,9 @@ import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { StitchChart } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
-import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { TOOL_TYPE_LABELS,
+  toolSizeOptions,
+} from '@/constants/catalogs';
 import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
 import type {
@@ -167,11 +169,11 @@ export function PatternKitEditor({
               value={t.type}
               onChange={(v) => updateTool(i, { type: v })}
             />
-            <FormField
+            <SelectField
               label="Size"
+              options={toolSizeOptions(t.thickness)}
               value={t.thickness}
-              onChangeText={(v) => updateTool(i, { thickness: v })}
-              placeholder="e.g. 4.5mm"
+              onChange={(v) => updateTool(i, { thickness: v })}
             />
             <FormField
               label="Note"

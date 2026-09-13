@@ -12,6 +12,7 @@ import {
   CATEGORY_ORDER,
   CRAFT_LABELS,
   CRAFT_ORDER,
+  toolSizeOptions,
 } from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
@@ -137,11 +138,11 @@ export default function ProjectToPatternScreen() {
             value={form.level}
             onChange={(v) => set('level', v)}
           />
-          <FormField
+          <SelectField
             label="Needle / hook size"
+            options={toolSizeOptions(form.needleSize)}
             value={form.needleSize}
-            onChangeText={(v) => set('needleSize', v)}
-            placeholder="e.g. 4.5mm"
+            onChange={(v) => set('needleSize', v)}
           />
           <GaugeField
             value={form.gauge}

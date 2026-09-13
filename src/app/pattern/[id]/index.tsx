@@ -15,6 +15,7 @@ import {
   CRAFT_ORDER,
   SIZE_OPTIONS,
   TOOL_TYPE_LABELS,
+  toolSizeOptions,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { patternSectionMarkers } from '@/lib/knitwit-helpers';
@@ -208,11 +209,11 @@ export default function PatternDetailScreen() {
                   })}
                 </View>
               </View>
-              <FormField
+              <SelectField
                 label="Needle / hook size"
+                options={toolSizeOptions(draft.needleSize)}
                 value={draft.needleSize}
-                onChangeText={(v) => set('needleSize', v)}
-                placeholder="e.g. 4.5mm"
+                onChange={(v) => set('needleSize', v)}
               />
               <GaugeField
                 label="Gauge the pattern calls for"

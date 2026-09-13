@@ -20,6 +20,7 @@ import {
   CRAFT_LABELS,
   CRAFT_ORDER,
   SIZE_OPTIONS,
+  toolSizeOptions,
 } from '@/constants/catalogs';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -482,11 +483,11 @@ export default function NewPatternWizardScreen() {
               <ThemedText type="small" themeColor="inkSoft">
                 This is what you&apos;ll check a swatch against before casting on.
               </ThemedText>
-              <FormField
+              <SelectField
                 label="Needle / hook size"
+                options={toolSizeOptions(form.needleSize)}
                 value={form.needleSize}
-                onChangeText={(v) => set('needleSize', v)}
-                placeholder="e.g. 4.5mm"
+                onChange={(v) => set('needleSize', v)}
               />
               <GaugeField
                 value={form.gauge}

@@ -14,6 +14,7 @@ import {
   CATEGORY_ORDER,
   CRAFT_LABELS,
   CRAFT_ORDER,
+  toolSizeOptions,
 } from '@/constants/catalogs';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
@@ -137,11 +138,11 @@ export default function ProjectEditScreen() {
             value={level}
             onChange={setLevel}
           />
-          <FormField
+          <SelectField
             label="Needle / hook size"
+            options={toolSizeOptions(needleSize)}
             value={needleSize}
-            onChangeText={setNeedleSize}
-            placeholder="e.g. 4.5mm"
+            onChange={setNeedleSize}
           />
           <FormField
             label="Instruction video (optional)"

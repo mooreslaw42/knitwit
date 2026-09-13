@@ -68,6 +68,33 @@ export const TOOL_TYPE_LABELS: Record<ToolType, string> = {
   other: 'Other',
 };
 
+// Needle and hook sizes, in millimetres. Half-millimetre steps up to 20, which is the scale they
+// are actually sold on, plus 25 at the top end for arm-knitting territory.
+//
+// The quarter sizes are in there too. Needles are mostly a 0.5 scale, but 2.25, 2.75, 3.25 and
+// 3.75 are standard — they're the metric equivalents of US 1, 2, 3 and 5, and a knitter who owns
+// a pair would otherwise have no way to say so.
+const HALF_STEPS = Array.from({ length: 40 }, (_, i) => (i + 1) * 0.5);
+const QUARTER_SIZES = [2.25, 2.75, 3.25, 3.75];
+
+export const TOOL_SIZES: number[] = [...HALF_STEPS, ...QUARTER_SIZES, 25].sort((a, b) => a - b);
+
+export const formatToolSize = (mm: number) => `${mm}mm`;
+
+// The options for a size picker, with whatever is already stored kept selectable even when it
+// isn't on the scale. A pattern imported as "3 mm [US 2.5] circular needles" is a real value, and
+// a picker that silently dropped it would rewrite the knitter's data the next time they saved.
+export function toolSizeOptions(current: string): { value: string; label: string }[] {
+  const options = [
+    { value: '', label: '— not set —' },
+    ...TOOL_SIZES.map((mm) => ({ value: formatToolSize(mm), label: `${mm} mm` })),
+  ];
+  if (current && !options.some((o) => o.value === current)) {
+    options.splice(1, 0, { value: current, label: current });
+  }
+  return options;
+}
+
 export const TOOL_ICONS: Record<ToolType, string> = {
   straight: '➖',
   circular: '⭕',
