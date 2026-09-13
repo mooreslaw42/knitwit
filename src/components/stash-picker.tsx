@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Material, ProjectSection, Tool } from '@/types/knitwit';
+import type { Material, ProjectSection, Technique, Tool } from '@/types/knitwit';
 
 export const materialLabel = (m: Material) => `${m.brand} — ${m.colorName}`;
 export const toolLabel = (t: Tool) => `${t.thickness} ${TOOL_TYPE_LABELS[t.type]}`;
@@ -26,6 +26,7 @@ function ChipToggles({
   emptyHint,
   addLabel,
   addHref,
+  hideAdd = false,
 }: {
   label: string;
   options: { id: string; label: string }[];
@@ -34,6 +35,7 @@ function ChipToggles({
   emptyHint: string;
   addLabel: string;
   addHref: Href;
+  hideAdd?: boolean;
 }) {
   const router = useRouter();
 
@@ -68,12 +70,16 @@ function ChipToggles({
         </ThemedText>
       )}
       {/* The stash is empty far more often than it looks from seed data, and without this the
-          answer to "my yarn isn't here" was nothing at all. */}
-      <Pressable hitSlop={6} style={styles.addLink} onPress={() => router.push(addHref)}>
-        <ThemedText type="smallBold" themeColor="sageDeep">
-          {addLabel}
-        </ThemedText>
-      </Pressable>
+          answer to "my yarn isn't here" was nothing at all. Hidden when the choices are already
+          narrowed to a project's own kit: the place to widen that is the step above, not the
+          library. */}
+      {!hideAdd && (
+        <Pressable hitSlop={6} style={styles.addLink} onPress={() => router.push(addHref)}>
+          <ThemedText type="smallBold" themeColor="sageDeep">
+            {addLabel}
+          </ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -86,13 +92,21 @@ function ChipToggles({
 export function SectionKitEditor({
   value,
   onChange,
+  only,
 }: {
   value: SectionKit;
   onChange: (kit: SectionKit) => void;
+  // Narrows the choices to what the project as a whole uses. Offering the entire stash per
+  // section is right on an existing project — you reach for whatever is to hand — but wrong in
+  // the wizard, where the step before has just asked what this project is made of.
+  only?: SectionKit;
 }) {
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const techniques = useKnitwitStore((state) => state.techniques);
+
+  const limit = (entries: [string, unknown][], allowed: string[] | undefined) =>
+    allowed ? entries.filter(([id]) => allowed.includes(id)) : entries;
 
   const toggle = (field: keyof SectionKit, id: string) =>
     onChange({
@@ -106,30 +120,42 @@ export function SectionKitEditor({
     <View style={styles.wrap}>
       <ChipToggles
         label="Yarn"
-        options={Object.entries(materials).map(([id, m]) => ({ id, label: materialLabel(m) }))}
+        options={limit(Object.entries(materials), only?.materialIds).map(([id, m]) => ({
+          id,
+          label: materialLabel(m as Material),
+        }))}
         selected={value.materialIds}
         onToggle={(id) => toggle('materialIds', id)}
-        emptyHint="No yarn in your library yet."
+        emptyHint={only ? 'No yarn chosen for this project.' : 'No yarn in your library yet.'}
         addLabel="+ Add a yarn to your library"
         addHref="/material/new"
+        hideAdd={!!only}
       />
       <ChipToggles
         label="Tools"
-        options={Object.entries(tools).map(([id, t]) => ({ id, label: toolLabel(t) }))}
+        options={limit(Object.entries(tools), only?.toolIds).map(([id, t]) => ({
+          id,
+          label: toolLabel(t as Tool),
+        }))}
         selected={value.toolIds}
         onToggle={(id) => toggle('toolIds', id)}
-        emptyHint="No needles or hooks in your library yet."
+        emptyHint={only ? 'No tools chosen for this project.' : 'No needles or hooks in your library yet.'}
         addLabel="+ Add a tool to your library"
         addHref="/tool/new"
+        hideAdd={!!only}
       />
       <ChipToggles
         label="Techniques"
-        options={Object.entries(techniques).map(([id, t]) => ({ id, label: t.name }))}
+        options={limit(Object.entries(techniques), only?.techniqueIds).map(([id, t]) => ({
+          id,
+          label: (t as Technique).name,
+        }))}
         selected={value.techniqueIds}
         onToggle={(id) => toggle('techniqueIds', id)}
-        emptyHint="No techniques in your library yet."
+        emptyHint={only ? 'No techniques chosen for this project.' : 'No techniques in your library yet.'}
         addLabel="+ Add a technique to your library"
         addHref="/technique/new"
+        hideAdd={!!only}
       />
     </View>
   );

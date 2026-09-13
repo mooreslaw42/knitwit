@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { projectToPattern } from '@/lib/project-to-pattern';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
+type KnitwitStore = ReturnType<typeof useKnitwitStore.getState>;
+
 // The store persists through AsyncStorage, which has no implementation under the jest-expo
 // preset — without this mock the whole suite fails to load. jest.mock factories are hoisted
 // above imports, so require() is the only way to reference the mock here.
@@ -1107,5 +1109,89 @@ describe('hydrating a store saved before a project held what a pattern holds', (
     expect(project).toMatchObject({ category: 'toys', level: 'advanced', sourceText: 'kept' });
     expect(project.sections[0].description).toBe('Row 1: K.');
     expect(project.sections[0].stitchMultiple).toEqual({ of: 4, plus: 0 });
+  });
+});
+
+describe('improvising a project with planned sections', () => {
+  const store = () => useKnitwitStore.getState();
+
+  type Planned = NonNullable<Parameters<KnitwitStore['createProject']>[0]['sections']>;
+
+  const make = (sections: Planned) =>
+    store().createProject({
+      name: 'Improvised',
+      startedOn: null,
+      craft: 'knit',
+      patternId: null,
+      totalRows: 60,
+      sections,
+    });
+
+  it('creates every section the wizard planned', () => {
+    const key = make([
+      { name: 'Body', totalRows: 80 },
+      { name: 'Left sleeve', totalRows: 40 },
+    ]);
+    expect(store().projects[key].sections.map((s) => [s.name, s.totalRows])).toEqual([
+      ['Body', 80],
+      ['Left sleeve', 40],
+    ]);
+  });
+
+  it('carries each section’s yarn, tools, techniques and instructions', () => {
+    const key = make([
+      {
+        name: 'Body',
+        totalRows: 80,
+        description: 'Row 1: K all.',
+        materialIds: ['m1', 'm2'],
+        toolIds: ['t1'],
+        techniqueIds: [],
+      },
+    ]);
+    expect(store().projects[key].sections[0]).toMatchObject({
+      description: 'Row 1: K all.',
+      materialIds: ['m1', 'm2'],
+      toolIds: ['t1'],
+    });
+  });
+
+  it('starts every planned section at zero, however it was planned', () => {
+    const key = make([{ name: 'Body', totalRows: 80 }]);
+    expect(store().projects[key].sections[0]).toMatchObject({ row: 0, complete: false, seconds: 0 });
+  });
+
+  it('names a section the knitter left blank rather than saving an empty one', () => {
+    const key = make([{ name: '   ', totalRows: 20 }]);
+    expect(store().projects[key].sections[0].name).toBe('Section 1');
+  });
+
+  it('never plans a section with no rows to count', () => {
+    const key = make([{ name: 'Body', totalRows: 0 }]);
+    expect(store().projects[key].sections[0].totalRows).toBe(1);
+  });
+
+  // Every screen reads sections[0], and the last section can't be deleted for the same reason.
+  it('falls back to one section when none were planned', () => {
+    const key = make([]);
+    expect(store().projects[key].sections).toHaveLength(1);
+    expect(store().projects[key].sections[0]).toMatchObject({ name: 'Main', totalRows: 60 });
+  });
+
+  // A pattern's sections are the thing being knitted; extras alongside them would give the
+  // project two sources of truth.
+  it('ignores planned sections when a pattern supplies its own', () => {
+    const patternId = Object.entries(store().patterns).find(([, p]) => p.sections.length > 0)![0];
+    const key = store().createProject({
+      name: 'From a pattern',
+      startedOn: null,
+      craft: 'knit',
+      patternId,
+      totalRows: 60,
+      sections: [{ name: 'Invented', totalRows: 5 }],
+    });
+    const names = store().projects[key].sections.map((s) => s.name);
+    expect(names).not.toContain('Invented');
+    expect(names).toEqual(store().patterns[patternId].sections.map((s) => s.name));
   });
 });

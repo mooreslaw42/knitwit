@@ -94,6 +94,10 @@ type KnitwitState = {
     // Chosen mappings from the pattern's generic material/tool slots to the user's own stash.
     slotMaterials?: Record<string, string>;
     slotTools?: Record<string, string>;
+    // Sections planned in the wizard when improvising. Ignored when a pattern supplies its own —
+    // a pattern's sections are the thing being knitted, and inventing extras alongside them would
+    // give the project two sources of truth. `totalRows` above is the fallback for neither.
+    sections?: ({ name: string; totalRows: number; description?: string } & Partial<SectionKit>)[];
   }) => string;
   updateProject: (
     key: string,
@@ -400,6 +404,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         swatchGauge = null,
         slotMaterials = {},
         slotTools = {},
+        sections: planned = [],
       }) => {
         const { projects, patterns, projectSeq, noteSeq } = get();
         const key = `proj${projectSeq}`;
@@ -421,6 +426,22 @@ export const useKnitwitStore = create<KnitwitState>()(
         const ratio =
           pattern?.gauge && swatchGauge ? stitchRatio(pattern.gauge, swatchGauge) : null;
         const regauged = ratio != null && Math.abs(ratio - 1) > 0.0005 ? ratio : null;
+        const blank = (over: Partial<ProjectSection> & { name: string; totalRows: number }) => ({
+          row: 0,
+          complete: false,
+          seconds: 0,
+          notes: [],
+          materialIds: [],
+          toolIds: [],
+          techniqueIds: [],
+          description: '',
+          stitchMultiple: null,
+          markers: [],
+          castOn: 0,
+          rows: [],
+          ...over,
+        });
+
         const sections =
           patternSections.length > 0
             ? patternSections.map((ps) => ({
@@ -445,24 +466,17 @@ export const useKnitwitStore = create<KnitwitState>()(
                 // from here on the project holds plain numbers.
                 ...resolveSection(ps, sizeIndex, regauged),
               }))
-            : [
-                {
-                  name: 'Main',
-                  totalRows: Math.max(1, totalRows || 60),
-                  row: 0,
-                  complete: false,
-                  seconds: 0,
-                  notes: [],
-                  materialIds: [],
-                  toolIds: [],
-                  techniqueIds: [],
-                  description: '',
-                  stitchMultiple: null,
-                  markers: [],
-                  castOn: 0,
-                  rows: [],
-                },
-              ];
+            : planned.length > 0
+              ? planned.map((p, i) =>
+                  blank({
+                    ...p,
+                    name: p.name.trim() || `Section ${i + 1}`,
+                    totalRows: Math.max(1, p.totalRows || 1),
+                  }),
+                )
+              : // Every project needs something to count — screens read sections[0], and the last
+                // section can't be deleted for the same reason. So there is always one.
+                [blank({ name: 'Main', totalRows: Math.max(1, totalRows || 60) })];
 
         set({
           projects: {

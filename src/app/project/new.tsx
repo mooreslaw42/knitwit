@@ -6,6 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { DateField } from '@/components/date-field';
 import { GaugeField } from '@/components/gauge-field';
+import {
+  blankSection,
+  ProjectSectionsEditor,
+  type DraftSection,
+} from '@/components/project-sections-editor';
+import { EMPTY_KIT, SectionKitEditor, type SectionKit } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -22,7 +28,7 @@ import { formatGaugeIn, isUsableGauge, stitchRatio } from '@/lib/gauge';
 import type { Gauge, TechniqueCraft } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
-type StepId = 'basics' | 'pattern' | 'match' | 'plan';
+type StepId = 'basics' | 'pattern' | 'match' | 'kit' | 'plan';
 
 const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
   value: c,
@@ -55,6 +61,10 @@ export default function NewProjectWizardScreen() {
   // Defaults to whatever swatch was recorded on the pattern, so a knitter who already swatched
   // doesn't type it twice. Null means "work it at the pattern's gauge".
   const [swatchGauge, setSwatchGauge] = useState<Gauge | null>(null);
+  // The improvise path: what the whole project is made of, and the pieces it's knitted in. A
+  // pattern supplies both, so these only come into play when there isn't one.
+  const [kit, setKit] = useState<SectionKit>(EMPTY_KIT);
+  const [draftSections, setDraftSections] = useState<DraftSection[]>([blankSection(EMPTY_KIT)]);
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 
   const selectedPattern = patternId ? patterns[patternId] : null;
@@ -66,11 +76,21 @@ export default function NewProjectWizardScreen() {
 
   // The stash-matching step only exists when the chosen pattern actually names yarn or tools, and
   // the final step is either the inherited-section review or the manual row count.
+  const improvising = patternId === null;
+
+  // A pattern brings its own yarn slots and its own sections, so those steps ask about matching
+  // and reviewing. Improvising, there is nothing to match or review — the same two questions have
+  // to be answered from scratch, which is what the pattern wizard's Materials and Sections steps
+  // do and what these mirror.
   const steps: { id: StepId; label: string }[] = [
     { id: 'basics', label: 'Basics' },
     { id: 'pattern', label: 'Pattern' },
-    ...(hasSlots ? [{ id: 'match' as const, label: 'Materials' }] : []),
-    { id: 'plan', label: hasSections ? 'Sections' : 'Rows' },
+    ...(improvising
+      ? [{ id: 'kit' as const, label: 'Yarn & tools' }]
+      : hasSlots
+        ? [{ id: 'match' as const, label: 'Materials' }]
+        : []),
+    { id: 'plan', label: hasSections || improvising ? 'Sections' : 'Rows' },
   ];
   const current = steps[step] ?? steps[steps.length - 1];
   // A plain statement of what accepting this will do, before it is done.
@@ -102,6 +122,14 @@ export default function NewProjectWizardScreen() {
     setSlotMaterials({});
     setSlotTools({});
     setSizeIndex(0);
+  };
+
+  // Sections follow the project's kit until the knitter narrows one by hand. Keyed off that flag
+  // rather than off an empty kit, which was wrong: the first pick filled the section in, and
+  // every pick after it then looked like a deliberate choice and was skipped.
+  const chooseKit = (next: SectionKit) => {
+    setKit(next);
+    setDraftSections((prev) => prev.map((s) => (s.kitTouched ? s : { ...s, ...next })));
   };
 
   const setSlotMaterial = (slotId: string, value: string) =>
@@ -153,6 +181,16 @@ export default function NewProjectWizardScreen() {
       swatchGauge,
       slotMaterials,
       slotTools,
+      sections: improvising
+        ? draftSections.map((d) => ({
+            name: d.name,
+            totalRows: parseInt(d.totalRows, 10) || 60,
+            description: d.description,
+            materialIds: d.materialIds,
+            toolIds: d.toolIds,
+            techniqueIds: d.techniqueIds,
+          }))
+        : [],
     });
     setActiveSection(key, 0);
     router.replace(`/project/${key}`);
@@ -292,6 +330,17 @@ export default function NewProjectWizardScreen() {
             </>
           )}
 
+          {current.id === 'kit' && (
+            <>
+              <ThemedText type="subtitle">What are you making it with?</ThemedText>
+              <ThemedText type="small" themeColor="inkSoft">
+                Pick from your library. Anything you choose here is offered on each section in the
+                next step — leave it empty if you&apos;d rather decide as you go.
+              </ThemedText>
+              <SectionKitEditor value={kit} onChange={chooseKit} />
+            </>
+          )}
+
           {current.id === 'plan' && (selectedPattern?.sizes.length ?? 0) > 1 && (
             <View style={styles.field}>
               <ThemedText type="smallBold" themeColor="inkSoft">
@@ -349,6 +398,19 @@ export default function NewProjectWizardScreen() {
                     </View>
                   </View>
                 ))}
+              </>
+            ) : improvising ? (
+              <>
+                <ThemedText type="subtitle">Break it into sections</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  The parts you knit one at a time — a body, a sleeve, a collar — each with its own
+                  row count and timer. One is plenty if you just want to count.
+                </ThemedText>
+                <ProjectSectionsEditor
+                  sections={draftSections}
+                  kit={kit}
+                  onChange={setDraftSections}
+                />
               </>
             ) : (
               <>
