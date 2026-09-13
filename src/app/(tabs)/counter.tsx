@@ -26,9 +26,13 @@ export default function CounterScreen() {
   const chartRows = section?.rows ?? [];
   // `row` counts rows completed, so it names the row just worked; before anything is worked, show
   // the first row that's coming up.
-  const chartRowIndex = chartRows.length
-    ? Math.min(chartRows.length - 1, Math.max(0, (section?.row ?? 0) - 1))
-    : -1;
+  // Counting on past the planned total (see the store's `extending`) takes the knitter beyond the
+  // charted rows. Clamping to the last one would caption row 21 as "Row 16" and hand them stitches
+  // for a row they aren't working — better to show no chart than the wrong one.
+  const chartRowIndex =
+    chartRows.length && (section?.row ?? 0) <= chartRows.length
+      ? Math.max(0, (section?.row ?? 0) - 1)
+      : -1;
   const chartRow = chartRowIndex >= 0 ? chartRows[chartRowIndex] : null;
 
   const dismissedMarkerRow = useKnitwitStore((state) => state.dismissedMarkerRow);
@@ -293,6 +297,16 @@ export default function CounterScreen() {
           </View>
         )}
 
+        {/* Sitting at the end with the prompt already declined, the only way to bind off was to
+            leave and come back. The action stays on the counter for as long as it applies. */}
+        {!hideMain && section.row >= section.totalRows && !section.complete && (
+          <PillButton style={styles.bindOffBtn} onPress={confirmCastOff}>
+            <ThemedText type="smallBold" themeColor="white">
+              ✓ Bind off &amp; finish {section.name}
+            </ThemedText>
+          </PillButton>
+        )}
+
         {markerHint && !hideMain && (
           <View style={styles.markerHint}>
             <ThemedText type="smallBold" themeColor="sageDeep">
@@ -448,6 +462,11 @@ const styles = StyleSheet.create({
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  bindOffBtn: {
+    alignSelf: 'center',
+    marginTop: Spacing.three,
+    backgroundColor: Colors.sageDeep,
   },
   markerHint: {
     backgroundColor: Colors.white,
