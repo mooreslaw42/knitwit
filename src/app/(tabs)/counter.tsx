@@ -113,6 +113,21 @@ export default function CounterScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.topbar}>
+          {/* Counter is a tab, so there is no reliable stack to go back through — arriving here
+              from the tab bar and from "Continue counting" leave different histories. It goes to
+              the section this counter is counting, which is the one answer that is always right.
+              The project/section heading below has always been a link to the same place, but it
+              reads as a title, so nobody found it. */}
+          <Pressable
+            onPress={() =>
+              router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)
+            }
+            style={styles.backBtn}
+            hitSlop={8}>
+            <ThemedText type="smallBold" themeColor="ink" numberOfLines={1}>
+              ← {section.name}
+            </ThemedText>
+          </Pressable>
           <Pressable onPress={toggleTimer} style={styles.timerBtn}>
             <ThemedText type="smallBold" themeColor="ink">
               {isTimerRunning ? '⏸' : '▶'} {formatClock(liveSeconds)}
@@ -378,14 +393,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
     width: '100%',
     marginBottom: Spacing.three,
+  },
+  backBtn: {
+    backgroundColor: Colors.white,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    // Yields to the timer and the note button, which are fixed width; a long section name
+    // truncates rather than pushing them off the row.
+    flexShrink: 1,
   },
   timerBtn: {
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
+    flexShrink: 0,
   },
   // Matches the "+ New pattern" pill used on the Library/Materials/Projects headers.
   noteBtn: {
