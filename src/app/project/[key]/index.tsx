@@ -11,11 +11,11 @@ import { formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { ProjectStatus } from '@/types/knitwit';
 
-const STATUSES: { id: ProjectStatus; label: string }[] = [
-  { id: 'active', label: 'On the needles' },
-  { id: 'finished', label: 'Finished' },
-  { id: 'frogged', label: 'Frogged' },
-];
+export const STATUS_LABELS: Record<ProjectStatus, string> = {
+  active: 'On the needles',
+  finished: 'Finished',
+  frogged: 'Frogged',
+};
 
 export default function ProjectDetailScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
@@ -25,7 +25,6 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
-  const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
 
   if (!project) return null;
 
@@ -81,23 +80,12 @@ export default function ProjectDetailScreen() {
             )}
           </Card>
 
-          {/* A project can now be more than "in progress" or "all rows counted": you can call it
-              done early, and you can rip it out. Frogging keeps it in your history rather than
-              pretending it never happened. */}
-          <View style={styles.statusRow}>
-            {STATUSES.map((option) => {
-              const on = project.status === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setProjectStatus(key, option.id)}
-                  style={[styles.statusChip, on && styles.statusChipOn]}>
-                  <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
-                    {option.label}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
+          {/* Read-only here. Changing it is an edit, and frogging in particular is the kind of
+              thing you shouldn't be one stray tap away from. */}
+          <View style={[styles.statusChip, styles.statusChipOn]}>
+            <ThemedText type="smallBold" themeColor="white">
+              {STATUS_LABELS[project.status]}
+            </ThemedText>
           </View>
 
           <View style={styles.sectionsHeader}>
@@ -173,12 +161,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
   statusChip: {
+    alignSelf: 'flex-start',
     backgroundColor: Colors.creamDeep,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,

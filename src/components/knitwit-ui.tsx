@@ -1,4 +1,5 @@
 import { Picker } from '@react-native-picker/picker';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -148,6 +149,60 @@ export function SelectField<T extends string>({
   );
 }
 
+// A destructive action that asks first, in place. Deliberately not a browser confirm(): those
+// block the whole page, look nothing like the rest of the app, and on React Native Web they're
+// only available at all by accident.
+export function ConfirmButton({
+  label,
+  question,
+  confirmLabel,
+  onConfirm,
+  style,
+}: {
+  label: string;
+  question: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  style?: ViewProps['style'];
+}) {
+  const [asking, setAsking] = useState(false);
+
+  if (!asking) {
+    return (
+      <PillButton variant="secondary" style={style} onPress={() => setAsking(true)}>
+        <ThemedText type="smallBold" themeColor="coralDeep">
+          {label}
+        </ThemedText>
+      </PillButton>
+    );
+  }
+
+  return (
+    <View style={[styles.confirmWrap, style]}>
+      <ThemedText type="small" themeColor="ink">
+        {question}
+      </ThemedText>
+      <View style={styles.confirmRow}>
+        <PillButton
+          style={styles.confirmGrow}
+          onPress={() => {
+            setAsking(false);
+            onConfirm();
+          }}>
+          <ThemedText type="smallBold" themeColor="white">
+            {confirmLabel}
+          </ThemedText>
+        </PillButton>
+        <PillButton variant="secondary" style={styles.confirmGrow} onPress={() => setAsking(false)}>
+          <ThemedText type="smallBold" themeColor="ink">
+            Cancel
+          </ThemedText>
+        </PillButton>
+      </View>
+    </View>
+  );
+}
+
 export function DeleteButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
@@ -241,6 +296,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.ink,
   },
+  confirmWrap: {
+    gap: Spacing.two,
+    backgroundColor: Colors.cream,
+    borderRadius: Radii.medium,
+    padding: Spacing.three,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  confirmGrow: { flex: 1 },
   deleteBtn: {
     alignSelf: 'flex-start',
     paddingVertical: Spacing.two,

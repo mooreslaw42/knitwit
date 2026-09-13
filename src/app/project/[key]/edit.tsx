@@ -3,7 +3,13 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import {
+  ConfirmButton,
+  DeleteButton,
+  FormField,
+  PillButton,
+  SelectField,
+} from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -18,6 +24,7 @@ export default function ProjectEditScreen() {
   const patterns = useKnitwitStore((state) => state.patterns);
   const updateProject = useKnitwitStore((state) => state.updateProject);
   const deleteProject = useKnitwitStore((state) => state.deleteProject);
+  const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
 
   const [name, setName] = useState(project?.name ?? '');
   const [started, setStarted] = useState(project?.started ?? '');
@@ -55,6 +62,32 @@ export default function ProjectEditScreen() {
               Save
             </ThemedText>
           </PillButton>
+
+          {/* Below Save, because it isn't saving — it's a decision about the project. Frogging
+              asks first: it takes the project off your needles, and unlike Save there's no
+              obvious way to tell you've done it by accident. */}
+          {project.status === 'frogged' ? (
+            <PillButton
+              variant="secondary"
+              onPress={() => {
+                setProjectStatus(key, 'active');
+                goBackOr(router, `/project/${key}`);
+              }}>
+              <ThemedText type="smallBold" themeColor="ink">
+                Put it back on the needles
+              </ThemedText>
+            </PillButton>
+          ) : (
+            <ConfirmButton
+              label="Frog this project"
+              question="Frog this project? It comes off your WIP list and stays in your history — the rows you've already counted still count."
+              confirmLabel="Yes, frog it"
+              onConfirm={() => {
+                setProjectStatus(key, 'frogged');
+                goBackOr(router, `/project/${key}`);
+              }}
+            />
+          )}
 
           <DeleteButton
             onPress={() => {
