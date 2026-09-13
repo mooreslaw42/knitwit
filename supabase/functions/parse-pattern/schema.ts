@@ -191,6 +191,14 @@ export const DOCUMENT_SCHEMA = {
   properties: {
     name: { type: 'string', description: 'The pattern\'s title. Empty string if not stated.' },
     category: { type: 'string', enum: [...CATEGORIES, ''] },
+    craft: {
+      type: 'string',
+      enum: ['knit', 'crochet', 'both', ''],
+      description:
+        'Whether the pattern is knitted, crocheted, or uses both (a knitted garment with a ' +
+        'crocheted edging). Read it from the stitches and tools the pattern calls for — hooks ' +
+        'and stitches like sc/dc/tr mean crochet.',
+    },
     level: { type: 'string', enum: [...LEVELS, ''] },
     needleSize: {
       type: 'string',
@@ -337,6 +345,7 @@ export const DOCUMENT_SCHEMA = {
   required: [
     'name',
     'category',
+    'craft',
     'level',
     'needleSize',
     'gauge',

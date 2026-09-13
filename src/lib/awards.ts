@@ -117,6 +117,37 @@ export const AWARDS: Award[] = [
   category('socks', 'Sock drawer', 10),
   category('blankets', 'Blanket statement', 10),
   category('toys', 'Something soft', 5),
+  // Craft, rather than craft × category: a "crocheted scarf" award for every combination would be
+  // sixty badges nobody reads. A piece marked 'both' counts toward each, since it is each.
+  {
+    id: 'craft-knit',
+    name: 'Knitter',
+    description: 'Finish something knitted.',
+    group: 'range',
+    goal: 1,
+    points: 5,
+    measure: (a) => (a.finishedByCraft.knit ?? 0) + (a.finishedByCraft.both ?? 0),
+  },
+  {
+    id: 'craft-crochet',
+    name: 'Hooked',
+    description: 'Finish something crocheted.',
+    group: 'range',
+    goal: 1,
+    points: 5,
+    measure: (a) => (a.finishedByCraft.crochet ?? 0) + (a.finishedByCraft.both ?? 0),
+  },
+  {
+    id: 'craft-both',
+    name: 'Two hands',
+    description: 'Finish something knitted and something crocheted.',
+    group: 'range',
+    goal: 2,
+    points: 25,
+    measure: (a) =>
+      (((a.finishedByCraft.knit ?? 0) + (a.finishedByCraft.both ?? 0) > 0 ? 1 : 0) +
+        ((a.finishedByCraft.crochet ?? 0) + (a.finishedByCraft.both ?? 0) > 0 ? 1 : 0)),
+  },
   {
     id: 'range-all',
     name: 'A bit of everything',

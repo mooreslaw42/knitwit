@@ -199,3 +199,30 @@ describe('localDate', () => {
     expect(localDate(new Date(2026, 8, 13, 23, 30))).toBe('2026-09-13');
   });
 });
+
+describe('craft awards', () => {
+  const withCraft = (finishedByCraft: Achievements['finishedByCraft']) => ({
+    ...emptyAchievements(),
+    finishedByCraft,
+  });
+  const find = (id: string) => AWARDS.find((x) => x.id === id)!;
+
+  it('awards the craft you actually finished something in', () => {
+    const a = withCraft({ crochet: 1 });
+    expect(awardProgress(find('craft-crochet'), a).earned).toBe(true);
+    expect(awardProgress(find('craft-knit'), a).earned).toBe(false);
+  });
+
+  // A piece that is both is genuinely both, so it counts toward each rather than neither.
+  it('counts a both-craft project toward knitting and crochet alike', () => {
+    const a = withCraft({ both: 1 });
+    expect(awardProgress(find('craft-knit'), a).earned).toBe(true);
+    expect(awardProgress(find('craft-crochet'), a).earned).toBe(true);
+    expect(awardProgress(find('craft-both'), a).earned).toBe(true);
+  });
+
+  it('needs one of each for Two hands, not two of one', () => {
+    expect(awardProgress(find('craft-both'), withCraft({ knit: 5 })).earned).toBe(false);
+    expect(awardProgress(find('craft-both'), withCraft({ knit: 1, crochet: 1 })).earned).toBe(true);
+  });
+});

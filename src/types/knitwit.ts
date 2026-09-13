@@ -62,6 +62,7 @@ export type Achievements = {
     techniquesAdded: number;
   };
   finishedByCategory: Partial<Record<PatternCategory, number>>;
+  finishedByCraft: Partial<Record<TechniqueCraft, number>>;
   finishedByPattern: Record<string, number>;
   days: ActivityDay[];
   earned: Record<string, string>; // award id → the date it was earned
@@ -237,6 +238,11 @@ export type PatternSection = {
 export type Pattern = {
   name: string;
   category: PatternCategory;
+  // Knitting, crochet, or a piece that uses both — a knitted garment with a crocheted edging is
+  // common enough to need saying. Today this is a label: it drives awards and the library filter,
+  // but the stitch vocabulary, chart and parser are all still knitting-shaped. Making crochet a
+  // first-class craft is its own piece of work — see docs/plans/crochet-mode.md.
+  craft: TechniqueCraft;
   weight: string; // legacy yarn-weight descriptor (kept for seeds); new patterns use needleSize
   needleSize: string; // recommended needle / hook size, e.g. "4.5mm"
   video: string; // optional link to an instruction video

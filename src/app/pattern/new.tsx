@@ -13,10 +13,16 @@ import { importPatternDocument, type ImportedPattern } from '@/lib/import-patter
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { pickPatternFile } from '@/lib/read-pattern-file';
-import { CATEGORY_LABELS, CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  CRAFT_LABELS,
+  CRAFT_ORDER,
+  SIZE_OPTIONS,
+} from '@/constants/catalogs';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Pattern, PatternCategory, PatternLevel } from '@/types/knitwit';
+import type { Pattern, PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
 const STEPS = ['Import', 'Basics', 'Gauge', 'Materials', 'Sections'] as const;
 
@@ -35,6 +41,11 @@ const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_O
   label: CATEGORY_LABELS[c],
 }));
 
+const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
+  value: c,
+  label: CRAFT_LABELS[c],
+}));
+
 const LEVEL_OPTIONS: { value: PatternLevel; label: string }[] = [
   { value: 'beginner', label: 'Beginner' },
   { value: 'easy', label: 'Easy' },
@@ -46,6 +57,7 @@ function blankPattern(): Pattern {
   return {
     name: '',
     category: 'sweaters',
+    craft: 'knit',
     weight: '',
     needleSize: '',
     video: '',
@@ -391,6 +403,12 @@ export default function NewPatternWizardScreen() {
                   A name is needed to save the pattern.
                 </ThemedText>
               )}
+              <SelectField
+                label="Craft"
+                options={CRAFT_OPTIONS}
+                value={form.craft}
+                onChange={(v) => set('craft', v)}
+              />
               <SelectField
                 label="Category"
                 options={CATEGORY_OPTIONS}

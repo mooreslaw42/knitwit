@@ -1,5 +1,5 @@
 // Ported verbatim from reference/index.html's catalog constants.
-import type { PatternCategory, SectionStatus, ToolType } from '@/types/knitwit';
+import type { PatternCategory, SectionStatus, TechniqueCraft, ToolType } from '@/types/knitwit';
 
 export const CATEGORY_LABELS: Record<PatternCategory, string> = {
   sweaters: 'Sweater',
@@ -13,6 +13,16 @@ export const CATEGORY_LABELS: Record<PatternCategory, string> = {
   baby: 'Baby & kids',
   queue: 'Queue',
 };
+
+// A pattern is knitted, crocheted, or both — a knitted garment with a crocheted edging is common
+// enough to need saying. Techniques already use the same three.
+export const CRAFT_LABELS: Record<TechniqueCraft, string> = {
+  knit: 'Knitting',
+  crochet: 'Crochet',
+  both: 'Both',
+};
+
+export const CRAFT_ORDER: TechniqueCraft[] = ['knit', 'crochet', 'both'];
 
 export const CATEGORY_ORDER: PatternCategory[] = [
   'sweaters',

@@ -159,6 +159,9 @@ function recordFinish(a: Achievements, project: Project, pattern: Pattern | null
     finishedByCategory: category
       ? { ...a.finishedByCategory, [category]: (a.finishedByCategory[category] ?? 0) + 1 }
       : a.finishedByCategory,
+    finishedByCraft: pattern
+      ? { ...a.finishedByCraft, [pattern.craft]: (a.finishedByCraft[pattern.craft] ?? 0) + 1 }
+      : a.finishedByCraft,
   };
 }
 
@@ -693,8 +696,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v19 adds the achievement record and project status — see the back-fill in migrate().
-      version: 19,
+      // v20 gives patterns a craft — see the back-fill in migrate().
+      version: 20,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -746,6 +749,9 @@ export const useKnitwitStore = create<KnitwitState>()(
                 if (!Array.isArray(section[key])) section[key] = [];
               }
             }
+            // v19 → v20: patterns gain a craft. Everything that already exists is knitting —
+            // that is all the app could express until now.
+            if (version < 20 && typeof pattern.craft !== 'string') pattern.craft = 'knit';
             // v14 → v15: gauge gains a unit. The bare strings always meant "per 10cm" — that was
             // the label printed next to the field — so that is what they become. An empty pair
             // meant "not stated", which is now null rather than a gauge of zero.
@@ -824,6 +830,10 @@ export const useKnitwitStore = create<KnitwitState>()(
           const withAwards = state as { achievements?: unknown };
           if (typeof withAwards.achievements !== 'object' || withAwards.achievements === null) {
             withAwards.achievements = emptyAchievements();
+          }
+          const awards = withAwards.achievements as Record<string, unknown>;
+          if (typeof awards.finishedByCraft !== 'object' || awards.finishedByCraft === null) {
+            awards.finishedByCraft = {};
           }
           for (const project of Object.values(state.projects ?? {})) {
             if (typeof project.status !== 'string') project.status = 'active';

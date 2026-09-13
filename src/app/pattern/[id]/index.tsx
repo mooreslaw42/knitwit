@@ -11,6 +11,8 @@ import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
+  CRAFT_LABELS,
+  CRAFT_ORDER,
   SIZE_OPTIONS,
   TOOL_TYPE_LABELS,
 } from '@/constants/catalogs';
@@ -20,7 +22,14 @@ import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Gauge, LengthUnit, Pattern, PatternCategory, PatternLevel } from '@/types/knitwit';
+import type {
+  Gauge,
+  LengthUnit,
+  Pattern,
+  PatternCategory,
+  PatternLevel,
+  TechniqueCraft,
+} from '@/types/knitwit';
 
 const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_ORDER.map((c) => ({
   value: c,
@@ -39,6 +48,11 @@ function gaugeLine(g: Gauge | null, unit: LengthUnit): string {
   if (!shown || !g || g.unit === unit) return shown;
   return `${shown}\nAs written: ${formatGauge(g)}`;
 }
+
+const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
+  value: c,
+  label: CRAFT_LABELS[c],
+}));
 
 export default function PatternDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -157,6 +171,12 @@ export default function PatternDetailScreen() {
                 placeholder="e.g. Meadow Cardigan"
               />
               <SelectField
+                label="Craft"
+                options={CRAFT_OPTIONS}
+                value={draft.craft}
+                onChange={(v) => set('craft', v)}
+              />
+              <SelectField
                 label="Category"
                 options={CATEGORY_OPTIONS}
                 value={draft.category}
@@ -262,6 +282,7 @@ export default function PatternDetailScreen() {
             </>
           ) : (
             <>
+              <Field label="Craft" value={CRAFT_LABELS[pattern.craft]} />
               <Field label="Category" value={CATEGORY_LABELS[pattern.category]} />
               <Field
                 label="Difficulty"

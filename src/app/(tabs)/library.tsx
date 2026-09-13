@@ -9,6 +9,8 @@ import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
+  CRAFT_LABELS,
+  CRAFT_ORDER,
   TOOL_ICONS,
   TOOL_TYPE_LABELS,
   yarnWeightLabel,
@@ -17,12 +19,6 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { toolInUseCount } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { PatternCategory, TechniqueCraft } from '@/types/knitwit';
-
-const CRAFT_LABELS: Record<TechniqueCraft, string> = {
-  knit: 'Knitting',
-  crochet: 'Crochet',
-  both: 'Knitting & crochet',
-};
 
 // Everything a knitter keeps rather than works on: patterns, the techniques they've noted down,
 // and the yarn and tools in their stash. Materials used to be its own menu item; four segments in
@@ -53,10 +49,19 @@ export default function LibraryScreen() {
   const toggleFavorite = useKnitwitStore((state) => state.toggleFavorite);
   const [view, setView] = useState<LibraryView>('patterns');
   const [filter, setFilter] = useState<'all' | PatternCategory>('all');
+  const [craft, setCraft] = useState<'all' | TechniqueCraft>('all');
 
   const entries = Object.entries(patterns);
-  const usedCategories = CATEGORY_ORDER.filter((c) => entries.some(([, p]) => p.category === c));
-  const visible = filter === 'all' ? entries : entries.filter(([, p]) => p.category === filter);
+
+  // A pattern marked 'both' shows under either craft, because it is either.
+  const byCraft =
+    craft === 'all'
+      ? entries
+      : entries.filter(([, p]) => p.craft === craft || p.craft === 'both');
+  const visible = filter === 'all' ? byCraft : byCraft.filter(([, p]) => p.category === filter);
+  const usedCrafts = CRAFT_ORDER.filter((c) => entries.some(([, p]) => p.craft === c));
+  // Categories follow the craft filter, so it never offers one with nothing behind it.
+  const usedCategories = CATEGORY_ORDER.filter((c) => byCraft.some(([, p]) => p.category === c));
   const techniqueEntries = Object.entries(techniques);
 
   return (
@@ -85,6 +90,20 @@ export default function LibraryScreen() {
 
           {view === 'patterns' ? (
             <>
+              {/* Only worth showing once there's more than one kind in the library. */}
+              {usedCrafts.length > 1 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
+                  <FilterChip label="All crafts" active={craft === 'all'} onPress={() => setCraft('all')} />
+                  {usedCrafts.map((c) => (
+                    <FilterChip
+                      key={c}
+                      label={CRAFT_LABELS[c]}
+                      active={craft === c}
+                      onPress={() => setCraft(c)}
+                    />
+                  ))}
+                </ScrollView>
+              )}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
                 <FilterChip
                   label="All"

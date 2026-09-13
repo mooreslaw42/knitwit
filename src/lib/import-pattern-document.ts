@@ -13,6 +13,7 @@ import type {
   PatternTechnique,
   PatternTool,
   SizedNumber,
+  TechniqueCraft,
   ToolType,
 } from '@/types/knitwit';
 
@@ -244,6 +245,9 @@ export function toImportedPattern(data: unknown): ImportedPattern {
     pattern: {
       name: str(draft.name, 120),
       category: oneOf<PatternCategory>(draft.category, [...CATEGORY_ORDER], 'sweaters'),
+      // Knitting is the safe default: the app was knitting-only until now, and a pattern wrongly
+      // marked crochet would be more confusing than one left at the common case.
+      craft: oneOf<TechniqueCraft>(draft.craft, ['knit', 'crochet', 'both'], 'knit'),
       level: oneOf<PatternLevel>(draft.level, LEVELS, 'intermediate'),
       needleSize: str(draft.needleSize, 60),
       // Legacy field, superseded by needleSize — imports never set it.

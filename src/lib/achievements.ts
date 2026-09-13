@@ -20,6 +20,7 @@ export function emptyAchievements(): Achievements {
       techniquesAdded: 0,
     },
     finishedByCategory: {},
+    finishedByCraft: {},
     finishedByPattern: {},
     days: [],
     earned: {},

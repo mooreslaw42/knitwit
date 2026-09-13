@@ -87,6 +87,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p1: {
     name: 'Meadow Cardigan',
     category: 'sweaters',
+    craft: 'knit',
     weight: 'worsted',
     accentColor: '#F4C6D3',
     needleSize: '4.5mm',
@@ -171,6 +172,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p2: {
     name: 'Rowan Socks',
     category: 'socks',
+    craft: 'knit',
     weight: 'fingering',
     accentColor: '#B9CFAD',
     needleSize: '2.5mm',
@@ -218,6 +220,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p3: {
     name: 'Fair Isle Mitts',
     category: 'accessories',
+    craft: 'knit',
     weight: 'DK',
     accentColor: '#D9C9EA',
     needleSize: '4mm',
@@ -238,6 +241,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p4: {
     name: 'Lace Shawl',
     category: 'accessories',
+    craft: 'knit',
     weight: 'lace',
     accentColor: '#F6E2A6',
     needleSize: '3.5mm',
@@ -258,6 +262,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p5: {
     name: 'Textured Beanie',
     category: 'hats',
+    craft: 'knit',
     weight: 'worsted',
     accentColor: '#F0A67E',
     needleSize: '5mm',
@@ -278,6 +283,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p6: {
     name: 'Cable Scarf',
     category: 'scarves',
+    craft: 'knit',
     weight: 'aran',
     accentColor: '#E58AA0',
     needleSize: '6mm',
@@ -298,6 +304,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   p7: {
     name: 'Camisole No. 9',
     category: 'sweaters',
+    craft: 'knit',
     weight: 'fingering',
     accentColor: '#4A3B38',
     needleSize: '3mm',
