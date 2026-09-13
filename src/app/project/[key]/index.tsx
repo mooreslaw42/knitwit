@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
@@ -35,12 +35,13 @@ export default function ProjectDetailScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View
-            style={[
-              styles.hero,
-              { backgroundColor: project.photo ? undefined : project.colorDeep },
-            ]}>
-            <ThemedText type="smallBold" themeColor="white">
+          <View style={[styles.hero, { backgroundColor: project.colorDeep }]}>
+            {/* The background was already being cleared for a photo that nothing ever drew, so a
+                project with one showed an empty block. */}
+            {project.photo ? (
+              <Image source={{ uri: project.photo }} style={styles.heroPhoto} />
+            ) : null}
+            <ThemedText type="smallBold" themeColor="white" style={styles.heroLabel}>
               {pct >= 1 ? 'Complete' : 'In progress'}
             </ThemedText>
           </View>
@@ -143,6 +144,23 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     paddingBottom: Spacing.six * 2,
     gap: Spacing.two,
+  },
+  heroPhoto: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: Radii.large,
+  },
+  // Sits above the photo, and keeps its own backing so white text stays readable on a pale one.
+  heroLabel: {
+    backgroundColor: 'rgba(74, 59, 56, 0.55)',
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    alignSelf: 'flex-start',
+    overflow: 'hidden',
   },
   hero: {
     height: 140,

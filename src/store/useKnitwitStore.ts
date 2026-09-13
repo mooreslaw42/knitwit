@@ -88,7 +88,7 @@ type KnitwitState = {
   }) => string;
   updateProject: (
     key: string,
-    patch: { name: string; started: string; patternId: string | null },
+    patch: { name: string; started: string; patternId: string | null; photo?: string | null },
   ) => void;
   deleteProject: (key: string) => void;
 
@@ -327,7 +327,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         return key;
       },
 
-      updateProject: (key, { name, started, patternId }) => {
+      updateProject: (key, { name, started, patternId, photo }) => {
         const { projects, patterns } = get();
         const project = projects[key];
         if (!project) return;
@@ -340,6 +340,8 @@ export const useKnitwitStore = create<KnitwitState>()(
               name: name.trim() || 'Untitled project',
               started: started.trim() || 'Just cast on',
               patternId,
+              // Undefined means the caller isn't touching the photo; null means remove it.
+              photo: photo === undefined ? project.photo : photo,
               // Re-derive rather than keep the old colour: the project is colour-coded by the
               // pattern it is knitting, so relinking has to move the colour with it.
               ...deriveProjectColors(accent),
