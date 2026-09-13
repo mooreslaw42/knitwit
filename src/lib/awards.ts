@@ -192,7 +192,8 @@ export type AwardProgress = {
   earned: boolean;
   // 0–1, for a progress bar.
   fraction: number;
-  label: string; // "4,200 of 10,000"
+  label: string; // "4,200 of 10,000", for reading in a sentence
+  fractionLabel: string; // "4,200 / 10,000", for a stat tile
 };
 
 export function awardProgress(award: Award, a: Achievements): AwardProgress {
@@ -204,6 +205,7 @@ export function awardProgress(award: Award, a: Achievements): AwardProgress {
     earned: at >= award.goal,
     fraction: award.goal > 0 ? Math.min(1, at / award.goal) : 0,
     label: `${format(Math.min(at, award.goal))} of ${format(award.goal)}`,
+    fractionLabel: `${format(Math.min(at, award.goal))} / ${format(award.goal)}`,
   };
 }
 

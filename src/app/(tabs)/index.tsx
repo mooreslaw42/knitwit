@@ -66,12 +66,25 @@ export default function HomeScreen() {
               num={streak}
               label={streak === 0 ? 'Start a streak' : todayCounted ? 'Day streak' : 'Knit today'}
             />
+            {/* Captioned and shown as a fraction, so it reads as something being worked towards
+                rather than as a third count of things you already have. */}
             <Pressable style={styles.grow} onPress={() => router.push('/awards')}>
-              {next ? (
-                <MiniStat text={next.label.split(' of ')[0]} label={next.award.name} />
-              ) : (
-                <MiniStat text="All" label="Awards earned" />
-              )}
+              <Card style={styles.miniStat}>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Next award
+                </ThemedText>
+                <ThemedText type="title" style={styles.miniNum} numberOfLines={1}>
+                  {next ? next.fractionLabel : 'All'}
+                </ThemedText>
+                <ThemedText
+                  type="small"
+                  themeColor="inkSoft"
+                  numberOfLines={2}
+                  style={styles.nextName}>
+                  {next ? next.award.name : 'Every award earned'}
+                </ThemedText>
+                {next && <ProgressBar pct={next.fraction} color={Colors.blushDeep} />}
+              </Card>
             </Pressable>
           </View>
 
@@ -195,9 +208,12 @@ const styles = StyleSheet.create({
   miniStat: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
     padding: Spacing.three,
     backgroundColor: Colors.creamDeep,
   },
+  nextName: { textAlign: 'center' },
   miniNum: {
     fontSize: 22,
     lineHeight: 26,
