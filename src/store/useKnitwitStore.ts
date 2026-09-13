@@ -368,7 +368,12 @@ export const useKnitwitStore = create<KnitwitState>()(
 
         const nextProjects = { ...projects };
         delete nextProjects[key];
-        const patch: Partial<KnitwitState> = { projects: nextProjects };
+        const patch: Partial<KnitwitState> = {
+          projects: nextProjects,
+          // The "where was I" trail would otherwise keep pointing at a project that no longer
+          // exists. Home copes with that, but leaving it would let the trail fill with ghosts.
+          recentSections: (get().recentSections ?? []).filter((r) => !r.startsWith(`${key}|`)),
+        };
 
         if (activeProjectKey === key) {
           // Counting screens read projects[activeProjectKey]; leaving it dangling would

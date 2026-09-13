@@ -637,3 +637,27 @@ describe('finishing a section', () => {
     expect(useKnitwitStore.getState().achievements.totals.projectsFinished).toBe(before);
   });
 });
+
+describe('deleting a project', () => {
+  it('actually removes it', () => {
+    expect(useKnitwitStore.getState().projects.rowan).toBeDefined();
+    useKnitwitStore.getState().deleteProject('rowan');
+    expect(useKnitwitStore.getState().projects.rowan).toBeUndefined();
+  });
+
+  // Home walks this trail looking for somewhere to resume; a deleted project must not linger in it.
+  it('takes its sections out of the recent trail', () => {
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    useKnitwitStore.getState().setActiveSection('meadow', 1);
+    useKnitwitStore.getState().deleteProject('rowan');
+    expect(useKnitwitStore.getState().recentSections.some((r) => r.startsWith('rowan|'))).toBe(false);
+    expect(useKnitwitStore.getState().recentSections).toContain('meadow|1');
+  });
+
+  it('moves the counter off a project that no longer exists', () => {
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    useKnitwitStore.getState().deleteProject('rowan');
+    expect(useKnitwitStore.getState().activeProjectKey).not.toBe('rowan');
+    expect(useKnitwitStore.getState().projects[useKnitwitStore.getState().activeProjectKey]).toBeDefined();
+  });
+});

@@ -3,13 +3,7 @@ import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  ConfirmButton,
-  DeleteButton,
-  FormField,
-  PillButton,
-  SelectField,
-} from '@/components/knitwit-ui';
+import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -127,8 +121,15 @@ export default function ProjectEditScreen() {
             />
           )}
 
-          <DeleteButton
-            onPress={() => {
+          {/* Asked for the same way as frogging, and worded to draw the line between them:
+              frogging keeps the project, this does not. Deleting is the only action here that
+              can't be undone, so the difference has to be on the screen at the moment of
+              choosing rather than assumed. */}
+          <ConfirmButton
+            label="Delete this project"
+            question="Delete this project for good? Its rows, notes and time go with it and can't be brought back. If you just want it off your needles, frog it instead — that keeps it."
+            confirmLabel="Yes, delete it"
+            onConfirm={() => {
               deleteProject(key);
               // The project screen this came from no longer exists, so go home rather
               // than back to a dead route.
