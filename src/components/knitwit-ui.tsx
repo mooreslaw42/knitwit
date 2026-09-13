@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing, type ThemeColor } from '@/constants/theme';
-import type { SectionStatus } from '@/types/knitwit';
+import type { ProjectStatus, SectionStatus } from '@/types/knitwit';
 
 export function Card({ style, ...props }: ViewProps) {
   return <View style={[styles.card, style]} {...props} />;
@@ -25,6 +26,24 @@ export function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
     <View style={styles.progressTrack}>
       <View style={[styles.progressFill, { width: `${clamped * 100}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+// The same badge for a whole project. Butter for work in hand, sage for done, coral for frogged
+// — a frogged project isn't a failure, but it is the one that needs to look different from the
+// two you'd otherwise mistake it for.
+export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
+  const bg: Record<ProjectStatus, string> = {
+    active: Colors.butter,
+    finished: Colors.sage,
+    frogged: Colors.coral,
+  };
+  return (
+    <View style={[styles.badge, { backgroundColor: bg[status] }]}>
+      <ThemedText type="small" themeColor="ink">
+        {PROJECT_STATUS_LABELS[status]}
+      </ThemedText>
     </View>
   );
 }

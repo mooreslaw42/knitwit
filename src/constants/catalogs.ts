@@ -1,5 +1,11 @@
 // Ported verbatim from reference/index.html's catalog constants.
-import type { PatternCategory, SectionStatus, TechniqueCraft, ToolType } from '@/types/knitwit';
+import type {
+  PatternCategory,
+  ProjectStatus,
+  SectionStatus,
+  TechniqueCraft,
+  ToolType,
+} from '@/types/knitwit';
 
 export const CATEGORY_LABELS: Record<PatternCategory, string> = {
   sweaters: 'Sweater',
@@ -36,6 +42,14 @@ export const CATEGORY_ORDER: PatternCategory[] = [
   'baby',
   'queue',
 ];
+
+// What a project is, in the knitter's words. Shared so the detail screen's chip and the list's
+// pill always say the same thing — they were two copies of these three strings.
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  active: 'On the needles',
+  finished: 'Finished',
+  frogged: 'Frogged',
+};
 
 export const SECTION_STATUS_LABELS: Record<SectionStatus, string> = {
   'not-started': 'Not started',

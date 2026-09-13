@@ -5,23 +5,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CRAFT_LABELS } from '@/constants/catalogs';
+import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
   formatStarted,
   projectProgress,
+  projectState,
   sectionStatus,
 } from '@/lib/knitwit-helpers';
 import { formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { ProjectStatus } from '@/types/knitwit';
-
-export const STATUS_LABELS: Record<ProjectStatus, string> = {
-  active: 'On the needles',
-  finished: 'Finished',
-  frogged: 'Frogged',
-};
 
 export default function ProjectDetailScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
@@ -101,10 +95,13 @@ export default function ProjectDetailScreen() {
           </Card>
 
           {/* Read-only here. Changing it is an edit, and frogging in particular is the kind of
-              thing you shouldn't be one stray tap away from. */}
+              thing you shouldn't be one stray tap away from.
+              projectState, not the stored flag: a project with every row counted reads as
+              finished whether or not anyone declared it so, and this has to agree with the list
+              and the filter, which both already worked that way. */}
           <View style={[styles.statusChip, styles.statusChipOn]}>
             <ThemedText type="smallBold" themeColor="white">
-              {STATUS_LABELS[project.status]}
+              {PROJECT_STATUS_LABELS[projectState(project)]}
             </ThemedText>
           </View>
 

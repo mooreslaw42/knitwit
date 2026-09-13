@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton, ProgressBar, Thumb } from '@/components/knitwit-ui';
+import { Card, PillButton, ProgressBar, ProjectStatusBadge, Thumb } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -101,9 +101,15 @@ export default function ProjectsScreen() {
                     <Thumb photo={p.photo} color={p.color} />
                     <View style={styles.projInfo}>
                       <ThemedText type="smallBold">{p.name}</ThemedText>
-                      <ThemedText type="small" themeColor="inkSoft">
-                        {cur.name} · row {cur.row} of {cur.totalRows}
-                      </ThemedText>
+                      {/* The project's combined state, not the current section's. Under "All" the
+                          rows were otherwise indistinguishable: a frogged project and one on the
+                          needles both just read "row 12 of 40". */}
+                      <View style={styles.projMeta}>
+                        <ProjectStatusBadge status={projectState(p)} />
+                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1} style={styles.projWhere}>
+                          {cur.name} · row {cur.row} of {cur.totalRows}
+                        </ThemedText>
+                      </View>
                       <View style={{ marginTop: Spacing.one }}>
                         <ProgressBar pct={pct} color={p.colorDeep} />
                       </View>
@@ -185,7 +191,16 @@ const styles = StyleSheet.create({
   },
   projInfo: {
     flex: 1,
-    gap: 2,
+    gap: Spacing.one,
+  },
+  projMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  // Shrinks before the badge does: which section you're on matters less than what the project is.
+  projWhere: {
+    flexShrink: 1,
   },
   pct: {
     flexShrink: 0,
