@@ -17,6 +17,7 @@ export default function CounterScreen() {
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
   const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const project = useKnitwitStore((state) => state.projects[activeProjectKey]);
+  const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
   // Every project can be deleted, which leaves nothing to count.
   const section = project?.sections[activeSectionIndex];
 
@@ -77,6 +78,20 @@ export default function CounterScreen() {
     section.row >= section.totalRows &&
     !castOffDismissed;
   const showComplete = !noteFormOpen && section.complete;
+  // Where to send the knitter next: the first section still to work, wrapping round so finishing
+  // out of order doesn't strand them on the last one.
+  const nextSection = (() => {
+    const n = project.sections.length;
+    for (let i = 1; i <= n; i++) {
+      const index = (activeSectionIndex + i) % n;
+      const candidate = project.sections[index];
+      if (!candidate.complete && candidate.row < candidate.totalRows) {
+        return { index, name: candidate.name };
+      }
+    }
+    return null;
+  })();
+  const allDone = project.sections.every((s) => s.complete || s.row >= s.totalRows);
   const hideMain = atMarker || showCastOff || showComplete || noteFormOpen;
 
   const nextMarker = section.markers.find((m) => m > section.row);
@@ -170,10 +185,40 @@ export default function CounterScreen() {
         )}
 
         {showComplete && (
-          <AlertCard borderColor={Colors.sageDeep} icon="🎉" title="Section complete!">
+          <AlertCard
+            borderColor={Colors.sageDeep}
+            icon="🎉"
+            title={allDone ? 'Project complete!' : 'Section complete!'}>
             <ThemedText type="small" themeColor="inkSoft" style={styles.centerText}>
-              You finished all {section.totalRows} rows of {section.name}.
+              {allDone
+                ? `Every section of ${project.name} is done.`
+                : `You finished all ${section.totalRows} rows of ${section.name}.`}
             </ThemedText>
+            {/* This card used to have no buttons and hid the counter, which left the screen with
+                nothing to do on it — finishing a section is the one moment the app should be
+                clearest about what comes next. */}
+            <View style={styles.alertBtnRow}>
+              {nextSection ? (
+                <>
+                  <AlertButton
+                    label={`Start ${nextSection.name} →`}
+                    onPress={() => setActiveSection(activeProjectKey, nextSection.index)}
+                    variant="set"
+                  />
+                  <AlertButton
+                    label="Back to project"
+                    onPress={() => router.push(`/project/${activeProjectKey}`)}
+                    variant="cancel"
+                  />
+                </>
+              ) : (
+                <AlertButton
+                  label={`Back to ${project.name}`}
+                  onPress={() => router.push(`/project/${activeProjectKey}`)}
+                  variant="set"
+                />
+              )}
+            </View>
           </AlertCard>
         )}
 
