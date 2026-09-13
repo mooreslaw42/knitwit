@@ -53,6 +53,7 @@ function blankPattern(): Pattern {
     accentColor: ACCENT_SWATCHES[Math.floor(Math.random() * ACCENT_SWATCHES.length)],
     photo: null,
     gauge: null,
+    swatchGauge: null,
     favorited: false,
     level: 'intermediate',
     sizes: [],

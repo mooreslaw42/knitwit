@@ -1,4 +1,4 @@
-import type { Gauge, LengthUnit } from '@/types/knitwit';
+import type { Gauge, LengthUnit, StitchMultiple } from '@/types/knitwit';
 
 // The gauge layer. Everything that will eventually re-gauge a pattern stands on these functions,
 // so they stay pure and exhaustively tested.
@@ -96,10 +96,9 @@ export function stitchRatio(pattern: Gauge, mine: Gauge): number | null {
   return from > 0 ? stitchesPerCm(mine) / from : null;
 }
 
-// "A multiple of 4, plus 2 edge stitches" — what a stitch pattern needs in order to come out
-// even. Rounding a rescaled count without honouring this produces a number that is arithmetically
-// right and won't knit: 27 stitches of k2/p2 rib leaves three stitches over.
-export type StitchMultiple = { of: number; plus: number };
+// Rounding a rescaled count without honouring a section's repeat produces a number that is
+// arithmetically right and won't knit: 27 stitches of k2/p2 rib leaves three stitches over.
+export type { StitchMultiple };
 
 export function roundToMultiple(value: number, multiple?: StitchMultiple | null): number {
   const nearest = Math.max(0, Math.round(value));

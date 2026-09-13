@@ -566,8 +566,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v15 gives gauge a unit — see the back-fill in migrate().
-      version: 15,
+      // v16 adds the fields re-gauging needs — see the back-fill in migrate().
+      version: 16,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -623,6 +623,14 @@ export const useKnitwitStore = create<KnitwitState>()(
             // the label printed next to the field — so that is what they become. An empty pair
             // meant "not stated", which is now null rather than a gauge of zero.
             if (version < 15) migrateGauge(pattern);
+            // v15 → v16: re-gauging needs the knitter's own swatch alongside the pattern's gauge,
+            // and a per-section stitch repeat so a rescaled count still divides.
+            if (version < 16) {
+              if (!('swatchGauge' in pattern)) pattern.swatchGauge = null;
+              for (const section of pattern.sections as Record<string, unknown>[]) {
+                if (!('stitchMultiple' in section)) section.stitchMultiple = null;
+              }
+            }
             if (version < 3) {
               if (!pattern.materials) pattern.materials = [];
               if (!pattern.tools) pattern.tools = [];

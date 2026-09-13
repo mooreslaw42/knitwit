@@ -251,6 +251,9 @@ type EditSection = {
   rows: PatternRow[];
   notes: EditNote[];
   markers: string[];
+  // Kept as strings so a half-typed number never round-trips through a parse.
+  multipleOf: string;
+  multiplePlus: string;
 };
 
 function sectionToEdit(s: PatternSection): EditSection {
@@ -265,7 +268,18 @@ function sectionToEdit(s: PatternSection): EditSection {
     rows: s.rows ?? [],
     notes: s.notes.map((n) => ({ id: n.id, row: n.row ? String(n.row) : '', text: n.text })),
     markers: s.markers.map((m) => String(m)),
+    multipleOf: s.stitchMultiple ? String(s.stitchMultiple.of) : '',
+    multiplePlus: s.stitchMultiple ? String(s.stitchMultiple.plus) : '',
   };
+}
+
+// A repeat of 1 is no repeat at all, so an empty or meaningless entry stays null rather than
+// becoming a constraint that does nothing but sit in the data.
+function multipleFrom(s: EditSection): PatternSection['stitchMultiple'] {
+  const of = parseInt(s.multipleOf, 10);
+  if (!Number.isFinite(of) || of <= 1) return null;
+  const plus = parseInt(s.multiplePlus, 10);
+  return { of, plus: Number.isFinite(plus) ? plus : 0 };
 }
 
 function sectionToPattern(s: EditSection): PatternSection {
@@ -278,6 +292,7 @@ function sectionToPattern(s: EditSection): PatternSection {
     techniques: [...s.techniques],
     description: s.description,
     rows: s.rows,
+    stitchMultiple: multipleFrom(s),
     notes: s.notes
       .filter((n) => n.text.trim())
       .map((n) => ({ id: n.id, row: Math.max(0, parseInt(n.row, 10) || 0), text: n.text.trim() })),
@@ -290,6 +305,8 @@ function sectionToPattern(s: EditSection): PatternSection {
 const BLANK_SECTION: EditSection = {
   name: '',
   totalRows: '',
+  multipleOf: '',
+  multiplePlus: '',
   castOn: 0,
   materials: [],
   tools: [],
@@ -413,6 +430,38 @@ export function PatternSectionsEditor({
               multiline
               style={[styles.input, styles.patternText]}
             />
+          </View>
+
+          {/* Only consulted when re-gauging, which is why it sits with the numbers rather than
+              the instructions: it's what stops a rescaled cast-on breaking the repeat. */}
+          <View style={styles.field}>
+            <ThemedText type="smallBold" themeColor="inkSoft">
+              Stitch repeat (optional)
+            </ThemedText>
+            <ThemedText type="small" themeColor="inkSoft">
+              If this section is worked over a repeat — k2/p2 rib is a multiple of 4 — say so, and
+              re-gauging will round to a count that still works.
+            </ThemedText>
+            <View style={styles.multipleRow}>
+              <View style={styles.grow}>
+                <FormField
+                  label="Multiple of"
+                  value={section.multipleOf}
+                  onChangeText={(v) => updateSection(i, { multipleOf: v })}
+                  keyboardType="numeric"
+                  placeholder="4"
+                />
+              </View>
+              <View style={styles.grow}>
+                <FormField
+                  label="Plus"
+                  value={section.multiplePlus}
+                  onChangeText={(v) => updateSection(i, { multiplePlus: v })}
+                  keyboardType="numeric"
+                  placeholder="2"
+                />
+              </View>
+            </View>
           </View>
 
           {/* Rows that were already charted — from an import, or from a previous edit. Read-only
@@ -690,6 +739,7 @@ const styles = StyleSheet.create({
   field: {
     gap: Spacing.one,
   },
+  multipleRow: { flexDirection: 'row', gap: Spacing.two },
   previewHead: {
     flexDirection: 'row',
     alignItems: 'center',

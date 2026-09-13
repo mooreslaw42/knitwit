@@ -157,6 +157,11 @@ export type PatternRow = {
   stitches: PatternStitchGroup[];
 };
 
+// "A multiple of 4, plus 2 edge stitches" — what a section's stitch pattern needs to come out
+// even. Only consulted when re-gauging: rescaling a cast-on and rounding to the nearest whole
+// stitch is arithmetically right and can leave a rib three stitches short of a repeat.
+export type StitchMultiple = { of: number; plus: number };
+
 export type PatternSection = {
   name: string;
   // Both are stated per size on real patterns. A project resolves them to plain numbers for the
@@ -173,6 +178,8 @@ export type PatternSection = {
   rows: PatternRow[];
   notes: ProjectNote[];
   markers: number[];
+  // Null means "no repeat to preserve" — rounding is then free to take the nearest stitch.
+  stitchMultiple: StitchMultiple | null;
 };
 
 // The full section/row/stitch-group pattern engine (expansionFor / currentRowContext /
@@ -191,6 +198,10 @@ export type Pattern = {
   accentColor: string;
   photo: string | null;
   gauge: Gauge | null;
+  // The knitter's own measured gauge for this pattern, from a swatch. Kept beside the pattern's
+  // own gauge rather than replacing it: comparing the two is the whole basis of re-gauging, so
+  // both have to survive. A project will snapshot this when it's created.
+  swatchGauge: Gauge | null;
   favorited: boolean;
   level: PatternLevel;
   sizes: string[];

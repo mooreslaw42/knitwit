@@ -187,7 +187,17 @@ export default function PatternDetailScreen() {
                 onChangeText={(v) => set('needleSize', v)}
                 placeholder="e.g. 4.5mm"
               />
-              <GaugeField value={draft.gauge} onChange={(g) => set('gauge', g)} />
+              <GaugeField
+                label="Gauge the pattern calls for"
+                value={draft.gauge}
+                onChange={(g) => set('gauge', g)}
+              />
+              <GaugeField
+                label="Your swatch"
+                hint="Measured on your own washed and blocked swatch. Knitwit works out what the pattern's numbers become at this gauge — it never changes the pattern."
+                value={draft.swatchGauge}
+                onChange={(g) => set('swatchGauge', g)}
+              />
               <FormField
                 label="Instruction video (optional)"
                 value={draft.video}
@@ -253,6 +263,7 @@ export default function PatternDetailScreen() {
               <Field label="Sizes" value={(pattern.sizes ?? []).join(', ')} />
               <Field label="Needle / hook size" value={pattern.needleSize || pattern.weight} />
               <Field label="Gauge" value={formatGauge(pattern.gauge)} />
+              <Field label="Your swatch" value={formatGauge(pattern.swatchGauge)} />
               <Field label="Instruction video" value={pattern.video} />
               <Field label="Imported file" value={pattern.sourceName} />
               <Field label="Imported text" value={pattern.sourceText} numberOfLines={4} />

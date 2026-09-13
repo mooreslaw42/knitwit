@@ -185,6 +185,7 @@ function normaliseSections(
         rows,
         notes: [],
         markers: [],
+        stitchMultiple: null,
       };
     })
     .filter((s) => s.description || s.rows.length > 0);
@@ -249,6 +250,8 @@ export function toImportedPattern(data: unknown): ImportedPattern {
       weight: '',
       video: '',
       gauge: normaliseGauge(draft.gauge),
+      // The knitter's own swatch — never something an import can know.
+      swatchGauge: null,
       sizes,
       materials,
       tools,

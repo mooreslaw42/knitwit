@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { RegaugePanel } from '@/components/regauge-panel';
 import { StitchChart, type ChartSelection } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -470,6 +471,17 @@ export default function SectionStitchesScreen() {
               No rows yet. Add the first row to build the stitch-by-stitch overview.
             </ThemedText>
           )}
+
+          {/* What this section becomes at the knitter's swatch gauge. Read-only — re-gauging is
+              applied to a project, never written back over the pattern. */}
+          <RegaugePanel
+            rows={patternRows}
+            castOn={startCount}
+            patternGauge={pattern?.gauge ?? null}
+            swatchGauge={pattern?.swatchGauge ?? null}
+            multiple={section?.stitchMultiple ?? null}
+            sizeIndex={sizePreview}
+          />
 
           {rows.length > 0 && (
             <Card style={styles.chartCard}>
