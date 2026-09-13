@@ -927,3 +927,185 @@ describe('hydrating a store saved before sections had kit lists', () => {
     expect(section.techniqueIds).toEqual(['q1']);
   });
 });
+
+describe('a project section’s instructions and chart', () => {
+  const store = () => useKnitwitStore.getState();
+  const section = () => store().projects.clover.sections[0];
+
+  const row = (id: string) => ({
+    id,
+    label: id,
+    side: 'RS' as const,
+    marker: false,
+    instruction: '',
+    stitches: [
+      { id: `g-${id}`, type: 'knit', span: 'all' as const, count: null, materialSlot: null, note: '' },
+    ],
+  });
+
+  it('saves the written instructions and the rows charted from them', () => {
+    store().setSectionStitches('clover', 0, {
+      description: 'Row 1 (RS): K to end.',
+      castOn: 88,
+      rows: [row('r1'), row('r2')],
+    });
+    expect(section().description).toBe('Row 1 (RS): K to end.');
+    expect(section().castOn).toBe(88);
+    expect(section().rows).toHaveLength(2);
+  });
+
+  it('keeps the cast-on a whole number that a chart can count from', () => {
+    store().setSectionStitches('clover', 0, { description: '', castOn: -4, rows: [] });
+    expect(section().castOn).toBe(0);
+  });
+
+  it('leaves progress and everything else alone', () => {
+    const before = section();
+    store().setSectionStitches('clover', 0, { description: 'x', castOn: 10, rows: [] });
+    const after = section();
+    expect(after.row).toBe(before.row);
+    expect(after.seconds).toBe(before.seconds);
+    expect(after.notes).toEqual(before.notes);
+    expect(after.materialIds).toEqual(before.materialIds);
+  });
+
+  it('shrugs off a section that is not there', () => {
+    const before = store().projects.clover;
+    store().setSectionStitches('clover', 99, { description: 'x', castOn: 1, rows: [] });
+    expect(store().projects.clover).toEqual(before);
+  });
+});
+
+describe('a project created without a pattern', () => {
+  const store = () => useKnitwitStore.getState();
+
+  it('reads its category off its own name rather than waiting to be converted', () => {
+    const key = store().createProject({
+      name: 'Stripy Baby Blanket',
+      startedOn: null,
+      craft: 'knit',
+      patternId: null,
+      totalRows: 40,
+    });
+    expect(store().projects[key].category).toBe('blankets');
+    expect(store().projects[key].level).toBe('intermediate');
+  });
+
+  it('takes the details off the pattern when there is one', () => {
+    const patternId = store().savePattern(null, {
+      ...store().patterns[Object.keys(store().patterns)[0]],
+      category: 'socks',
+      level: 'advanced',
+      needleSize: '2.5mm',
+      video: 'https://x.test',
+    });
+    const key = store().createProject({
+      name: 'Anything',
+      startedOn: null,
+      craft: 'knit',
+      patternId,
+      totalRows: 40,
+    });
+    expect(store().projects[key]).toMatchObject({
+      category: 'socks',
+      level: 'advanced',
+      needleSize: '2.5mm',
+      video: 'https://x.test',
+    });
+  });
+
+  it('starts its one section with room for instructions and a chart', () => {
+    const key = store().createProject({
+      name: 'Improvised',
+      startedOn: null,
+      craft: 'knit',
+      patternId: null,
+      totalRows: 40,
+    });
+    expect(store().projects[key].sections[0]).toMatchObject({
+      description: '',
+      stitchMultiple: null,
+      rows: [],
+    });
+  });
+});
+
+describe('hydrating a store saved before a project held what a pattern holds', () => {
+  const persist = useKnitwitStore.persist;
+
+  const hydrate = async (payload: unknown) => {
+    await AsyncStorage.setItem('knitwit-store', JSON.stringify(payload));
+    await persist.rehydrate();
+    return useKnitwitStore.getState().projects.p;
+  };
+
+  const bareSection = { name: 'Main', materialIds: [], toolIds: [], techniqueIds: [] };
+
+  it('gives an improvised project a category read off its name', async () => {
+    const project = await hydrate({
+      state: {
+        patterns: {},
+        projects: { p: { name: 'Winter Socks', patternId: null, sections: [bareSection] } },
+      },
+      version: 24,
+    });
+    expect(project.category).toBe('socks');
+    expect(project.level).toBe('intermediate');
+    expect(project.needleSize).toBe('');
+  });
+
+  it('seeds a linked project from the pattern it was made from', async () => {
+    const project = await hydrate({
+      state: {
+        patterns: {
+          pat: { category: 'hats', level: 'easy', needleSize: '5mm', video: 'https://v.test', sections: [] },
+        },
+        projects: { p: { name: 'Anything', patternId: 'pat', sections: [bareSection] } },
+      },
+      version: 24,
+    });
+    expect(project).toMatchObject({
+      category: 'hats',
+      level: 'easy',
+      needleSize: '5mm',
+      video: 'https://v.test',
+    });
+  });
+
+  it('gives every section somewhere to write instructions', async () => {
+    const project = await hydrate({
+      state: {
+        patterns: {},
+        projects: { p: { name: 'Improvised', patternId: null, sections: [bareSection] } },
+      },
+      version: 24,
+    });
+    expect(project.sections[0].description).toBe('');
+    expect(project.sections[0].stitchMultiple).toBeNull();
+  });
+
+  it('does not overwrite what a project already says about itself', async () => {
+    const project = await hydrate({
+      state: {
+        patterns: { pat: { category: 'hats', level: 'easy', sections: [] } },
+        projects: {
+          p: {
+            name: 'Mine',
+            patternId: 'pat',
+            category: 'toys',
+            level: 'advanced',
+            needleSize: '3mm',
+            video: '',
+            sourceName: '',
+            sourceText: 'kept',
+            sections: [{ ...bareSection, description: 'Row 1: K.', stitchMultiple: { of: 4, plus: 0 } }],
+          },
+        },
+      },
+      version: 24,
+    });
+    expect(project).toMatchObject({ category: 'toys', level: 'advanced', sourceText: 'kept' });
+    expect(project.sections[0].description).toBe('Row 1: K.');
+    expect(project.sections[0].stitchMultiple).toEqual({ of: 4, plus: 0 });
+  });
+});

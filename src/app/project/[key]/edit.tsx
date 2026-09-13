@@ -1,23 +1,40 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
+import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  CRAFT_LABELS,
+  CRAFT_ORDER,
+} from '@/constants/catalogs';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { TechniqueCraft } from '@/types/knitwit';
+import type { PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
 const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
   value: c,
   label: CRAFT_LABELS[c],
 }));
+
+const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_ORDER.map((c) => ({
+  value: c,
+  label: CATEGORY_LABELS[c],
+}));
+
+const LEVEL_OPTIONS: { value: PatternLevel; label: string }[] = [
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'easy', label: 'Easy' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
+];
 
 export default function ProjectEditScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
@@ -35,6 +52,11 @@ export default function ProjectEditScreen() {
   const [patternId, setPatternId] = useState(project?.patternId ?? '');
   const [photo, setPhoto] = useState<string | null>(project?.photo ?? null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [category, setCategory] = useState<PatternCategory>(project?.category ?? 'sweaters');
+  const [level, setLevel] = useState<PatternLevel>(project?.level ?? 'intermediate');
+  const [needleSize, setNeedleSize] = useState(project?.needleSize ?? '');
+  const [video, setVideo] = useState(project?.video ?? '');
+  const [sourceText, setSourceText] = useState(project?.sourceText ?? '');
 
   const choosePhoto = async () => {
     const result = await pickImage();
@@ -99,10 +121,66 @@ export default function ProjectEditScreen() {
             onChange={setPatternId}
           />
 
+          {/* The rest of what a pattern records about itself. A project holds all of it now, so an
+              improvised make is describable without first being turned into a pattern — and when
+              it is turned into one, these are real answers rather than guesses. */}
+          <SelectField
+            label="Category"
+            options={CATEGORY_OPTIONS}
+            value={category}
+            onChange={setCategory}
+          />
+          <SelectField
+            label="Difficulty"
+            options={LEVEL_OPTIONS}
+            value={level}
+            onChange={setLevel}
+          />
+          <FormField
+            label="Needle / hook size"
+            value={needleSize}
+            onChangeText={setNeedleSize}
+            placeholder="e.g. 4.5mm"
+          />
+          <FormField
+            label="Instruction video (optional)"
+            value={video}
+            onChangeText={setVideo}
+            placeholder="https://…"
+          />
+          <View style={styles.field}>
+            <ThemedText type="smallBold" themeColor="inkSoft">
+              Pattern text (optional)
+            </ThemedText>
+            <ThemedText type="small" themeColor="inkSoft">
+              Anything written down about the whole piece. Per-section instructions live on the
+              sections themselves, where they can be charted.
+            </ThemedText>
+            <TextInput
+              value={sourceText}
+              onChangeText={setSourceText}
+              placeholder="Paste or write it here…"
+              placeholderTextColor={Colors.inkSoft}
+              multiline
+              style={styles.pasteBox}
+            />
+          </View>
+
           <PillButton
             style={styles.saveBtn}
             onPress={() => {
-              updateProject(key, { name, startedOn, craft, patternId: patternId || null, photo });
+              updateProject(key, {
+                name,
+                startedOn,
+                craft,
+                patternId: patternId || null,
+                photo,
+                category,
+                level,
+                needleSize,
+                video,
+                sourceText,
+              });
               goBackOr(router, `/project/${key}`);
             }}>
             <ThemedText type="smallBold" themeColor="white">
@@ -166,6 +244,18 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   saveBtn: { marginTop: Spacing.two },
+  field: { gap: Spacing.one },
+  pasteBox: {
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 15,
+    color: Colors.ink,
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   hero: {
     height: 140,
     borderRadius: Radii.large,

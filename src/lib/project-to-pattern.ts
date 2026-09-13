@@ -134,11 +134,14 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
       techniques: s.techniqueIds.length
         ? s.techniqueIds.map((id) => techniqueSlots.get(id)!)
         : (from?.techniques ?? []),
-      description: from?.description ?? '',
+      // The project's own wording wins. It only falls back to the source pattern for a section
+      // the knitter never wrote anything on — before a project could hold a description at all,
+      // the fallback was the only way to get one.
+      description: s.description.trim() ? s.description : (from?.description ?? ''),
       rows: s.rows,
       notes: s.notes,
       markers: s.markers,
-      stitchMultiple: from?.stitchMultiple ?? null,
+      stitchMultiple: s.stitchMultiple ?? from?.stitchMultiple ?? null,
     };
   });
 
@@ -148,13 +151,18 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
 
   return {
     name: project.name,
-    category: source?.category ?? categoryFromName(project.name),
+    // Read off the project rather than guessed. A project records all of this itself now, so the
+    // conversion form is pre-filled with real answers; categoryFromName still exists, but it runs
+    // once when the project is created rather than every time one is converted.
+    category: project.category,
     craft: project.craft,
     weight: '',
-    needleSize: source?.needleSize || toolLabel(stash.tools[toolIds[0]]),
-    video: source?.video ?? '',
-    sourceName: '',
-    sourceText: '',
+    // Falls back to the first needle the project was actually worked with, which is a better
+    // answer than blank for a knitter who never filled the field in.
+    needleSize: project.needleSize || toolLabel(stash.tools[toolIds[0]]),
+    video: project.video,
+    sourceName: project.sourceName,
+    sourceText: project.sourceText,
     // Taken from the project so the pattern reads as the same thing in the library, and so
     // re-deriving the project's colours from it is a no-op.
     accentColor: project.color,
@@ -164,7 +172,7 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
     // swatch would make re-gauging compare a number against itself.
     swatchGauge: null,
     favorited: false,
-    level: source?.level ?? 'intermediate',
+    level: project.level,
     sizes: [source?.sizes[project.sizeIndex] ?? 'One size'],
     materials,
     tools,
@@ -179,11 +187,15 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
 // can see before pressing the button whether there's a pattern in here or just an empty shell.
 export function describeConversion(pattern: Pattern): string {
   const rowsCharted = pattern.sections.reduce((n, s) => n + s.rows.length, 0);
+  const written = pattern.sections.filter((s) => s.description.trim()).length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const parts = [
     plural(pattern.sections.length, 'section', 'sections'),
     plural(rowsCharted, 'row charted', 'rows charted'),
   ];
+  // Worth its own count: the wording is what makes a converted pattern readable, and it's the
+  // thing a project could not hold at all until recently.
+  if (written) parts.push(`${written} written up`);
   if (pattern.materials.length) parts.push(plural(pattern.materials.length, 'yarn', 'yarns'));
   if (pattern.tools.length) parts.push(plural(pattern.tools.length, 'tool', 'tools'));
   if (pattern.techniques.length) {

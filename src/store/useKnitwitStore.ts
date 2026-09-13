@@ -23,6 +23,7 @@ import {
   stitchesForRow,
 } from '@/lib/achievements';
 import { stitchRatio } from '@/lib/gauge';
+import { categoryFromName } from '@/lib/project-to-pattern';
 import { regaugeSectionRows } from '@/lib/regauge';
 import type {
   Achievements,
@@ -102,7 +103,7 @@ type KnitwitState = {
       craft: TechniqueCraft;
       patternId: string | null;
       photo?: string | null;
-    },
+    } & Partial<ProjectMeta>,
   ) => void;
   deleteProject: (key: string) => void;
 
@@ -119,6 +120,13 @@ type KnitwitState = {
   // because it's a different gesture: name and rows are typed into a form and saved, this is
   // toggled on and off and takes effect there and then.
   setSectionKit: (projectKey: string, index: number, patch: Partial<SectionKit>) => void;
+  // The written instructions and the chart read from them. Its own action because the stitch
+  // editor owns all three together and hands them back as a set.
+  setSectionStitches: (
+    projectKey: string,
+    index: number,
+    draft: { description: string; castOn: number; rows: PatternRow[] },
+  ) => void;
   deleteSection: (projectKey: string, index: number) => void;
 
   saveMaterial: (id: string | null, data: Material) => string;
@@ -202,6 +210,13 @@ function withRecent(recent: string[], projectKey: string, sectionIndex: number):
   return [entry, ...recent.filter((r) => r !== entry)].slice(0, 12);
 }
 
+// Everything a project records about itself that a pattern also records. Grouped because the
+// edit screen offers them as a block and updateProject takes them as one.
+type ProjectMeta = Pick<
+  Project,
+  'category' | 'level' | 'needleSize' | 'video' | 'sourceName' | 'sourceText'
+>;
+
 // The three lists a project section carries: what it is worked with, as ids into the knitter's
 // own stash. Named as a set because every screen that offers one offers all three.
 type SectionKit = Pick<ProjectSection, 'materialIds' | 'toolIds' | 'techniqueIds'>;
@@ -231,9 +246,38 @@ function repairSectionKits(state: {
   for (const project of Object.values(state.projects ?? {})) {
     const patternId = project.patternId as string | null | undefined;
     const source = patternId ? state.patterns?.[patternId] : undefined;
+
+    // A project now records what a pattern records. Seeded from the pattern it was made from,
+    // since that is where the true answer already is; improvised projects get a reading of their
+    // own name and sensible blanks, which is exactly what the conversion screen used to guess.
+    if (typeof project.category !== 'string') {
+      project.category = (source?.category as string | undefined) ?? categoryFromName(String(project.name ?? ''));
+    }
+    if (typeof project.level !== 'string') {
+      project.level = (source?.level as string | undefined) ?? 'intermediate';
+    }
+    if (typeof project.needleSize !== 'string') {
+      project.needleSize = (source?.needleSize as string | undefined) ?? '';
+    }
+    for (const [key, from] of [
+      ['video', 'video'],
+      ['sourceName', 'sourceName'],
+      ['sourceText', 'sourceText'],
+    ] as const) {
+      if (typeof project[key] !== 'string') {
+        project[key] = (source?.[from] as string | undefined) ?? '';
+      }
+    }
     const sourceSections = (source?.sections as Record<string, unknown>[] | undefined) ?? [];
     const slotMaterials = (project.slotMaterials ?? {}) as Record<string, string>;
     const slotTools = (project.slotTools ?? {}) as Record<string, string>;
+
+    // Fields a project section gained once it could hold everything a pattern section holds.
+    // Shape-driven like the rest: absent means "predates this", not "version N".
+    for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
+      if (typeof section.description !== 'string') section.description = '';
+      if (!('stitchMultiple' in section)) section.stitchMultiple = null;
+    }
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
       if (Array.isArray(section.materialIds) && Array.isArray(section.toolIds)) {
@@ -391,6 +435,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                 // A pattern names its techniques inline rather than pointing at the knitter's
                 // library, so there is nothing to resolve them to. Left for the knitter to set.
                 techniqueIds: [],
+                description: ps.description,
+                stitchMultiple: ps.stitchMultiple,
                 // Markers flagged on charted rows count too, not just bare section markers.
                 markers: patternSectionMarkers(ps),
                 // The chart is copied, not referenced, so later pattern edits leave a project in
@@ -410,6 +456,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                   materialIds: [],
                   toolIds: [],
                   techniqueIds: [],
+                  description: '',
+                  stitchMultiple: null,
                   markers: [],
                   castOn: 0,
                   rows: [],
@@ -425,6 +473,16 @@ export const useKnitwitStore = create<KnitwitState>()(
               craft,
               photo: null,
               ...deriveProjectColors(accent),
+              // Copied off the pattern where there is one, so a project made from a sweater
+              // pattern is a sweater. Improvised, it reads its own name and leaves the rest blank
+              // for the knitter to fill in — the same reading the conversion screen used to do,
+              // moved to the moment the project is created.
+              category: pattern?.category ?? categoryFromName(name),
+              level: pattern?.level ?? 'intermediate',
+              needleSize: pattern?.needleSize ?? '',
+              video: pattern?.video ?? '',
+              sourceName: pattern?.sourceName ?? '',
+              sourceText: pattern?.sourceText ?? '',
               patternId,
               sizeIndex,
               status: 'active',
@@ -442,7 +500,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         return key;
       },
 
-      updateProject: (key, { name, startedOn, craft, patternId, photo }) => {
+      updateProject: (key, { name, startedOn, craft, patternId, photo, ...meta }) => {
         const { projects, patterns } = get();
         const project = projects[key];
         if (!project) return;
@@ -452,6 +510,8 @@ export const useKnitwitStore = create<KnitwitState>()(
             ...projects,
             [key]: {
               ...project,
+              // Spread first so the named fields below always win over a stale meta key.
+              ...meta,
               name: name.trim() || 'Untitled project',
               startedOn,
               craft,
@@ -510,6 +570,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                   materialIds,
                   toolIds,
                   techniqueIds,
+                  description: '',
+                  stitchMultiple: null,
                   markers: [],
                   castOn: 0,
                   rows: [],
@@ -567,6 +629,16 @@ export const useKnitwitStore = create<KnitwitState>()(
           })),
         );
       },
+
+      setSectionStitches: (projectKey, index, { description, castOn, rows }) =>
+        set(
+          patchSection(get(), projectKey, index, (s) => ({
+            ...s,
+            description,
+            castOn: Math.max(0, Math.round(castOn) || 0),
+            rows,
+          })),
+        ),
 
       deleteSection: (projectKey, index) => {
         const { projects, activeProjectKey, activeSectionIndex, timerKey } = get();

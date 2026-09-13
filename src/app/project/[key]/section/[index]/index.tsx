@@ -174,6 +174,31 @@ export default function SectionDetailScreen() {
             )}
           </Card>
 
+          {/* The written instructions and the chart read from them — the pair a pattern section
+              has always had and a project section could not hold at all. */}
+          <Card style={styles.card}>
+            <ThemedText type="small" themeColor="inkSoft">
+              Instructions & stitches
+            </ThemedText>
+            {section.description.trim() ? (
+              <ThemedText type="default" numberOfLines={3}>
+                {section.description.trim()}
+              </ThemedText>
+            ) : null}
+            <Pressable
+              hitSlop={6}
+              style={styles.pickDone}
+              onPress={() => router.push(`/project/${key}/section/${sectionIndex}/stitches`)}>
+              <ThemedText type="smallBold" themeColor="sageDeep">
+                {section.rows.length > 0
+                  ? `${section.rows.length} ${section.rows.length === 1 ? 'row' : 'rows'} charted — open the stitch editor →`
+                  : section.description.trim()
+                    ? 'Chart these stitches →'
+                    : '+ Write the instructions & chart the stitches'}
+              </ThemedText>
+            </Pressable>
+          </Card>
+
           {sortedNotes.length > 0 && (
             <>
               <ThemedText type="subtitle" style={styles.notesTitle}>

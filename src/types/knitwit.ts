@@ -283,6 +283,13 @@ export type ProjectSection = {
   // (PatternTechnique); a project points at the ones in the knitter's library, the same way it
   // points at their yarn.
   techniqueIds: string[];
+  // The written instructions, the same field a pattern section carries. A project improvised
+  // without a pattern still has instructions — they're just in the knitter's head until there's
+  // somewhere to put them, and they're what the chart below is read from.
+  description: string;
+  // Only consulted when re-gauging, and carried for the same reason a pattern carries it: a
+  // rescaled cast-on rounded to the nearest stitch can leave a rib short of a repeat.
+  stitchMultiple: StitchMultiple | null;
   markers: number[];
   // The stitch chart is copied from the pattern when the project is created, not read live from
   // it: a project in progress shouldn't silently change under the knitter because the pattern was
@@ -302,6 +309,16 @@ export type Project = {
   photo: string | null;
   color: string;
   colorDeep: string;
+  // Everything a pattern records about itself that a project has no other way to hold. A project
+  // improvised without a pattern is still a sweater knitted at an intermediate level on 4.5mm
+  // needles from a page someone pasted in — and when it's turned into a pattern, these are the
+  // fields that were previously guessed or asked for again.
+  category: PatternCategory;
+  level: PatternLevel;
+  needleSize: string;
+  video: string;
+  sourceName: string;
+  sourceText: string;
   patternId: string | null;
   // Which of the pattern's sizes this project is being knitted in. Every per-size number is
   // resolved against this when the project is created, so the project itself holds plain numbers.

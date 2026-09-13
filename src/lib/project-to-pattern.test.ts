@@ -46,6 +46,8 @@ const section = (over: Partial<ProjectSection> = {}): ProjectSection => ({
   materialIds: [],
   toolIds: [],
   techniqueIds: [],
+  description: '',
+  stitchMultiple: null,
   markers: [],
   castOn: 88,
   rows: [],
@@ -56,6 +58,12 @@ const project = (over: Partial<Project> = {}): Project => ({
   name: 'Meadow Cardigan',
   startedOn: '2026-06-14',
   craft: 'knit',
+  category: 'sweaters',
+  level: 'intermediate',
+  needleSize: '',
+  video: '',
+  sourceName: '',
+  sourceText: '',
   photo: null,
   color: '#E8B4C0',
   colorDeep: '#A78189',
@@ -254,9 +262,15 @@ describe('carrying a source pattern across', () => {
     expect(p.sections[0].materials).toEqual([p.materials[0].id]);
   });
 
-  it('takes the details a project has no field for', () => {
-    const p = projectToPattern(project(), bare, source);
-    expect(p).toMatchObject({ category: 'sweaters', level: 'advanced', needleSize: '4.0mm' });
+  // These used to come from the source pattern, because a project had nowhere to keep them. It
+  // does now, so its own answers win even when it was made from a pattern that disagrees.
+  it('prefers the project\u2019s own details over the source pattern\u2019s', () => {
+    const p = projectToPattern(
+      project({ category: 'blankets', level: 'beginner', needleSize: '6mm' }),
+      bare,
+      source,
+    );
+    expect(p).toMatchObject({ category: 'blankets', level: 'beginner', needleSize: '6mm' });
   });
 
   it('keeps the project name, not the source pattern name', () => {
@@ -277,6 +291,17 @@ describe('describeConversion', () => {
       null,
     );
     expect(describeConversion(p)).toBe('2 sections · 3 rows charted · 1 yarn · 1 tool');
+  });
+
+  it('counts the sections that have been written up', () => {
+    const p = projectToPattern(
+      project({
+        sections: [section({ description: 'Row 1: K.' }), section({ name: 'Front' })],
+      }),
+      bare,
+      null,
+    );
+    expect(describeConversion(p)).toBe('2 sections · 0 rows charted · 1 written up');
   });
 
   it('says so plainly when there is nothing charted', () => {
@@ -401,5 +426,69 @@ describe('techniques', () => {
     expect(p.sections[0].techniques.every((id) => ids.includes(id))).toBe(true);
     expect(p.sections[1].techniques.every((id) => ids.includes(id))).toBe(true);
     expect(p.techniques.map((t) => t.name)).toEqual(['Kitchener stitch', 'German short rows']);
+  });
+});
+
+describe('a project that holds what a pattern holds', () => {
+  it('carries the section wording the knitter wrote on the project', () => {
+    const p = projectToPattern(
+      project({ sections: [section({ description: 'Row 1: K all.' })] }),
+      bare,
+      null,
+    );
+    expect(p.sections[0].description).toBe('Row 1: K all.');
+  });
+
+  // The fallback still exists for a section the knitter never wrote anything on — before a project
+  // could hold a description at all, it was the only way to get one.
+  it('falls back to the source pattern only for a section left blank', () => {
+    const source = {
+      sizes: [],
+      techniques: [],
+      sections: [
+        { name: 'Back', description: 'From the pattern.', techniques: [], stitchMultiple: null },
+      ],
+    } as unknown as Pattern;
+    const written = projectToPattern(
+      project({ sections: [section({ name: 'Back', description: 'Mine.' })] }),
+      bare,
+      source,
+    );
+    const blank = projectToPattern(project({ sections: [section({ name: 'Back' })] }), bare, source);
+    expect(written.sections[0].description).toBe('Mine.');
+    expect(blank.sections[0].description).toBe('From the pattern.');
+  });
+
+  it('carries the stitch repeat, so a converted pattern still re-gauges correctly', () => {
+    const p = projectToPattern(
+      project({ sections: [section({ stitchMultiple: { of: 4, plus: 2 } })] }),
+      bare,
+      null,
+    );
+    expect(p.sections[0].stitchMultiple).toEqual({ of: 4, plus: 2 });
+  });
+
+  it('carries the whole-pattern text and video the project was given', () => {
+    const p = projectToPattern(
+      project({ sourceName: 'camisole.pdf', sourceText: 'Cast on 88 sts.', video: 'https://x.test' }),
+      bare,
+      null,
+    );
+    expect(p).toMatchObject({
+      sourceName: 'camisole.pdf',
+      sourceText: 'Cast on 88 sts.',
+      video: 'https://x.test',
+    });
+  });
+
+  // The needle size is a field now, but an improvised project that never filled it in still has a
+  // better answer available than blank.
+  it('falls back to the needle it was actually worked with', () => {
+    const p = projectToPattern(
+      project({ needleSize: '', sections: [section({ toolIds: ['t2'] })] }),
+      stash,
+      null,
+    );
+    expect(p.needleSize).toBe('3.0mm Circular');
   });
 });
