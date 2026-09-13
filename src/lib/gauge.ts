@@ -96,6 +96,57 @@ export function stitchRatio(pattern: Gauge, mine: Gauge): number | null {
   return from > 0 ? stitchesPerCm(mine) / from : null;
 }
 
+// "A multiple of 4, plus 2 edge stitches" — what a stitch pattern needs in order to come out
+// even. Rounding a rescaled count without honouring this produces a number that is arithmetically
+// right and won't knit: 27 stitches of k2/p2 rib leaves three stitches over.
+export type StitchMultiple = { of: number; plus: number };
+
+export function roundToMultiple(value: number, multiple?: StitchMultiple | null): number {
+  const nearest = Math.max(0, Math.round(value));
+  if (!multiple || multiple.of <= 1) return nearest;
+
+  const of = Math.round(multiple.of);
+  // "Multiple of 4 plus 6" is the same requirement as "multiple of 4 plus 2"; normalising means a
+  // knitter can type whichever the pattern printed.
+  const plus = ((Math.round(multiple.plus) % of) + of) % of;
+
+  const base = Math.round((value - plus) / of);
+  const candidates = [base - 1, base, base + 1]
+    .map((k) => k * of + plus)
+    .filter((n) => n >= 0);
+  if (candidates.length === 0) return plus;
+
+  // Nearest wins; an exact tie rounds up, because a garment slightly roomier beats one slightly
+  // too tight.
+  return candidates.reduce((best, n) =>
+    Math.abs(n - value) < Math.abs(best - value) - 1e-9 ? n : n > best && Math.abs(n - value) <= Math.abs(best - value) + 1e-9 ? n : best,
+  );
+}
+
+export type Rescaled = {
+  // What the maths gives before rounding — shown so the rounding is never invisible.
+  exact: number;
+  // What to actually cast on.
+  rounded: number;
+  // True when the multiple forced a bigger move than plain rounding would have.
+  adjustedForMultiple: boolean;
+};
+
+// The core of re-gauging: the pattern's stitch count, at the knitter's gauge.
+export function rescaleStitches(
+  count: number,
+  ratio: number,
+  multiple?: StitchMultiple | null,
+): Rescaled {
+  const exact = count * ratio;
+  const rounded = roundToMultiple(exact, multiple);
+  return {
+    exact,
+    rounded,
+    adjustedForMultiple: rounded !== Math.max(0, Math.round(exact)),
+  };
+}
+
 // What a length of fabric worked at `g` measures, in centimetres.
 export function stitchesToCm(stitches: number, g: Gauge): number | null {
   const perCm = stitchesPerCm(g);

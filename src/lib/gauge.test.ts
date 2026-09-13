@@ -6,6 +6,8 @@ import {
   isUsableGauge,
   makeGauge,
   presetIndexFor,
+  rescaleStitches,
+  roundToMultiple,
   rowsPerCm,
   stitchesPerCm,
   stitchesToCm,
@@ -177,5 +179,70 @@ describe('presetIndexFor', () => {
 describe('measurements', () => {
   it('says what a stitch count measures', () => {
     expect(stitchesToCm(44, metric)).toBe(20);
+  });
+});
+
+describe('roundToMultiple', () => {
+  it('rounds normally when there is no multiple to honour', () => {
+    expect(roundToMultiple(27.3)).toBe(27);
+    expect(roundToMultiple(27.6)).toBe(28);
+  });
+
+  // The case that makes plain rounding useless: 27 stitches of k2/p2 rib leaves three over.
+  it('keeps a k2/p2 rib knittable', () => {
+    expect(roundToMultiple(27.3, { of: 4, plus: 0 })).toBe(28);
+    expect(roundToMultiple(29.4, { of: 4, plus: 0 })).toBe(28);
+  });
+
+  it('honours an offset, so a lace repeat keeps its edge stitches', () => {
+    // Multiple of 8 plus 2: …26, 34, 42.
+    expect(roundToMultiple(31, { of: 8, plus: 2 })).toBe(34);
+    expect(roundToMultiple(28, { of: 8, plus: 2 })).toBe(26);
+  });
+
+  it('normalises an offset the pattern wrote larger than the multiple', () => {
+    // "Multiple of 4 plus 6" is the same requirement as "plus 2".
+    expect(roundToMultiple(31, { of: 4, plus: 6 })).toBe(30);
+    expect(roundToMultiple(31, { of: 4, plus: 2 })).toBe(30);
+  });
+
+  it('rounds a tie up, since a roomier garment beats a tight one', () => {
+    expect(roundToMultiple(30, { of: 4, plus: 0 })).toBe(32);
+  });
+
+  it('never goes negative', () => {
+    expect(roundToMultiple(1, { of: 8, plus: 2 })).toBe(2);
+    expect(roundToMultiple(-5)).toBe(0);
+  });
+
+  it('ignores a meaningless multiple rather than dividing by it', () => {
+    expect(roundToMultiple(27.3, { of: 1, plus: 0 })).toBe(27);
+    expect(roundToMultiple(27.3, { of: 0, plus: 0 })).toBe(27);
+  });
+});
+
+describe('rescaleStitches', () => {
+  it('scales a cast-on to the knitter’s gauge', () => {
+    // Pattern 22 sts/10cm, knitter 20 — a looser fabric needs fewer stitches for the same width.
+    const ratio = stitchRatio(metric, { ...metric, stitches: 20 })!;
+    expect(rescaleStitches(30, ratio).rounded).toBe(27);
+  });
+
+  it('shows the unrounded number so the rounding is never invisible', () => {
+    const ratio = stitchRatio(metric, { ...metric, stitches: 20 })!;
+    expect(rescaleStitches(30, ratio).exact).toBeCloseTo(27.27, 2);
+  });
+
+  it('says when the stitch multiple moved the number further than rounding would', () => {
+    const ratio = stitchRatio(metric, { ...metric, stitches: 20 })!;
+    const plain = rescaleStitches(30, ratio);
+    const ribbed = rescaleStitches(30, ratio, { of: 4, plus: 0 });
+    expect(plain.adjustedForMultiple).toBe(false);
+    expect(ribbed.rounded).toBe(28);
+    expect(ribbed.adjustedForMultiple).toBe(true);
+  });
+
+  it('leaves a count alone when the gauges match', () => {
+    expect(rescaleStitches(88, 1).rounded).toBe(88);
   });
 });
