@@ -57,6 +57,10 @@ type KnitwitState = {
 
   activeProjectKey: string;
   activeSectionIndex: number;
+  // Sections worked on, most recent first, as "projectKey|sectionIndex". activeProjectKey alone
+  // can't answer "where was I before this?", which is what Home needs when the last thing worked
+  // on has since been frogged or finished.
+  recentSections: string[];
 
   timerKey: string | null; // `${projectKey}|${sectionIndex}`
   timerStartedAt: number | null;
@@ -174,6 +178,12 @@ function bumpTotal(a: Achievements, key: keyof Achievements['totals']): Achievem
   return { ...a, totals: { ...a.totals, [key]: a.totals[key] + 1 } };
 }
 
+// Most recent first, no duplicates, capped — this is a "where was I" trail, not a history.
+function withRecent(recent: string[], projectKey: string, sectionIndex: number): string[] {
+  const entry = `${projectKey}|${sectionIndex}`;
+  return [entry, ...recent.filter((r) => r !== entry)].slice(0, 12);
+}
+
 function clampSectionIndex(projects: Record<string, Project>, projectKey: string, index: number) {
   const n = projects[projectKey]?.sections.length ?? 0;
   if (!n) return 0;
@@ -223,6 +233,7 @@ export const useKnitwitStore = create<KnitwitState>()(
 
       activeProjectKey: 'meadow',
       activeSectionIndex: currentSectionIndexOf(SEED_PROJECTS.meadow),
+      recentSections: [],
 
       timerKey: null,
       timerStartedAt: null,
@@ -546,10 +557,12 @@ export const useKnitwitStore = create<KnitwitState>()(
       },
 
       setActiveSection: (projectKey, sectionIndex) => {
-        const { projects } = get();
+        const { projects, recentSections } = get();
+        const index = clampSectionIndex(projects, projectKey, sectionIndex);
         set({
           activeProjectKey: projectKey,
-          activeSectionIndex: clampSectionIndex(projects, projectKey, sectionIndex),
+          activeSectionIndex: index,
+          recentSections: withRecent(recentSections ?? [], projectKey, index),
           dismissedMarkerRow: null,
           castOffDismissed: false,
           noteFormOpen: false,
@@ -589,6 +602,7 @@ export const useKnitwitStore = create<KnitwitState>()(
             },
           },
           achievements: earned,
+          recentSections: withRecent(get().recentSections ?? [], activeProjectKey, activeSectionIndex),
           dismissedMarkerRow: nextRow === dismissedMarkerRow ? dismissedMarkerRow : null,
         });
         get().ensureTimerRunning();
@@ -918,6 +932,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         projects: state.projects,
         activeProjectKey: state.activeProjectKey,
         activeSectionIndex: state.activeSectionIndex,
+        recentSections: state.recentSections,
         noteSeq: state.noteSeq,
         materialSeq: state.materialSeq,
         toolSeq: state.toolSeq,

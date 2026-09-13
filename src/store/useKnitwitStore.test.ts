@@ -546,3 +546,35 @@ describe('sections', () => {
     expect(projects.meadow.sections[activeSectionIndex].name).toBe(target.name);
   });
 });
+
+// Home's "Continue" has to land somewhere you can knit. It used to follow activeProjectKey with
+// no check at all, so frogging the project you were last on left the button pointing at it.
+describe('recent sections', () => {
+  it('remembers a section when it is selected', () => {
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    useKnitwitStore.getState().setActiveSection('meadow', 1);
+    expect(useKnitwitStore.getState().recentSections.slice(0, 2)).toEqual(['meadow|1', 'rowan|0']);
+  });
+
+  it('moves a section back to the front rather than repeating it', () => {
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    useKnitwitStore.getState().setActiveSection('meadow', 1);
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    const recent = useKnitwitStore.getState().recentSections;
+    expect(recent[0]).toBe('rowan|0');
+    expect(recent.filter((r) => r === 'rowan|0')).toHaveLength(1);
+  });
+
+  it('keeps the trail fresh when a row is counted, not only when a section is picked', () => {
+    useKnitwitStore.getState().setActiveSection('meadow', 1);
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    useKnitwitStore.setState({ activeProjectKey: 'meadow', activeSectionIndex: 1 });
+    useKnitwitStore.getState().changeRow(1);
+    expect(useKnitwitStore.getState().recentSections[0]).toBe('meadow|1');
+  });
+
+  it('stays bounded', () => {
+    for (let i = 0; i < 30; i++) useKnitwitStore.getState().setActiveSection('meadow', i % 3);
+    expect(useKnitwitStore.getState().recentSections.length).toBeLessThanOrEqual(12);
+  });
+});

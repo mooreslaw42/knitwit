@@ -10,6 +10,7 @@ import { currentStreak, knittedToday } from '@/lib/achievements';
 import { nextAward } from '@/lib/awards';
 import { currentSectionIndexOf, projectProgress } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import type { Project } from '@/types/knitwit';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function HomeScreen() {
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
   const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
+  const recentSections = useKnitwitStore((state) => state.recentSections);
   const achievements = useKnitwitStore((state) => state.achievements);
 
   const streak = currentStreak(achievements);
@@ -31,19 +33,29 @@ export default function HomeScreen() {
   );
   const activeCount = incomplete.length;
 
-  // Where "Continue" picks up: the section last counted, or — if that project has since been
-  // deleted — the current section of the first project still on the needles.
-  const lastProject = projects[activeProjectKey];
-  const lastSection = lastProject?.sections[activeSectionIndex];
+  // Where "Continue" picks up. It has to land somewhere you can actually knit, so a project that
+  // has since been frogged or finished is skipped rather than offered — walking back through the
+  // sections most recently worked on until one is still on the needles, and falling back to the
+  // first WIP project if none of them are.
   const resume = (() => {
-    if (lastProject && lastSection) {
-      return {
-        key: activeProjectKey,
-        index: activeSectionIndex,
-        project: lastProject,
-        section: lastSection,
-      };
+    const onNeedles = (project: Project | undefined) =>
+      !!project && project.status === 'active' && projectProgress(project).pct < 1;
+
+    const trail = [`${activeProjectKey}|${activeSectionIndex}`, ...(recentSections ?? [])];
+    for (const entry of trail) {
+      const [key, rawIndex] = entry.split('|');
+      const project = projects[key];
+      if (!onNeedles(project)) continue;
+      // The remembered section may itself be finished even though the project isn't — carry on
+      // to whatever that project is actually up to.
+      const remembered = Number(rawIndex);
+      const candidate = project.sections[remembered];
+      const index =
+        candidate && candidate.row < candidate.totalRows ? remembered : currentSectionIndexOf(project);
+      const section = project.sections[index];
+      if (section) return { key, index, project, section };
     }
+
     const fallback = incomplete[0];
     if (!fallback) return null;
     const [key, project] = fallback;
