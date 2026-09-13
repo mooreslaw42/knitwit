@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton, ProgressBar } from '@/components/knitwit-ui';
+import { Card, PillButton, ProgressBar, Thumb } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -97,12 +97,7 @@ export default function ProjectsScreen() {
                     key={key}
                     style={styles.projRow}
                     onPress={() => router.push(`/project/${key}`)}>
-                    <View
-                      style={[
-                        styles.projThumb,
-                        { backgroundColor: p.photo ? undefined : p.color },
-                      ]}
-                    />
+                    <Thumb photo={p.photo} color={p.color} />
                     <View style={styles.projInfo}>
                       <ThemedText type="smallBold">{p.name}</ThemedText>
                       <ThemedText type="small" themeColor="inkSoft">
@@ -186,11 +181,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
     padding: Spacing.three,
-  },
-  projThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: Radii.small,
   },
   projInfo: {
     flex: 1,

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton } from '@/components/knitwit-ui';
+import { Card, PillButton, Thumb } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -192,7 +192,7 @@ export default function LibraryScreen() {
                     key={id}
                     style={styles.stashRow}
                     onPress={() => router.push(`/material/${id}`)}>
-                    <View style={styles.thumb} />
+                    <Thumb photo={m.photo} />
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">
                         {m.brand} — {m.colorName}
@@ -215,9 +215,9 @@ export default function LibraryScreen() {
                     key={id}
                     style={styles.stashRow}
                     onPress={() => router.push(`/tool/${id}`)}>
-                    <View style={[styles.thumb, styles.iconThumb]}>
+                    <Thumb>
                       <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
-                    </View>
+                    </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">
                         {t.thickness} {TOOL_TYPE_LABELS[t.type]}
@@ -371,16 +371,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
     padding: Spacing.three,
-  },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: Radii.small,
-    backgroundColor: Colors.creamDeep,
-  },
-  iconThumb: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   qtyPill: {
     backgroundColor: Colors.creamDeep,

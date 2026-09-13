@@ -2,6 +2,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   TextInput,
@@ -145,6 +146,33 @@ export function SelectField<T extends string>({
           ))}
         </Picker>
       </View>
+    </View>
+  );
+}
+
+// The small square that stands for a thing in a list — a project, a yarn, a tool. Shows the
+// photo when there is one and falls back to the item's colour, or to an icon passed as children.
+//
+// Shared because three lists each wrote `backgroundColor: photo ? undefined : color` and then
+// never drew the photo, so anything with one showed a blank square. One place to get it right.
+export function Thumb({
+  photo,
+  color,
+  size = 44,
+  children,
+}: {
+  photo?: string | null;
+  color?: string;
+  size?: number;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        styles.thumb,
+        { width: size, height: size, backgroundColor: color ?? Colors.creamDeep },
+      ]}>
+      {photo ? <Image source={{ uri: photo }} style={styles.thumbPhoto} /> : children}
     </View>
   );
 }
@@ -295,6 +323,19 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodySemibold,
     fontSize: 15,
     color: Colors.ink,
+  },
+  thumb: {
+    borderRadius: Radii.small,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbPhoto: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   confirmWrap: {
     gap: Spacing.two,
