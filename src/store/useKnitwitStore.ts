@@ -15,7 +15,12 @@ import {
   patternSectionMarkers,
   sizeValue,
 } from '@/lib/knitwit-helpers';
-import { emptyAchievements, recordActivity, stitchesForRow } from '@/lib/achievements';
+import {
+  emptyAchievements,
+  normaliseAchievements,
+  recordActivity,
+  stitchesForRow,
+} from '@/lib/achievements';
 import { stitchRatio } from '@/lib/gauge';
 import { regaugeSectionRows } from '@/lib/regauge';
 import type {
@@ -696,8 +701,9 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v20 gives patterns a craft — see the back-fill in migrate().
-      version: 20,
+      // v21 repairs an achievements record saved before finishedByCraft existed. The bump is what
+      // makes the repair run at all on a store that already reached 20.
+      version: 21,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -826,15 +832,13 @@ export const useKnitwitStore = create<KnitwitState>()(
         // start empty: there is no history to reconstruct, because nothing was ever dated. An
         // existing project is active unless it has already been knitted to the end, which the
         // progress calculation still works out on its own.
-        if (version < 19 && state) {
+        // Unconditional, not gated on a version. A back-fill written after the store has already
+        // passed the version it checks for simply never runs — that is how finishedByCraft came to
+        // be undefined on a store already at 19. normaliseAchievements fills whatever is missing,
+        // so a field added later is repaired by this same line.
+        if (state) {
           const withAwards = state as { achievements?: unknown };
-          if (typeof withAwards.achievements !== 'object' || withAwards.achievements === null) {
-            withAwards.achievements = emptyAchievements();
-          }
-          const awards = withAwards.achievements as Record<string, unknown>;
-          if (typeof awards.finishedByCraft !== 'object' || awards.finishedByCraft === null) {
-            awards.finishedByCraft = {};
-          }
+          withAwards.achievements = normaliseAchievements(withAwards.achievements);
           for (const project of Object.values(state.projects ?? {})) {
             if (typeof project.status !== 'string') project.status = 'active';
           }

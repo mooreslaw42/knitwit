@@ -27,6 +27,27 @@ export function emptyAchievements(): Achievements {
   };
 }
 
+// Repair a persisted record into a complete one, whatever shape it was saved in.
+//
+// Called unconditionally by the migration rather than behind a version gate. Every new field on
+// Achievements would otherwise need its own gate, and a gate written after the store has already
+// passed that version never runs — which is exactly how `finishedByCraft` arrived undefined and
+// crashed the awards screen. Filling from a fresh record means a field added tomorrow is repaired
+// by the same line.
+export function normaliseAchievements(value: unknown): Achievements {
+  const base = emptyAchievements();
+  if (typeof value !== 'object' || value === null) return base;
+  const a = value as Partial<Achievements>;
+  return {
+    totals: { ...base.totals, ...(a.totals ?? {}) },
+    finishedByCategory: a.finishedByCategory ?? {},
+    finishedByCraft: a.finishedByCraft ?? {},
+    finishedByPattern: a.finishedByPattern ?? {},
+    days: Array.isArray(a.days) ? a.days : [],
+    earned: a.earned ?? {},
+  };
+}
+
 // Local, not UTC. A knitter in Amsterdam finishing at 00:30 has not started a new knitting day in
 // any sense they'd recognise, and toISOString() would say otherwise.
 export function localDate(at: Date = new Date()): string {

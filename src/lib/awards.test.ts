@@ -4,6 +4,7 @@ import {
   knittedToday,
   localDate,
   longestStreak,
+  normaliseAchievements,
   recordActivity,
   stitchesForRow,
 } from '@/lib/achievements';
@@ -224,5 +225,44 @@ describe('craft awards', () => {
   it('needs one of each for Two hands, not two of one', () => {
     expect(awardProgress(find('craft-both'), withCraft({ knit: 5 })).earned).toBe(false);
     expect(awardProgress(find('craft-both'), withCraft({ knit: 1, crochet: 1 })).earned).toBe(true);
+  });
+});
+
+// The crash this exists to prevent: a record saved before a field existed reaching code that
+// assumes it does. Gating the repair on a version the store had already passed is what let
+// finishedByCraft through as undefined.
+describe('normaliseAchievements', () => {
+  it('fills a field the saved record predates', () => {
+    const old = { ...emptyAchievements() } as Record<string, unknown>;
+    delete old.finishedByCraft;
+    expect(normaliseAchievements(old).finishedByCraft).toEqual({});
+  });
+
+  it('fills a totals key the saved record predates, keeping the ones it has', () => {
+    const old = {
+      ...emptyAchievements(),
+      totals: { rows: 12, stitches: 400 },
+    };
+    const fixed = normaliseAchievements(old);
+    expect(fixed.totals.rows).toBe(12);
+    expect(fixed.totals.projectsFrogged).toBe(0);
+  });
+
+  it('keeps everything a complete record already had', () => {
+    let a = recordActivity(emptyAchievements(), { rows: 4, stitches: 100 }, '2026-09-13');
+    a = { ...a, finishedByCraft: { crochet: 2 }, earned: { 'finish-1': '2026-09-13' } };
+    expect(normaliseAchievements(a)).toEqual(a);
+  });
+
+  it('survives nonsense rather than propagating it', () => {
+    expect(normaliseAchievements(null)).toEqual(emptyAchievements());
+    expect(normaliseAchievements('nope')).toEqual(emptyAchievements());
+    expect(normaliseAchievements({ days: 'not an array' }).days).toEqual([]);
+  });
+
+  // Every award has to survive a bare record, since that is what a fresh install has.
+  it('produces a record every award can be measured against', () => {
+    const a = normaliseAchievements({});
+    expect(() => AWARDS.forEach((award) => award.measure(a))).not.toThrow();
   });
 });
