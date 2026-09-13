@@ -100,7 +100,8 @@ export default function CounterScreen() {
     if (nextMarker !== undefined) {
       markerHint = `📍 Stitch marker at row ${nextMarker} — ${nextMarker - section.row} to go`;
     } else if (section.markers.length && section.row < section.totalRows) {
-      markerHint = `🎉 Final stretch — ${section.totalRows - section.row} rows to go`;
+      const left = section.totalRows - section.row;
+      markerHint = `🎉 Final stretch — ${left} ${left === 1 ? 'row' : 'rows'} to go`;
     }
   }
 
@@ -258,8 +259,14 @@ export default function CounterScreen() {
               </Pressable>
               <Pressable
                 onPress={() => changeRow(1)}
-                disabled={section.row >= section.totalRows}
-                style={[styles.cntBtnPlus, section.row >= section.totalRows && styles.disabled]}>
+                // Only locked while the bind-off prompt is still standing. Once it's been
+                // declined the knitter has said they aren't finished, so counting on has to work
+                // — the store grows the section to match.
+                disabled={section.row >= section.totalRows && !castOffDismissed}
+                style={[
+                  styles.cntBtnPlus,
+                  section.row >= section.totalRows && !castOffDismissed && styles.disabled,
+                ]}>
                 <ThemedText type="title" themeColor="white" style={styles.plusGlyph}>
                   +
                 </ThemedText>

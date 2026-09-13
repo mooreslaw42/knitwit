@@ -578,3 +578,62 @@ describe('recent sections', () => {
     expect(useKnitwitStore.getState().recentSections.length).toBeLessThanOrEqual(12);
   });
 });
+
+// The cast-off flow: reaching the last row prompts you to bind off, and "not yet" has to leave a
+// counter you can still use rather than one that stops dead.
+describe('finishing a section', () => {
+  const setup = () => {
+    useKnitwitStore.getState().setActiveSection('rowan', 0);
+    const s = useKnitwitStore.getState().projects.rowan.sections[0];
+    useKnitwitStore.setState({
+      projects: {
+        ...useKnitwitStore.getState().projects,
+        rowan: {
+          ...useKnitwitStore.getState().projects.rowan,
+          sections: [{ ...s, row: s.totalRows - 1, complete: false }, ...useKnitwitStore.getState().projects.rowan.sections.slice(1)],
+        },
+      },
+      castOffDismissed: false,
+    });
+    return useKnitwitStore.getState().projects.rowan.sections[0].totalRows;
+  };
+  const section = () => useKnitwitStore.getState().projects.rowan.sections[0];
+
+  it('stops at the last row while the bind-off prompt is still standing', () => {
+    const total = setup();
+    useKnitwitStore.getState().changeRow(1);
+    useKnitwitStore.getState().changeRow(1);
+    expect(section().row).toBe(total);
+    expect(section().totalRows).toBe(total);
+  });
+
+  // "Not yet" means the knitter isn't done — the counter has to keep going, not sit at the cap.
+  it('keeps counting past the planned total once bind-off is declined', () => {
+    const total = setup();
+    useKnitwitStore.getState().changeRow(1);
+    useKnitwitStore.getState().dismissCastOff();
+    useKnitwitStore.getState().changeRow(1);
+    expect(section().row).toBe(total + 1);
+    expect(section().totalRows).toBe(total + 1);
+  });
+
+  it('un-finishes a section ripped back below its last row', () => {
+    setup();
+    useKnitwitStore.getState().changeRow(1);
+    useKnitwitStore.getState().confirmCastOff();
+    expect(section().complete).toBe(true);
+    useKnitwitStore.getState().changeRow(-1);
+    // A section sitting short of its end must not still call itself finished.
+    expect(section().complete).toBe(false);
+  });
+
+  // Counting the last row used to record the finish, so tapping back and forward counted it again.
+  it('records a finish once, however often the last row is re-counted', () => {
+    setup();
+    const before = useKnitwitStore.getState().achievements.totals.projectsFinished;
+    useKnitwitStore.getState().changeRow(1);
+    useKnitwitStore.getState().changeRow(-1);
+    useKnitwitStore.getState().changeRow(1);
+    expect(useKnitwitStore.getState().achievements.totals.projectsFinished).toBe(before);
+  });
+});

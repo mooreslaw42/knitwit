@@ -570,11 +570,26 @@ export const useKnitwitStore = create<KnitwitState>()(
       },
 
       changeRow: (delta) => {
-        const { projects, patterns, activeProjectKey, activeSectionIndex, dismissedMarkerRow, achievements } =
-          get();
+        const {
+          projects,
+          activeProjectKey,
+          activeSectionIndex,
+          dismissedMarkerRow,
+          castOffDismissed,
+          achievements,
+        } = get();
         const project = projects[activeProjectKey];
         const section = project.sections[activeSectionIndex];
-        const nextRow = Math.min(section.totalRows, Math.max(0, section.row + delta));
+        // Saying "not yet" to binding off means the knitter isn't done — so counting on from the
+        // last row grows the section rather than stopping dead at a planned total that turned out
+        // to be short. Working to a measurement routinely needs more rows than the pattern says.
+        const extending = castOffDismissed && delta > 0 && section.row >= section.totalRows;
+        const totalRows = extending ? section.totalRows + delta : section.totalRows;
+        const nextRow = Math.min(totalRows, Math.max(0, section.row + delta));
+
+        // Ripping back below the end un-finishes the section. `complete` and `row` disagreeing is
+        // what let a counter sitting on row 15 of 16 announce itself as finished.
+        const complete = nextRow >= totalRows ? section.complete : false;
 
         // Only forward counts. Tapping back doesn't subtract — the row was knitted — and doesn't
         // add either. Each newly reached row is worth the stitches it actually contains.
@@ -583,21 +598,13 @@ export const useKnitwitStore = create<KnitwitState>()(
           earned = recordActivity(earned, { rows: 1, stitches: stitchesForRow(section, row) });
         }
 
-        const finishing =
-          nextRow >= section.totalRows &&
-          section.row < section.totalRows &&
-          project.sections.every((s, i) => (i === activeSectionIndex ? true : s.row >= s.totalRows));
-        if (finishing) {
-          earned = recordFinish(earned, project, project.patternId ? patterns[project.patternId] : null);
-        }
-
         set({
           projects: {
             ...projects,
             [activeProjectKey]: {
               ...project,
               sections: project.sections.map((s, i) =>
-                i === activeSectionIndex ? { ...s, row: nextRow } : s,
+                i === activeSectionIndex ? { ...s, row: nextRow, totalRows, complete } : s,
               ),
             },
           },
@@ -667,17 +674,20 @@ export const useKnitwitStore = create<KnitwitState>()(
       dismissCastOff: () => set({ castOffDismissed: true }),
 
       confirmCastOff: () => {
-        const { projects, activeProjectKey, activeSectionIndex } = get();
+        const { projects, patterns, activeProjectKey, activeSectionIndex, achievements } = get();
+        const project = projects[activeProjectKey];
+        const sections = project.sections.map((s, i) =>
+          i === activeSectionIndex ? { ...s, complete: true } : s,
+        );
+        // A finish is recorded here rather than when the last row is counted. Binding off is
+        // deliberate and happens once; counting the last row fired again every time the knitter
+        // tapped back over it and forward again, which inflated the finished count.
+        const finishing = sections.every((s) => s.complete);
         set({
-          projects: {
-            ...projects,
-            [activeProjectKey]: {
-              ...projects[activeProjectKey],
-              sections: projects[activeProjectKey].sections.map((s, i) =>
-                i === activeSectionIndex ? { ...s, complete: true } : s,
-              ),
-            },
-          },
+          projects: { ...projects, [activeProjectKey]: { ...project, sections } },
+          achievements: finishing
+            ? recordFinish(achievements, project, project.patternId ? patterns[project.patternId] : null)
+            : achievements,
         });
         get().stopTimer();
       },
@@ -717,9 +727,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v21 repairs an achievements record saved before finishedByCraft existed. The bump is what
-      // makes the repair run at all on a store that already reached 20.
-      version: 21,
+      // v22 also repairs sections marked complete while short of their last row.
+      version: 22,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -848,6 +857,15 @@ export const useKnitwitStore = create<KnitwitState>()(
         // start empty: there is no history to reconstruct, because nothing was ever dated. An
         // existing project is active unless it has already been knitted to the end, which the
         // progress calculation still works out on its own.
+        // A section marked complete while its row count says otherwise is a contradiction the
+        // counter read as "finished" — repaired rather than left to sit there confusing people.
+        for (const project of Object.values(state?.projects ?? {})) {
+          for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
+            if (section.complete && (section.row as number) < (section.totalRows as number)) {
+              section.complete = false;
+            }
+          }
+        }
         // Unconditional, not gated on a version. A back-fill written after the store has already
         // passed the version it checks for simply never runs — that is how finishedByCraft came to
         // be undefined on a store already at 19. normaliseAchievements fills whatever is missing,
