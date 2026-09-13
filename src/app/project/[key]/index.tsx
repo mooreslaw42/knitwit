@@ -86,6 +86,18 @@ export default function ProjectDetailScreen() {
             ) : (
               <ThemedText type="smallBold">No pattern linked</ThemedText>
             )}
+            {/* A project improvised without a pattern still has one in it — the sections, the row
+                counts, the chart. This is how it gets written down so it can be knitted again.
+                Offered on a project that already has a pattern too: a heavily-altered make is a
+                different pattern from the one it started as. */}
+            <Pressable
+              hitSlop={6}
+              style={styles.convertLink}
+              onPress={() => router.push(`/project/${key}/to-pattern`)}>
+              <ThemedText type="smallBold" themeColor="sageDeep">
+                {pattern ? 'Save my version as a new pattern →' : 'Save this as a pattern →'}
+              </ThemedText>
+            </Pressable>
           </Card>
 
           {/* Read-only here. Changing it is an edit, and frogging in particular is the kind of
@@ -179,6 +191,10 @@ const styles = StyleSheet.create({
   tagCard: {
     marginTop: Spacing.two,
     gap: 2,
+  },
+  convertLink: {
+    alignSelf: 'flex-start',
+    paddingTop: Spacing.two,
   },
   titleRow: {
     flexDirection: 'row',

@@ -1,3 +1,4 @@
+import { projectToPattern } from '@/lib/project-to-pattern';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // The store persists through AsyncStorage, which has no implementation under the jest-expo
@@ -660,5 +661,54 @@ describe('deleting a project', () => {
     useKnitwitStore.getState().deleteProject('rowan');
     expect(useKnitwitStore.getState().activeProjectKey).not.toBe('rowan');
     expect(useKnitwitStore.getState().projects[useKnitwitStore.getState().activeProjectKey]).toBeDefined();
+  });
+});
+
+describe('savePatternFromProject', () => {
+  const store = () => useKnitwitStore.getState();
+
+  const draft = () => {
+    const project = store().projects.clover;
+    return projectToPattern(project, { materials: store().materials, tools: store().tools }, null);
+  };
+
+  it('saves the pattern and links the project to it in one go', () => {
+    const id = store().savePatternFromProject('clover', draft());
+    expect(store().patterns[id]).toBeDefined();
+    expect(store().projects.clover.patternId).toBe(id);
+  });
+
+  // A project already linked to a pattern moves to the one it just produced — that's the point of
+  // saving your own version of a pattern you altered.
+  it('relinks a project that already had a pattern', () => {
+    const before = store().projects.meadow.patternId;
+    const id = store().savePatternFromProject('meadow', draft());
+    expect(id).not.toBe(before);
+    expect(store().projects.meadow.patternId).toBe(id);
+    // The pattern it came from is untouched.
+    expect(store().patterns[before!]).toBeDefined();
+  });
+
+  // updateProject re-derives a project's colours from the pattern it links to. Going through it
+  // here would repaint the project from its own colour and darken it a shade every time.
+  it('leaves the project looking exactly as it did', () => {
+    const before = store().projects.clover;
+    store().savePatternFromProject('clover', draft());
+    const after = store().projects.clover;
+    expect(after.color).toBe(before.color);
+    expect(after.colorDeep).toBe(before.colorDeep);
+    expect(after.sections).toEqual(before.sections);
+    expect(after.status).toBe(before.status);
+  });
+
+  it('counts as making a pattern', () => {
+    const before = store().achievements.totals.patternsCreated;
+    store().savePatternFromProject('clover', draft());
+    expect(store().achievements.totals.patternsCreated).toBe(before + 1);
+  });
+
+  it('still saves the pattern when the project has gone', () => {
+    const id = store().savePatternFromProject('nope', draft());
+    expect(store().patterns[id]).toBeDefined();
   });
 });

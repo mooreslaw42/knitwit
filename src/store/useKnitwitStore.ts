@@ -118,6 +118,7 @@ type KnitwitState = {
   saveTool: (id: string | null, data: Tool) => string;
   deleteTool: (id: string) => void;
   savePattern: (id: string | null, data: Pattern) => string;
+  savePatternFromProject: (projectKey: string, data: Pattern) => string;
   deletePattern: (id: string) => void;
   saveTechnique: (id: string | null, data: Technique) => string;
   deleteTechnique: (id: string) => void;
@@ -538,6 +539,23 @@ export const useKnitwitStore = create<KnitwitState>()(
           achievements: id ? get().achievements : bumpTotal(get().achievements, 'patternsCreated'),
         });
         return resolvedId;
+      },
+
+      // Writing a pattern out of a project and linking the two is one action, not two: a pattern
+      // saved but not linked leaves the knitter looking at a project that still says "No pattern
+      // linked" next to a library card that came from it.
+      //
+      // Deliberately not routed through updateProject, which re-derives the project's colours from
+      // the pattern it links to. Here the pattern took its accent from the project, so re-deriving
+      // would repaint the project from its own colour and shift it a shade darker.
+      savePatternFromProject: (projectKey, data) => {
+        const id = get().savePattern(null, data);
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (project) {
+          set({ projects: { ...projects, [projectKey]: { ...project, patternId: id } } });
+        }
+        return id;
       },
 
       deletePattern: (id) => {
