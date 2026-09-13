@@ -84,6 +84,24 @@ export function formatGauge(g: Gauge | null | undefined): string {
   return `${trim(g.stitches)} × ${trim(g.rows)} sts/rows per ${window}`;
 }
 
+// The window a knitter reading in this unit expects: 10cm, or 4in.
+export function defaultWindow(unit: LengthUnit): { width: number; height: number; unit: LengthUnit } {
+  return unit === 'inch' ? { width: 4, height: 4, unit } : { width: 10, height: 10, unit };
+}
+
+// Show a gauge in the unit the knitter prefers, whatever it was written in. This is a display
+// conversion only — the stored gauge is untouched, so the pattern's own numbers are never lost
+// and the arithmetic still runs on what was written.
+//
+// A gauge already in the preferred unit is shown exactly as written, decimals and all: restating
+// "22 sts per 4in" as "22.35 per 4.06in" because the window isn't a round number in the other
+// system would be worse than useless.
+export function formatGaugeIn(g: Gauge | null | undefined, unit: LengthUnit): string {
+  if (!isUsableGauge(g)) return '';
+  if (g.unit === unit) return formatGauge(g);
+  return formatGauge(convertGauge(g, defaultWindow(unit)));
+}
+
 // How many of the knitter's stitches stand in for one of the pattern's. Above 1 means their
 // fabric is finer, so the pattern's counts must go up to reach the same width.
 //

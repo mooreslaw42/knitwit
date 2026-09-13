@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentSectionIndexOf, projectProgress, sectionStatus } from '@/lib/knitwit-helpers';
-import { formatGauge } from '@/lib/gauge';
+import { formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function ProjectDetailScreen() {
@@ -17,6 +17,7 @@ export default function ProjectDetailScreen() {
   const pattern = useKnitwitStore((state) =>
     project?.patternId ? state.patterns[project.patternId] : null,
   );
+  const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 
   if (!project) return null;
 
@@ -53,16 +54,16 @@ export default function ProjectDetailScreen() {
             {pattern ? (
               <>
                 <ThemedText type="smallBold">{pattern.name}</ThemedText>
-                {formatGauge(pattern.gauge) ? (
+                {formatGaugeIn(pattern.gauge, unit) ? (
                   <ThemedText type="small" themeColor="inkSoft">
-                    {formatGauge(pattern.gauge)}
+                    {formatGaugeIn(pattern.gauge, unit)}
                   </ThemedText>
                 ) : null}
                 {/* Without this the counts would simply differ from the printed pattern with no
                     explanation, which reads as a bug rather than a feature. */}
                 {project.gauge ? (
                   <ThemedText type="small" themeColor="sageDeep">
-                    Worked at your gauge: {formatGauge(project.gauge.mine)}. Stitch counts here are
+                    Worked at your gauge: {formatGaugeIn(project.gauge.mine, unit)}. Stitch counts here are
                     yours, not the pattern&apos;s; row counts are unchanged.
                   </ThemedText>
                 ) : null}

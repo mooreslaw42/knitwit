@@ -11,7 +11,7 @@ import { CATEGORY_LABELS, TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { todayStarted } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
-import { formatGauge, isUsableGauge, stitchRatio } from '@/lib/gauge';
+import { formatGaugeIn, isUsableGauge, stitchRatio } from '@/lib/gauge';
 import type { Gauge } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
@@ -39,6 +39,7 @@ export default function NewProjectWizardScreen() {
   // Defaults to whatever swatch was recorded on the pattern, so a knitter who already swatched
   // doesn't type it twice. Null means "work it at the pattern's gauge".
   const [swatchGauge, setSwatchGauge] = useState<Gauge | null>(null);
+  const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 
   const selectedPattern = patternId ? patterns[patternId] : null;
   const patternMaterials = selectedPattern?.materials ?? [];
@@ -286,7 +287,7 @@ export default function NewProjectWizardScreen() {
             <View style={styles.field}>
               <GaugeField
                 label="Your swatch (optional)"
-                hint={`The pattern is written for ${formatGauge(selectedPattern?.gauge)}. If your swatch differs, Knitwit works out this project's stitch counts at your gauge instead — the pattern itself is left alone.`}
+                hint={`The pattern is written for ${formatGaugeIn(selectedPattern?.gauge, unit)}. If your swatch differs, Knitwit works out this project's stitch counts at your gauge instead — the pattern itself is left alone.`}
                 value={swatchGauge}
                 onChange={setSwatchGauge}
               />

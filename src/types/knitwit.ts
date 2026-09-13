@@ -24,6 +24,19 @@ export type Gauge = {
   unit: LengthUnit;
 };
 
+// Preferences that belong to the person, not to any pattern or project.
+//
+// Kept as one object rather than loose fields because that is the shape it needs to be in when
+// accounts arrive: today it is persisted with the rest of the local store, and it should then
+// move onto the user record and follow them between devices. Language belongs here too once
+// there is more than one to choose from — adding the setting before the translations would be a
+// control that does nothing.
+export type UserSettings = {
+  // The unit new gauges default to, and the one stored gauges are shown in. Storage is unaffected:
+  // a gauge is always kept as it was written, and converted at the point it is displayed.
+  gaugeUnit: LengthUnit;
+};
+
 export type Craft = {
   thickness: string;
   gauge: Gauge | null;

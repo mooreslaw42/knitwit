@@ -18,9 +18,9 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { patternSectionMarkers } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
-import { formatGauge } from '@/lib/gauge';
+import { formatGauge, formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Pattern, PatternCategory, PatternLevel } from '@/types/knitwit';
+import type { Gauge, LengthUnit, Pattern, PatternCategory, PatternLevel } from '@/types/knitwit';
 
 const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_ORDER.map((c) => ({
   value: c,
@@ -34,12 +34,19 @@ const LEVEL_OPTIONS: { value: PatternLevel; label: string }[] = [
   { value: 'advanced', label: 'Advanced' },
 ];
 
+function gaugeLine(g: Gauge | null, unit: LengthUnit): string {
+  const shown = formatGaugeIn(g, unit);
+  if (!shown || !g || g.unit === unit) return shown;
+  return `${shown}\nAs written: ${formatGauge(g)}`;
+}
+
 export default function PatternDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const pattern = useKnitwitStore((state) => state.patterns[id]);
   const savePattern = useKnitwitStore((state) => state.savePattern);
   const deletePattern = useKnitwitStore((state) => state.deletePattern);
+  const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Pattern | null>(null);
@@ -262,8 +269,11 @@ export default function PatternDetailScreen() {
               />
               <Field label="Sizes" value={(pattern.sizes ?? []).join(', ')} />
               <Field label="Needle / hook size" value={pattern.needleSize || pattern.weight} />
-              <Field label="Gauge" value={formatGauge(pattern.gauge)} />
-              <Field label="Your swatch" value={formatGauge(pattern.swatchGauge)} />
+              {/* Shown in the knitter's unit, with the pattern's own wording kept alongside when
+                  they differ — otherwise the screen and the printed pattern disagree and there's
+                  no way to tell which is right. */}
+              <Field label="Gauge" value={gaugeLine(pattern.gauge, unit)} />
+              <Field label="Your swatch" value={gaugeLine(pattern.swatchGauge, unit)} />
               <Field label="Instruction video" value={pattern.video} />
               <Field label="Imported file" value={pattern.sourceName} />
               <Field label="Imported text" value={pattern.sourceText} numberOfLines={4} />

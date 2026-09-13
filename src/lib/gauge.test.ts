@@ -1,6 +1,8 @@
 import {
   convertGauge,
+  defaultWindow,
   formatGauge,
+  formatGaugeIn,
   gaugeFields,
   hasRowGauge,
   isUsableGauge,
@@ -244,5 +246,36 @@ describe('rescaleStitches', () => {
 
   it('leaves a count alone when the gauges match', () => {
     expect(rescaleStitches(88, 1).rounded).toBe(88);
+  });
+});
+
+describe('formatGaugeIn', () => {
+  it('shows a gauge in the unit the knitter reads in', () => {
+    expect(formatGaugeIn(metric, 'inch')).toBe('22.35 × 30.48 sts/rows per 4in');
+    expect(formatGaugeIn(imperial, 'cm')).toBe('21.65 × 29.53 sts/rows per 10cm');
+  });
+
+  // Restating a gauge that's already in the right unit would turn "22 per 4in" into "22.35 per
+  // 4.06in" — technically the same fabric, and useless to read.
+  it('leaves a gauge already in that unit exactly as written', () => {
+    expect(formatGaugeIn(metric, 'cm')).toBe('22 × 30 sts/rows per 10cm');
+    expect(formatGaugeIn(imperial, 'inch')).toBe('22 × 30 sts/rows per 4in');
+  });
+
+  it('converts for reading without touching what was stored', () => {
+    const before = { ...metric };
+    formatGaugeIn(metric, 'inch');
+    expect(metric).toEqual(before);
+  });
+
+  it('is empty rather than misleading when nothing was stated', () => {
+    expect(formatGaugeIn(null, 'inch')).toBe('');
+  });
+});
+
+describe('defaultWindow', () => {
+  it('uses each system’s own convention', () => {
+    expect(defaultWindow('cm')).toEqual({ width: 10, height: 10, unit: 'cm' });
+    expect(defaultWindow('inch')).toEqual({ width: 4, height: 4, unit: 'inch' });
   });
 });

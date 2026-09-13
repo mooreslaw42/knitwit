@@ -4,7 +4,15 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { FormField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radii, Spacing } from '@/constants/theme';
-import { convertGauge, GAUGE_PRESETS, gaugeFields, makeGauge, presetIndexFor } from '@/lib/gauge';
+import {
+  convertGauge,
+  defaultWindow,
+  GAUGE_PRESETS,
+  gaugeFields,
+  makeGauge,
+  presetIndexFor,
+} from '@/lib/gauge';
+import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Gauge, LengthUnit } from '@/types/knitwit';
 
 type Window = { width: number; height: number; unit: LengthUnit };
@@ -28,7 +36,10 @@ export function GaugeField({
 }) {
   // The fields hold strings so a half-typed number ("2", "", "21,") never round-trips through a
   // parse and reappears as something the knitter didn't type.
-  const initial = gaugeFields(value);
+  // A gauge already recorded keeps the window it was written in; only a new one takes the
+  // knitter's preference, because that is the only case where nothing would be overridden.
+  const preferred = useKnitwitStore((state) => state.settings.gaugeUnit);
+  const initial = value ? gaugeFields(value) : { stitches: '', rows: '', window: defaultWindow(preferred) };
   const [stitches, setStitches] = useState(initial.stitches);
   const [rows, setRows] = useState(initial.rows);
   const [window, setWindow] = useState<Window>(initial.window);

@@ -3,7 +3,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Radii, Spacing } from '@/constants/theme';
 import { StyleSheet, View } from 'react-native';
 
-import { formatGauge, isUsableGauge, stitchesToCm, stitchRatio } from '@/lib/gauge';
+import { formatGaugeIn, isUsableGauge, stitchesToCm, stitchRatio } from '@/lib/gauge';
+import { useKnitwitStore } from '@/store/useKnitwitStore';
 import { describeIntervals, rescaleSection } from '@/lib/regauge';
 import type { Gauge, PatternRow, StitchMultiple } from '@/types/knitwit';
 
@@ -27,6 +28,7 @@ export function RegaugePanel({
   multiple: StitchMultiple | null;
   sizeIndex?: number;
 }) {
+  const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
   if (!isUsableGauge(patternGauge) || !isUsableGauge(swatchGauge)) return null;
 
   const ratio = stitchRatio(patternGauge, swatchGauge);
@@ -39,7 +41,7 @@ export function RegaugePanel({
     <Card style={styles.card}>
       <ThemedText type="smallBold">At your gauge</ThemedText>
       <ThemedText type="small" themeColor="inkSoft">
-        {formatGauge(swatchGauge)} against the pattern&apos;s {formatGauge(patternGauge)}.
+        {formatGaugeIn(swatchGauge, unit)} against the pattern&apos;s {formatGaugeIn(patternGauge, unit)}.
       </ThemedText>
 
       {same ? (

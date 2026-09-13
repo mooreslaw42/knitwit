@@ -26,6 +26,7 @@ import type {
   Project,
   Technique,
   Tool,
+  UserSettings,
 } from '@/types/knitwit';
 
 type KnitwitState = {
@@ -33,6 +34,9 @@ type KnitwitState = {
   // never flashes seed data before the user's real projects load.
   hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
+
+  settings: UserSettings;
+  updateSettings: (patch: Partial<UserSettings>) => void;
 
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
@@ -146,6 +150,11 @@ export const useKnitwitStore = create<KnitwitState>()(
     (set, get) => ({
       hasHydrated: false,
       setHasHydrated: (value) => set({ hasHydrated: value }),
+
+      // Metric by default: the app's own defaults, the seed data and the reference mockup are all
+      // written per 10cm.
+      settings: { gaugeUnit: 'cm' },
+      updateSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
 
       materials: SEED_MATERIALS,
       tools: SEED_TOOLS,
@@ -609,8 +618,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v17 records the gauge a project was cast on at — see the back-fill in migrate().
-      version: 17,
+      // v18 adds user settings — see the back-fill in migrate().
+      version: 18,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -732,6 +741,14 @@ export const useKnitwitStore = create<KnitwitState>()(
             for (const craft of Object.values(crafts ?? {})) migrateGauge(craft);
           }
         }
+        // v17 → v18: preferences move into the store. An existing install was working in
+        // centimetres, because that was the only thing the app could express.
+        if (version < 18 && state) {
+          const withSettings = state as { settings?: unknown };
+          if (typeof withSettings.settings !== 'object' || withSettings.settings === null) {
+            withSettings.settings = { gaugeUnit: 'cm' };
+          }
+        }
         // v16 → v17: a project records the gauge it was cast on at. Existing projects were worked
         // at the pattern's own gauge, which is what null means.
         if (version < 17 && state?.projects) {
@@ -788,6 +805,7 @@ export const useKnitwitStore = create<KnitwitState>()(
       // report. Undercounting an interrupted session is the safer failure. Accumulated time
       // already banked into section.seconds does persist.
       partialize: (state) => ({
+        settings: state.settings,
         materials: state.materials,
         tools: state.tools,
         patterns: state.patterns,

@@ -1,15 +1,26 @@
 import { useState } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { useKnitwitStore } from '@/store/useKnitwitStore';
+import type { LengthUnit } from '@/types/knitwit';
+
+// Settings live on the device today and should follow the knitter between them once there are
+// accounts — see UserSettings. Language belongs in this list when there is more than one.
+const UNITS: { id: LengthUnit; label: string }[] = [
+  { id: 'cm', label: 'Centimetres' },
+  { id: 'inch', label: 'Inches' },
+];
 
 export default function AccountScreen() {
   const [name, setName] = useState('Pim');
   const [savedName, setSavedName] = useState('Pim');
+  const settings = useKnitwitStore((state) => state.settings);
+  const updateSettings = useKnitwitStore((state) => state.updateSettings);
 
   return (
     <ThemedView style={styles.container}>
@@ -36,6 +47,30 @@ export default function AccountScreen() {
             Save
           </ThemedText>
         </PillButton>
+
+        <ThemedText type="smallBold" style={styles.label}>
+          Measurements
+        </ThemedText>
+        <ThemedText type="small" themeColor="inkSoft">
+          New gauges start in this unit, and gauges you&apos;ve already recorded are shown in it.
+          A pattern written in the other unit keeps its own numbers — nothing is rewritten, only
+          converted for reading.
+        </ThemedText>
+        <View style={styles.unitRow}>
+          {UNITS.map((u) => {
+            const on = settings.gaugeUnit === u.id;
+            return (
+              <Pressable
+                key={u.id}
+                onPress={() => updateSettings({ gaugeUnit: u.id })}
+                style={[styles.unitChip, on && styles.unitChipOn]}>
+                <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                  {u.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
       </SafeAreaView>
     </ThemedView>
   );
@@ -56,6 +91,20 @@ const styles = StyleSheet.create({
   },
   label: {
     marginTop: Spacing.three,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  unitChip: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
+  unitChipOn: {
+    backgroundColor: Colors.blushDeep,
   },
   input: {
     backgroundColor: Colors.white,
