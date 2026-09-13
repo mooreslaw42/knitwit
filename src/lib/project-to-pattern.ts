@@ -149,7 +149,10 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
       // the fallback was the only way to get one.
       description: s.description.trim() ? s.description : (from?.description ?? ''),
       rows: s.rows,
-      notes: s.notes,
+      rowNotes: s.rowNotes,
+      // Same rule as the description: the project's own wording wins, falling back to the source
+      // pattern only for a section the knitter never wrote anything on.
+      notes: s.notes.trim() ? s.notes : (from?.notes ?? ''),
       markers: s.markers,
       stitchMultiple: s.stitchMultiple ?? from?.stitchMultiple ?? null,
     };
@@ -173,6 +176,9 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
     video: project.video,
     sourceName: project.sourceName,
     sourceText: project.sourceText,
+    // Back the way they came. The project's own notes win; a project made from a pattern started
+    // with that pattern's, so this is either what the knitter wrote or what they left alone.
+    notes: project.notes,
     // Taken from the project so the pattern reads as the same thing in the library, and so
     // re-deriving the project's colours from it is a no-op.
     accentColor: project.color,

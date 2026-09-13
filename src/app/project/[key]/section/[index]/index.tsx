@@ -17,6 +17,7 @@ import {
   SectionKitEditor,
   toolLabel,
 } from '@/components/stash-picker';
+import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -38,6 +39,7 @@ export default function SectionDetailScreen() {
   const updateSection = useKnitwitStore((state) => state.updateSection);
   const deleteSection = useKnitwitStore((state) => state.deleteSection);
   const setSectionKit = useKnitwitStore((state) => state.setSectionKit);
+  const setSectionNotes = useKnitwitStore((state) => state.setSectionNotes);
   const seconds = useLiveSeconds(key, sectionIndex);
 
   const [editing, setEditing] = useState(false);
@@ -51,7 +53,7 @@ export default function SectionDetailScreen() {
 
   const status = sectionStatus(section);
   const pct = section.totalRows ? section.row / section.totalRows : 0;
-  const sortedNotes = [...section.notes].sort((a, b) => a.row - b.row);
+  const sortedNotes = [...section.rowNotes].sort((a, b) => a.row - b.row);
 
   const kit = {
     materialIds: section.materialIds,
@@ -198,6 +200,12 @@ export default function SectionDetailScreen() {
               </ThemedText>
             </Pressable>
           </Card>
+
+          <NotesCard
+            value={section.notes}
+            onChange={(notes) => setSectionNotes(key, sectionIndex, notes)}
+            hint="About this section. Saved as you type."
+          />
 
           {sortedNotes.length > 0 && (
             <>

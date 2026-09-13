@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
+import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
@@ -25,6 +26,7 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
+  const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
 
   if (!project) return null;
 
@@ -104,6 +106,12 @@ export default function ProjectDetailScreen() {
               {PROJECT_STATUS_LABELS[projectState(project)]}
             </ThemedText>
           </View>
+
+          <NotesCard
+            value={project.notes}
+            onChange={(notes) => setProjectNotes(key, notes)}
+            hint="About the whole project. Saved as you type."
+          />
 
           <View style={styles.sectionsHeader}>
             <ThemedText type="subtitle">Sections</ThemedText>

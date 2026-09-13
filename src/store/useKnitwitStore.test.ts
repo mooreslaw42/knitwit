@@ -143,7 +143,7 @@ describe('notes', () => {
   it('records a note against a row and closes the form', () => {
     useKnitwitStore.getState().openNoteForm();
     useKnitwitStore.getState().saveNote(12, 'Dropped a stitch here');
-    const note = activeSection().notes.at(-1);
+    const note = activeSection().rowNotes.at(-1);
     expect(note).toMatchObject({ row: 12, text: 'Dropped a stitch here' });
     expect(useKnitwitStore.getState().noteFormOpen).toBe(false);
   });
@@ -217,8 +217,8 @@ describe('createProject', () => {
     expect(project.sections[0].markers).toEqual(patterns.p1.sections[0].markers);
 
     // The single inherited note is re-keyed from the store's own sequence, not the template id.
-    const inheritedNote = project.sections[1].notes[0];
-    expect(inheritedNote.text).toBe(patterns.p1.sections[1].notes[0].text);
+    const inheritedNote = project.sections[1].rowNotes[0];
+    expect(inheritedNote.text).toBe(patterns.p1.sections[1].rowNotes[0].text);
     expect(inheritedNote.id).toBe(noteSeq);
     expect(useKnitwitStore.getState().noteSeq).toBe(noteSeq + 1);
   });
@@ -773,7 +773,7 @@ describe('a section’s yarn, tools and techniques', () => {
     expect(after.row).toBe(before.row);
     expect(after.totalRows).toBe(before.totalRows);
     expect(after.seconds).toBe(before.seconds);
-    expect(after.notes).toEqual(before.notes);
+    expect(after.rowNotes).toEqual(before.rowNotes);
   });
 
   it('leaves the other sections alone', () => {
@@ -967,7 +967,7 @@ describe('a project section’s instructions and chart', () => {
     const after = section();
     expect(after.row).toBe(before.row);
     expect(after.seconds).toBe(before.seconds);
-    expect(after.notes).toEqual(before.notes);
+    expect(after.rowNotes).toEqual(before.rowNotes);
     expect(after.materialIds).toEqual(before.materialIds);
   });
 
@@ -1193,5 +1193,171 @@ describe('improvising a project with planned sections', () => {
     const names = store().projects[key].sections.map((s) => s.name);
     expect(names).not.toContain('Invented');
     expect(names).toEqual(store().patterns[patternId].sections.map((s) => s.name));
+  });
+});
+
+describe('free-text notes', () => {
+  const store = () => useKnitwitStore.getState();
+
+  it('saves a project’s notes without a save step', () => {
+    store().setProjectNotes('clover', 'Ran out of yarn at row 40.');
+    expect(store().projects.clover.notes).toBe('Ran out of yarn at row 40.');
+  });
+
+  it('saves a section’s notes', () => {
+    store().setSectionNotes('clover', 0, 'Cable crosses every 8th row.');
+    expect(store().projects.clover.sections[0].notes).toBe('Cable crosses every 8th row.');
+  });
+
+  it('saves a pattern’s notes, and a pattern section’s', () => {
+    const [id] = Object.keys(store().patterns);
+    store().setPatternNotes(id, 'Errata: row 12 should read k2tog.');
+    store().setPatternSectionNotes(id, 0, 'Worked flat, not in the round.');
+    expect(store().patterns[id].notes).toBe('Errata: row 12 should read k2tog.');
+    expect(store().patterns[id].sections[0].notes).toBe('Worked flat, not in the round.');
+  });
+
+  // Row-pinned notes and free text are different things that used to share a name.
+  it('leaves the row-pinned notes alone', () => {
+    const before = store().projects.clover.sections[0].rowNotes;
+    store().setSectionNotes('clover', 0, 'anything');
+    expect(store().projects.clover.sections[0].rowNotes).toEqual(before);
+  });
+
+  it('shrugs off a project, pattern or section that is not there', () => {
+    const before = store().projects;
+    store().setProjectNotes('nope', 'x');
+    store().setSectionNotes('clover', 99, 'x');
+    store().setPatternNotes('nope', 'x');
+    store().setPatternSectionNotes('nope', 0, 'x');
+    expect(store().projects).toEqual(before);
+  });
+});
+
+describe('notes travelling between a pattern and a project', () => {
+  const store = () => useKnitwitStore.getState();
+
+  it('starts a project off with the pattern’s notes', () => {
+    const patternId = Object.entries(store().patterns).find(([, p]) => p.sections.length > 0)![0];
+    store().setPatternNotes(patternId, 'Knits large — go down a size.');
+    store().setPatternSectionNotes(patternId, 0, 'Cast on loosely.');
+
+    const key = store().createProject({
+      name: 'From a pattern',
+      startedOn: null,
+      craft: 'knit',
+      patternId,
+      totalRows: 60,
+    });
+    expect(store().projects[key].notes).toBe('Knits large — go down a size.');
+    expect(store().projects[key].sections[0].notes).toBe('Cast on loosely.');
+  });
+
+  // A project is a copy, not a view: what you scribble on your own make is yours.
+  it('does not write a project’s notes back to the pattern it came from', () => {
+    const patternId = Object.entries(store().patterns).find(([, p]) => p.sections.length > 0)![0];
+    store().setPatternNotes(patternId, 'Original.');
+    const key = store().createProject({
+      name: 'Mine',
+      startedOn: null,
+      craft: 'knit',
+      patternId,
+      totalRows: 60,
+    });
+    store().setProjectNotes(key, 'Changed my mind.');
+    expect(store().patterns[patternId].notes).toBe('Original.');
+  });
+
+  it('carries them back out when the project is saved as a pattern', () => {
+    store().setProjectNotes('clover', 'Blocked to 90cm.');
+    store().setSectionNotes('clover', 0, 'Two skeins, just.');
+    const project = store().projects.clover;
+    const draft = projectToPattern(
+      project,
+      { materials: store().materials, tools: store().tools, techniques: store().techniques },
+      null,
+    );
+    expect(draft.notes).toBe('Blocked to 90cm.');
+    expect(draft.sections[0].notes).toBe('Two skeins, just.');
+  });
+});
+
+// The rename this exists to survive: row-pinned notes were called `notes` until the plain
+// free-text field took the name. A saved store has an array sitting where a string now goes, and
+// every screen reads one or the other without checking.
+describe('hydrating a store saved before notes split in two', () => {
+  const persist = useKnitwitStore.persist;
+
+  const hydrate = async (payload: unknown) => {
+    await AsyncStorage.setItem('knitwit-store', JSON.stringify(payload));
+    await persist.rehydrate();
+    return useKnitwitStore.getState();
+  };
+
+  const oldNotes = [{ id: 1, row: 12, text: 'Dropped a stitch' }];
+
+  it('moves a project section’s row-pinned notes to rowNotes', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: {},
+        projects: {
+          p: {
+            name: 'Old',
+            patternId: null,
+            sections: [{ name: 'Main', notes: oldNotes, materialIds: [], toolIds: [] }],
+          },
+        },
+      },
+      version: 24,
+    });
+    expect(state.projects.p.sections[0].rowNotes).toEqual(oldNotes);
+    expect(state.projects.p.sections[0].notes).toBe('');
+  });
+
+  it('does the same for a pattern section', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: { pat: { sections: [{ name: 'Body', notes: oldNotes }] } },
+        projects: {},
+      },
+      // A different version so the pattern repair runs at all.
+      version: 23,
+    });
+    expect(state.patterns.pat.sections[0].rowNotes).toEqual(oldNotes);
+    expect(state.patterns.pat.sections[0].notes).toBe('');
+  });
+
+  it('gives a project and a pattern somewhere to write notes', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: { pat: { sections: [] } },
+        projects: { p: { name: 'Old', patternId: null, sections: [] } },
+      },
+      version: 23,
+    });
+    expect(state.projects.p.notes).toBe('');
+    expect(state.patterns.pat.notes).toBe('');
+  });
+
+  it('leaves notes that are already split alone', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: {},
+        projects: {
+          p: {
+            name: 'New',
+            patternId: null,
+            notes: 'project note',
+            sections: [
+              { name: 'Main', rowNotes: oldNotes, notes: 'section note', materialIds: [], toolIds: [] },
+            ],
+          },
+        },
+      },
+      version: 24,
+    });
+    expect(state.projects.p.notes).toBe('project note');
+    expect(state.projects.p.sections[0].notes).toBe('section note');
+    expect(state.projects.p.sections[0].rowNotes).toEqual(oldNotes);
   });
 });

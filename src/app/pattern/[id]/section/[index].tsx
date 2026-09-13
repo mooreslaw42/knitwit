@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SectionStitchEditor } from '@/components/section-stitch-editor';
+import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -16,6 +17,7 @@ export default function SectionStitchesScreen() {
 
   const pattern = useKnitwitStore((state) => state.patterns[id]);
   const savePattern = useKnitwitStore((state) => state.savePattern);
+  const setPatternSectionNotes = useKnitwitStore((state) => state.setPatternSectionNotes);
   const section = pattern?.sections[sectionIndex];
 
   // The pattern or section can be missing (deep link, or deleted in another tab).
@@ -29,6 +31,13 @@ export default function SectionStitchesScreen() {
           <ThemedText type="small" themeColor="inkSoft">
             {pattern.name} · stitch-by-stitch
           </ThemedText>
+
+          {/* Above the editor and outside its Save, for the same reason as everywhere else. */}
+          <NotesCard
+            value={section.notes}
+            onChange={(notes) => setPatternSectionNotes(id, sectionIndex, notes)}
+            hint="About this section. Saved as you type."
+          />
 
           <SectionStitchEditor
             initial={{

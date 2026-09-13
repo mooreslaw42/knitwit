@@ -249,10 +249,11 @@ type EditSection = {
   tools: string[]; // slot ids
   techniques: string[]; // technique ids
   description: string;
+  notes: string;
   // The structured stitch rows are carried through untouched here — they are authored/parsed and
   // edited on the dedicated stitch editor (Phase 3); this editor must not drop them on save.
   rows: PatternRow[];
-  notes: EditNote[];
+  rowNotes: EditNote[];
   markers: string[];
   // Kept as strings so a half-typed number never round-trips through a parse.
   multipleOf: string;
@@ -269,7 +270,8 @@ function sectionToEdit(s: PatternSection): EditSection {
     techniques: [...(s.techniques ?? [])],
     description: s.description ?? '',
     rows: s.rows ?? [],
-    notes: s.notes.map((n) => ({ id: n.id, row: n.row ? String(n.row) : '', text: n.text })),
+    rowNotes: s.rowNotes.map((n) => ({ id: n.id, row: n.row ? String(n.row) : '', text: n.text })),
+    notes: s.notes ?? '',
     markers: s.markers.map((m) => String(m)),
     multipleOf: s.stitchMultiple ? String(s.stitchMultiple.of) : '',
     multiplePlus: s.stitchMultiple ? String(s.stitchMultiple.plus) : '',
@@ -294,9 +296,10 @@ function sectionToPattern(s: EditSection): PatternSection {
     tools: [...s.tools],
     techniques: [...s.techniques],
     description: s.description,
+    notes: s.notes,
     rows: s.rows,
     stitchMultiple: multipleFrom(s),
-    notes: s.notes
+    rowNotes: s.rowNotes
       .filter((n) => n.text.trim())
       .map((n) => ({ id: n.id, row: Math.max(0, parseInt(n.row, 10) || 0), text: n.text.trim() })),
     markers: Array.from(
@@ -316,7 +319,8 @@ const BLANK_SECTION: EditSection = {
   techniques: [],
   description: '',
   rows: [],
-  notes: [],
+  rowNotes: [],
+  notes: '',
   markers: [],
 };
 
@@ -569,13 +573,13 @@ export function PatternSectionsEditor({
             <ThemedText type="smallBold" themeColor="inkSoft">
               Notes
             </ThemedText>
-            {section.notes.map((note, ni) => (
+            {section.rowNotes.map((note, ni) => (
               <View key={note.id} style={styles.rowLine}>
                 <TextInput
                   value={note.row}
                   onChangeText={(v) =>
                     updateSection(i, {
-                      notes: section.notes.map((n, idx) => (idx === ni ? { ...n, row: v } : n)),
+                      rowNotes: section.rowNotes.map((n, idx) => (idx === ni ? { ...n, row: v } : n)),
                     })
                   }
                   keyboardType="numeric"
@@ -587,7 +591,7 @@ export function PatternSectionsEditor({
                   value={note.text}
                   onChangeText={(v) =>
                     updateSection(i, {
-                      notes: section.notes.map((n, idx) => (idx === ni ? { ...n, text: v } : n)),
+                      rowNotes: section.rowNotes.map((n, idx) => (idx === ni ? { ...n, text: v } : n)),
                     })
                   }
                   placeholder="What to remember at this row"
@@ -597,7 +601,7 @@ export function PatternSectionsEditor({
                 <Pressable
                   hitSlop={8}
                   onPress={() =>
-                    updateSection(i, { notes: section.notes.filter((_, idx) => idx !== ni) })
+                    updateSection(i, { rowNotes: section.rowNotes.filter((_, idx) => idx !== ni) })
                   }>
                   <ThemedText type="default" themeColor="inkSoft">
                     ✕
@@ -608,7 +612,7 @@ export function PatternSectionsEditor({
             <AddLink
               label="+ Add note"
               onPress={() =>
-                updateSection(i, { notes: [...section.notes, { id: nextId++, row: '', text: '' }] })
+                updateSection(i, { rowNotes: [...section.rowNotes, { id: nextId++, row: '', text: '' }] })
               }
             />
           </View>

@@ -184,7 +184,8 @@ function normaliseSections(
         techniques: slotIds(s.usesTechniques, slots.techniques),
         description,
         rows,
-        notes: [],
+        rowNotes: [],
+        notes: '',
         markers: [],
         stitchMultiple: null,
       };
@@ -257,6 +258,7 @@ export function toImportedPattern(data: unknown): ImportedPattern {
       // The knitter's own swatch — never something an import can know.
       swatchGauge: null,
       sizes,
+    notes: '',
       materials,
       tools,
       techniques,

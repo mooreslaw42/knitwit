@@ -127,6 +127,12 @@ type KnitwitState = {
   // because it's a different gesture: name and rows are typed into a form and saved, this is
   // toggled on and off and takes effect there and then.
   setSectionKit: (projectKey: string, index: number, patch: Partial<SectionKit>) => void;
+  // Free-text notes, saved as they're typed. No Save button: a notes box that can lose what you
+  // wrote by navigating away is worse than no notes box.
+  setProjectNotes: (projectKey: string, notes: string) => void;
+  setSectionNotes: (projectKey: string, index: number, notes: string) => void;
+  setPatternNotes: (patternId: string, notes: string) => void;
+  setPatternSectionNotes: (patternId: string, index: number, notes: string) => void;
   // The written instructions and the chart read from them. Its own action because the stitch
   // editor owns all three together and hands them back as a set.
   setSectionStitches: (
@@ -281,9 +287,20 @@ function repairSectionKits(state: {
 
     // Fields a project section gained once it could hold everything a pattern section holds.
     // Shape-driven like the rest: absent means "predates this", not "version N".
+    if (typeof project.notes !== 'string') project.notes = (source?.notes as string | undefined) ?? '';
+
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
       if (typeof section.description !== 'string') section.description = '';
       if (!('stitchMultiple' in section)) section.stitchMultiple = null;
+      // Rescue before coercing, not after. Blanking `notes` to a string first and then looking
+      // for the array in it destroys every row-pinned note in the project — which is exactly what
+      // the first version of this did.
+      if (!Array.isArray(section.rowNotes) && Array.isArray(section.notes)) {
+        section.rowNotes = section.notes;
+        section.notes = '';
+      }
+      if (!Array.isArray(section.rowNotes)) section.rowNotes = [];
+      if (typeof section.notes !== 'string') section.notes = '';
     }
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
@@ -434,7 +451,8 @@ export const useKnitwitStore = create<KnitwitState>()(
           row: 0,
           complete: false,
           seconds: 0,
-          notes: [],
+          rowNotes: [],
+          notes: '',
           materialIds: [],
           toolIds: [],
           techniqueIds: [],
@@ -454,7 +472,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                 row: 0,
                 complete: false,
                 seconds: 0,
-                notes: ps.notes.map((n) => ({ id: nextNoteSeq++, row: n.row, text: n.text })),
+                rowNotes: ps.rowNotes.map((n) => ({ id: nextNoteSeq++, row: n.row, text: n.text })),
+                notes: ps.notes,
                 materialIds: ps.materials.map((slot) => slotMaterials[slot]).filter(Boolean),
                 toolIds: ps.tools.map((slot) => slotTools[slot]).filter(Boolean),
                 // A pattern names its techniques inline rather than pointing at the knitter's
@@ -501,6 +520,9 @@ export const useKnitwitStore = create<KnitwitState>()(
               video: pattern?.video ?? '',
               sourceName: pattern?.sourceName ?? '',
               sourceText: pattern?.sourceText ?? '',
+              // The pattern's notes come across as the project's own starting point. Editing them
+              // on the project never touches the pattern — a project is a copy, not a view.
+              notes: pattern?.notes ?? '',
               patternId,
               sizeIndex,
               status: 'active',
@@ -584,7 +606,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                   row: 0,
                   complete: false,
                   seconds: 0,
-                  notes: [],
+                  rowNotes: [],
+                  notes: '',
                   materialIds,
                   toolIds,
                   techniqueIds,
@@ -657,6 +680,38 @@ export const useKnitwitStore = create<KnitwitState>()(
             rows,
           })),
         ),
+
+      setProjectNotes: (projectKey, notes) => {
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (!project) return;
+        set({ projects: { ...projects, [projectKey]: { ...project, notes } } });
+      },
+
+      setSectionNotes: (projectKey, index, notes) =>
+        set(patchSection(get(), projectKey, index, (s) => ({ ...s, notes }))),
+
+      setPatternNotes: (patternId, notes) => {
+        const { patterns } = get();
+        const pattern = patterns[patternId];
+        if (!pattern) return;
+        set({ patterns: { ...patterns, [patternId]: { ...pattern, notes } } });
+      },
+
+      setPatternSectionNotes: (patternId, index, notes) => {
+        const { patterns } = get();
+        const pattern = patterns[patternId];
+        if (!pattern?.sections[index]) return;
+        set({
+          patterns: {
+            ...patterns,
+            [patternId]: {
+              ...pattern,
+              sections: pattern.sections.map((s, i) => (i === index ? { ...s, notes } : s)),
+            },
+          },
+        });
+      },
 
       deleteSection: (projectKey, index) => {
         const { projects, activeProjectKey, activeSectionIndex, timerKey } = get();
@@ -965,7 +1020,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...projects[activeProjectKey],
               sections: projects[activeProjectKey].sections.map((s, i) =>
                 i === activeSectionIndex
-                  ? { ...s, notes: [...s.notes, { id: noteSeq, row, text }] }
+                  ? { ...s, rowNotes: [...s.rowNotes, { id: noteSeq, row, text }] }
                   : s,
               ),
             },
@@ -1047,8 +1102,16 @@ export const useKnitwitStore = create<KnitwitState>()(
             for (const key of ['sections', 'materials', 'tools', 'techniques', 'sizes'] as const) {
               if (!Array.isArray(pattern[key])) pattern[key] = [];
             }
+            if (typeof pattern.notes !== 'string') pattern.notes = '';
             for (const section of pattern.sections as Record<string, unknown>[]) {
-              for (const key of ['materials', 'tools', 'techniques', 'notes', 'markers', 'rows'] as const) {
+              // Row-pinned notes were called `notes` until the plain free-text field took the
+              // name. Moved before the array back-fill below, which would otherwise blank them.
+              if (!Array.isArray(section.rowNotes) && Array.isArray(section.notes)) {
+                section.rowNotes = section.notes;
+                section.notes = '';
+              }
+              if (typeof section.notes !== 'string') section.notes = '';
+              for (const key of ['materials', 'tools', 'techniques', 'rowNotes', 'markers', 'rows'] as const) {
                 if (!Array.isArray(section[key])) section[key] = [];
               }
             }

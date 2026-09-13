@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { GaugeField } from '@/components/gauge-field';
+import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -60,6 +61,7 @@ export default function PatternDetailScreen() {
   const router = useRouter();
   const pattern = useKnitwitStore((state) => state.patterns[id]);
   const savePattern = useKnitwitStore((state) => state.savePattern);
+  const setPatternNotes = useKnitwitStore((state) => state.setPatternNotes);
   const deletePattern = useKnitwitStore((state) => state.deletePattern);
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 
@@ -162,6 +164,14 @@ export default function PatternDetailScreen() {
               </Pressable>
             )}
           </View>
+
+          {/* Outside the edit/view split on purpose: notes save as they're typed, so there is
+              nothing to put behind Edit and nothing to lose by leaving. */}
+          <NotesCard
+            value={pattern.notes}
+            onChange={(notes) => setPatternNotes(id, notes)}
+            hint="About the whole pattern. Saved as you type."
+          />
 
           {editing && draft ? (
             <>

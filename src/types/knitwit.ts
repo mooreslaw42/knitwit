@@ -239,7 +239,12 @@ export type PatternSection = {
   // The structured stitch-by-stitch-per-row model (Phase 2+). Empty until authored/parsed; the
   // counter and editor consume it, and stitch counts are derived from it, never stored.
   rows: PatternRow[];
-  notes: ProjectNote[];
+  // Notes pinned to a particular row, which is what the counter raises as you reach them. Named
+  // for what they are so that `notes` can mean the plain free-text field below.
+  rowNotes: ProjectNote[];
+  // Anything the knitter wants to say about this section as a whole — a reminder, a measurement,
+  // what went wrong last time. Not tied to a row and not the instructions.
+  notes: string;
   markers: number[];
   // Null means "no repeat to preserve" — rounding is then free to take the nearest stitch.
   stitchMultiple: StitchMultiple | null;
@@ -271,6 +276,9 @@ export type Pattern = {
   // both have to survive. A project will snapshot this when it's created.
   swatchGauge: Gauge | null;
   favorited: boolean;
+  // The knitter's own notes about the pattern as a whole — distinct from sourceText, which is the
+  // document it came from. A project made from this pattern starts with a copy.
+  notes: string;
   level: PatternLevel;
   sizes: string[];
   materials: PatternMaterial[];
@@ -285,7 +293,9 @@ export type ProjectSection = {
   row: number;
   complete: boolean;
   seconds: number;
-  notes: ProjectNote[];
+  rowNotes: ProjectNote[];
+  // Free text about the section as a whole, carried to and from the pattern it came from.
+  notes: string;
   // What this section is worked with, as ids into the knitter's own stash — Material, Tool and
   // Technique in the store. Lists, because a pattern section already carries lists and a real
   // section genuinely uses more than one of each: a yoke in two colours, a body swapped from
@@ -333,6 +343,10 @@ export type Project = {
   video: string;
   sourceName: string;
   sourceText: string;
+  // Copied from the pattern when the project is cast on, and copied back if the project is ever
+  // saved as a pattern of its own. Yours to change either way — editing it here never touches the
+  // pattern in the library.
+  notes: string;
   patternId: string | null;
   // Which of the pattern's sizes this project is being knitted in. Every per-size number is
   // resolved against this when the project is created, so the project itself holds plain numbers.

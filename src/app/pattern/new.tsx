@@ -69,6 +69,7 @@ function blankPattern(): Pattern {
     gauge: null,
     swatchGauge: null,
     favorited: false,
+    notes: '',
     level: 'intermediate',
     sizes: [],
     sourceName: '',
