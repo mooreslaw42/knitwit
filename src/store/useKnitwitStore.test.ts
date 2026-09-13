@@ -382,6 +382,65 @@ describe('createProject', () => {
     expect(project.sections[0].rows[0].stitches[0].count).toBe(4);
   });
 
+  // G5: the knitter's gauge is resolved once, at creation, exactly like sizeIndex — so nothing in
+  // the counter has to know about gauge, and a pattern edited later can't re-scale a project
+  // already on the needles.
+  it('resolves the knitter’s gauge into the project it creates', () => {
+    const { patterns } = useKnitwitStore.getState();
+    useKnitwitStore.setState({
+      patterns: {
+        ...patterns,
+        p1: {
+          ...patterns.p1,
+          gauge: { stitches: 20, rows: 28, width: 10, height: 10, unit: 'cm' },
+          sections: [
+            { ...patterns.p1.sections[0], castOn: 40, rows: [], stitchMultiple: null },
+            ...patterns.p1.sections.slice(1),
+          ],
+        },
+      },
+    });
+
+    const key = useKnitwitStore.getState().createProject({
+      name: 'Looser',
+      started: '',
+      patternId: 'p1',
+      totalRows: 10,
+      // Half the pattern's stitch gauge, so every count halves.
+      swatchGauge: { stitches: 10, rows: 28, width: 10, height: 10, unit: 'cm' },
+    });
+    const project = useKnitwitStore.getState().projects[key];
+    expect(project.sections[0].castOn).toBe(20);
+    // Both gauges are snapshotted, so editing the pattern later can't move this project.
+    expect(project.gauge).toEqual({
+      pattern: { stitches: 20, rows: 28, width: 10, height: 10, unit: 'cm' },
+      mine: { stitches: 10, rows: 28, width: 10, height: 10, unit: 'cm' },
+    });
+  });
+
+  it('leaves a project at the pattern’s own numbers when no swatch is given', () => {
+    const { patterns } = useKnitwitStore.getState();
+    useKnitwitStore.setState({
+      patterns: {
+        ...patterns,
+        p1: {
+          ...patterns.p1,
+          gauge: { stitches: 20, rows: 28, width: 10, height: 10, unit: 'cm' },
+          sections: [
+            { ...patterns.p1.sections[0], castOn: 40, rows: [], stitchMultiple: null },
+            ...patterns.p1.sections.slice(1),
+          ],
+        },
+      },
+    });
+    const key = useKnitwitStore
+      .getState()
+      .createProject({ name: 'As written', started: '', patternId: 'p1', totalRows: 10 });
+    const project = useKnitwitStore.getState().projects[key];
+    expect(project.sections[0].castOn).toBe(40);
+    expect(project.gauge).toBeNull();
+  });
+
   it('falls back to a single section for a pattern that defines none', () => {
     const key = useKnitwitStore
       .getState()

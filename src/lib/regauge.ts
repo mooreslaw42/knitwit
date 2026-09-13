@@ -1,6 +1,6 @@
 import { rescaleStitches, roundToMultiple, type StitchMultiple } from '@/lib/gauge';
 import { rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
-import type { PatternRow } from '@/types/knitwit';
+import type { PatternRow, StitchSide } from '@/types/knitwit';
 
 // Re-gauging a section: what its numbers become when the knitter's fabric isn't the pattern's.
 //
@@ -212,4 +212,103 @@ export function rescaleSection(
     runs,
     issues: runs.flatMap((r) => r.issues),
   };
+}
+
+export type RegaugedSection = {
+  castOn: number;
+  rows: PatternRow[];
+  // False when the rebuild couldn't be trusted and the pattern's own chart was kept instead.
+  applied: boolean;
+  issues: string[];
+};
+
+const cloneRow = (row: PatternRow, side: StitchSide, seq: number): PatternRow => ({
+  ...row,
+  id: `rg${seq}`,
+  side,
+  // Markers belong to rows the knitter set them on; a rebuilt row is not that row.
+  marker: false,
+  stitches: row.stitches.map((g, i) => ({ ...g, id: `rg${seq}-${i}` })),
+});
+
+// Rebuild a section's chart at the knitter's gauge.
+//
+// The cast-on alone isn't enough. Most groups are span-based — "knit to last 1" absorbs a
+// different stitch count on its own — but the *number* of shaping rows has to change too, or the
+// running count arrives somewhere the pattern never intended. So the shaping rows are laid out
+// again at their new spacing, using the section's own rows as templates rather than inventing any.
+//
+// The result is checked before it's returned. If the rebuilt chart doesn't reconcile to the count
+// the rescale aimed at, the pattern's chart is kept and the caller is told — a project that
+// silently disagrees with itself is worse than one that hasn't been re-gauged.
+export function regaugeSectionRows(
+  rows: PatternRow[],
+  castOn: number,
+  ratio: number,
+  multiple?: StitchMultiple | null,
+  sizeIndex = 0,
+): RegaugedSection {
+  const plan = rescaleSection(rows, castOn, ratio, multiple, sizeIndex);
+  const keep = (issues: string[]): RegaugedSection => ({
+    castOn: plan.castOn.to,
+    rows,
+    applied: false,
+    issues,
+  });
+
+  if (plan.runs.length === 0) {
+    // Nothing shapes, so the spans do all the work and the chart needs no rebuilding.
+    return { castOn: plan.castOn.to, rows, applied: true, issues: plan.issues };
+  }
+
+  let seq = 0;
+  const out: PatternRow[] = [];
+  let cursor = 0;
+
+  for (const r of plan.runs) {
+    for (let i = cursor; i < r.run.from; i++) out.push(rows[i]);
+
+    const shaping = rows[r.run.shapingRows[0]];
+    const plains = rows
+      .slice(r.run.from, r.run.to + 1)
+      .filter((_, i) => !r.run.shapingRows.includes(r.run.from + i));
+    const needsPlain = r.intervals.some((iv) => iv.every > 1);
+    if (needsPlain && plains.length === 0) {
+      return keep([
+        ...plan.issues,
+        `Rows ${r.run.from + 1}–${r.run.to + 1}: every row shapes, so there's no plain row to space them with.`,
+      ]);
+    }
+
+    // Sides keep alternating across the rebuild; a plain template of the right side is preferred
+    // so a wrong-side row stays purl rather than becoming knit.
+    let side: StitchSide = r.run.from > 0 ? (rows[r.run.from - 1].side === 'RS' ? 'WS' : 'RS') : shaping.side;
+    const plainFor = (s: StitchSide) => plains.find((p) => p.side === s) ?? plains[0];
+
+    for (const iv of r.intervals) {
+      for (let t = 0; t < iv.times; t++) {
+        out.push(cloneRow(shaping, side, seq++));
+        side = side === 'RS' ? 'WS' : 'RS';
+        for (let k = 1; k < iv.every; k++) {
+          out.push(cloneRow(plainFor(side), side, seq++));
+          side = side === 'RS' ? 'WS' : 'RS';
+        }
+      }
+    }
+    cursor = r.run.to + 1;
+  }
+  for (let i = cursor; i < rows.length; i++) out.push(rows[i]);
+
+  // The same check the parser gets: does the chart actually arrive where the rescale said?
+  const before = sectionRowCounts(out, plan.castOn.to, sizeIndex);
+  const final =
+    out.length > 0 ? rowStitchesAfter(out[out.length - 1], before[out.length - 1], sizeIndex) : plan.castOn.to;
+  if (final !== plan.finalStitches.to) {
+    return keep([
+      ...plan.issues,
+      `Re-gauged chart ends on ${final} sts, not the ${plan.finalStitches.to} the rescale aimed at — keeping the pattern's own rows.`,
+    ]);
+  }
+
+  return { castOn: plan.castOn.to, rows: out, applied: true, issues: plan.issues };
 }

@@ -58,6 +58,14 @@ export default function ProjectDetailScreen() {
                     {formatGauge(pattern.gauge)}
                   </ThemedText>
                 ) : null}
+                {/* Without this the counts would simply differ from the printed pattern with no
+                    explanation, which reads as a bug rather than a feature. */}
+                {project.gauge ? (
+                  <ThemedText type="small" themeColor="sageDeep">
+                    Worked at your gauge: {formatGauge(project.gauge.mine)}. Stitch counts here are
+                    yours, not the pattern&apos;s; row counts are unchanged.
+                  </ThemedText>
+                ) : null}
               </>
             ) : (
               <ThemedText type="smallBold">No pattern linked</ThemedText>

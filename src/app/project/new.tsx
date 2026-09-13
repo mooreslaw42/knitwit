@@ -4,12 +4,15 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CATEGORY_LABELS, TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { todayStarted } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
+import { formatGauge, isUsableGauge, stitchRatio } from '@/lib/gauge';
+import type { Gauge } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 type StepId = 'basics' | 'pattern' | 'match' | 'plan';
@@ -33,6 +36,9 @@ export default function NewProjectWizardScreen() {
   const [slotTools, setSlotTools] = useState<Record<string, string>>({});
   // Which of the pattern's sizes this project is knitted in; every per-size number resolves to it.
   const [sizeIndex, setSizeIndex] = useState(0);
+  // Defaults to whatever swatch was recorded on the pattern, so a knitter who already swatched
+  // doesn't type it twice. Null means "work it at the pattern's gauge".
+  const [swatchGauge, setSwatchGauge] = useState<Gauge | null>(null);
 
   const selectedPattern = patternId ? patterns[patternId] : null;
   const patternMaterials = selectedPattern?.materials ?? [];
@@ -50,6 +56,16 @@ export default function NewProjectWizardScreen() {
     { id: 'plan', label: hasSections ? 'Sections' : 'Rows' },
   ];
   const current = steps[step] ?? steps[steps.length - 1];
+  // A plain statement of what accepting this will do, before it is done.
+  const previewRatio =
+    selectedPattern?.gauge && swatchGauge ? stitchRatio(selectedPattern.gauge, swatchGauge) : null;
+  const regaugeNote =
+    previewRatio == null
+      ? ''
+      : Math.abs(previewRatio - 1) < 0.0005
+        ? 'That matches the pattern — nothing will change.'
+        : `Stitch counts will be scaled by ×${Math.round(previewRatio * 1000) / 1000}. Row counts stay as written; work to the measurement.`;
+
   const isLast = step === steps.length - 1;
 
   // The original refuses to leave the first step without a name, since an unnamed project is
@@ -110,6 +126,7 @@ export default function NewProjectWizardScreen() {
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
       sizeIndex,
+      swatchGauge,
       slotMaterials,
       slotTools,
     });
@@ -260,6 +277,24 @@ export default function NewProjectWizardScreen() {
                   </Pressable>
                 ))}
               </View>
+            </View>
+          )}
+
+          {/* Offered only when the pattern states a gauge — without one there is nothing to
+              compare against, and asking would imply otherwise. */}
+          {current.id === 'plan' && isUsableGauge(selectedPattern?.gauge) && (
+            <View style={styles.field}>
+              <GaugeField
+                label="Your swatch (optional)"
+                hint={`The pattern is written for ${formatGauge(selectedPattern?.gauge)}. If your swatch differs, Knitwit works out this project's stitch counts at your gauge instead — the pattern itself is left alone.`}
+                value={swatchGauge}
+                onChange={setSwatchGauge}
+              />
+              {regaugeNote ? (
+                <ThemedText type="small" themeColor="sageDeep">
+                  {regaugeNote}
+                </ThemedText>
+              ) : null}
             </View>
           )}
 

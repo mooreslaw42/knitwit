@@ -238,6 +238,10 @@ export type Project = {
   // Which of the pattern's sizes this project is being knitted in. Every per-size number is
   // resolved against this when the project is created, so the project itself holds plain numbers.
   sizeIndex: number;
+  // Both gauges as they stood when the project was cast on. The pattern's is snapshotted too,
+  // because a pattern can be edited afterwards and a project already on the needles must not
+  // silently re-scale underneath the knitter. Null means it was worked at the pattern's gauge.
+  gauge: { pattern: Gauge; mine: Gauge } | null;
   // Maps a pattern material/tool slot id to one of the user's own material/tool ids — how a
   // generic pattern requirement is resolved to the actual stash item for this project.
   slotMaterials?: Record<string, string>;

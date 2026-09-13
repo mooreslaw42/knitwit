@@ -15,7 +15,18 @@ import {
   patternSectionMarkers,
   sizeValue,
 } from '@/lib/knitwit-helpers';
-import type { Material, Pattern, Project, Technique, Tool } from '@/types/knitwit';
+import { stitchRatio } from '@/lib/gauge';
+import { regaugeSectionRows } from '@/lib/regauge';
+import type {
+  Gauge,
+  Material,
+  Pattern,
+  PatternRow,
+  PatternSection,
+  Project,
+  Technique,
+  Tool,
+} from '@/types/knitwit';
 
 type KnitwitState = {
   // False until the saved state has been read back off the device. The UI waits on this so it
@@ -52,6 +63,10 @@ type KnitwitState = {
     totalRows: number;
     // Which of the pattern's sizes this project is being knitted in.
     sizeIndex?: number;
+    // The knitter's swatch gauge. When it differs from the pattern's, the sections below are
+    // resolved to it — cast-ons rescaled and shaping redistributed — so the counter works in the
+    // knitter's numbers rather than the pattern's.
+    swatchGauge?: Gauge | null;
     // Chosen mappings from the pattern's generic material/tool slots to the user's own stash.
     slotMaterials?: Record<string, string>;
     slotTools?: Record<string, string>;
@@ -94,6 +109,31 @@ type KnitwitState = {
   toggleFavorite: (patternId: string) => void;
 };
 
+// A pattern section becomes a project section: per-size numbers resolved to the one size, then —
+// if the knitter's gauge differs — the chart re-gauged. Both are one-time resolutions, so from
+// here on the project holds plain numbers that nothing recomputes.
+function resolveSection(
+  ps: PatternSection,
+  sizeIndex: number,
+  ratio: number | null,
+): { castOn: number; rows: PatternRow[] } {
+  const sized = ps.rows.map((r) => ({
+    ...r,
+    stitches: r.stitches.map((g) => ({
+      ...g,
+      count: g.count == null ? null : sizeValue(g.count, sizeIndex),
+    })),
+  }));
+  const castOn = sizeValue(ps.castOn, sizeIndex);
+  if (ratio == null) return { castOn, rows: sized };
+
+  // regaugeSectionRows validates its own rebuild and hands back the pattern's rows unchanged if it
+  // couldn't stand behind the result — so a project is never stamped from a chart that doesn't
+  // reconcile with its own cast-on.
+  const out = regaugeSectionRows(sized, castOn, ratio, ps.stitchMultiple);
+  return { castOn: out.castOn, rows: out.rows };
+}
+
 function clampSectionIndex(projects: Record<string, Project>, projectKey: string, index: number) {
   const n = projects[projectKey]?.sections.length ?? 0;
   if (!n) return 0;
@@ -135,6 +175,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         patternId,
         totalRows,
         sizeIndex = 0,
+        swatchGauge = null,
         slotMaterials = {},
         slotTools = {},
       }) => {
@@ -152,6 +193,12 @@ export const useKnitwitStore = create<KnitwitState>()(
         // with no sections) still starts with a single countable section.
         let nextNoteSeq = noteSeq;
         const patternSections = pattern?.sections ?? [];
+        // Resolved once, here, rather than recomputed on every render of the counter — the same
+        // choice as sizeIndex, and for the same reason: a project on the needles should not shift
+        // underneath the knitter.
+        const ratio =
+          pattern?.gauge && swatchGauge ? stitchRatio(pattern.gauge, swatchGauge) : null;
+        const regauged = ratio != null && Math.abs(ratio - 1) > 0.0005 ? ratio : null;
         const sections =
           patternSections.length > 0
             ? patternSections.map((ps) => ({
@@ -169,14 +216,7 @@ export const useKnitwitStore = create<KnitwitState>()(
                 // progress alone. Deep-cloned so editing one never mutates the other, and every
                 // per-size number is resolved to the one size this project is being knitted in —
                 // from here on the project holds plain numbers.
-                castOn: sizeValue(ps.castOn, sizeIndex),
-                rows: ps.rows.map((r) => ({
-                  ...r,
-                  stitches: r.stitches.map((g) => ({
-                    ...g,
-                    count: g.count == null ? null : sizeValue(g.count, sizeIndex),
-                  })),
-                })),
+                ...resolveSection(ps, sizeIndex, regauged),
               }))
             : [
                 {
@@ -204,6 +244,9 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...deriveProjectColors(accent),
               patternId,
               sizeIndex,
+              gauge: regauged && pattern?.gauge && swatchGauge
+                ? { pattern: pattern.gauge, mine: swatchGauge }
+                : null,
               slotMaterials,
               slotTools,
               sections,
@@ -566,8 +609,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v16 adds the fields re-gauging needs — see the back-fill in migrate().
-      version: 16,
+      // v17 records the gauge a project was cast on at — see the back-fill in migrate().
+      version: 17,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -687,6 +730,13 @@ export const useKnitwitStore = create<KnitwitState>()(
             migrateGauge(material);
             const crafts = material.crafts as Record<string, Record<string, unknown>> | undefined;
             for (const craft of Object.values(crafts ?? {})) migrateGauge(craft);
+          }
+        }
+        // v16 → v17: a project records the gauge it was cast on at. Existing projects were worked
+        // at the pattern's own gauge, which is what null means.
+        if (version < 17 && state?.projects) {
+          for (const project of Object.values(state.projects)) {
+            if (!('gauge' in project)) project.gauge = null;
           }
         }
         // v12 → v13: a project records which size it is being knitted in. Existing projects

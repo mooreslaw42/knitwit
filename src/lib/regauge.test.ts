@@ -2,9 +2,11 @@ import {
   describeIntervals,
   detectShapingRuns,
   distributeShaping,
+  regaugeSectionRows,
   rescaleRun,
   rescaleSection,
 } from '@/lib/regauge';
+import { rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup } from '@/types/knitwit';
 
 let n = 0;
@@ -234,5 +236,69 @@ describe('rescaleSection', () => {
     expect(out.castOn.to).toBe(30);
     expect(out.finalStitches.to).toBe(30);
     expect(out.runs).toEqual([]);
+  });
+});
+
+describe('regaugeSectionRows', () => {
+  // Three increases spread over seven rows, +2 each: 30 → 36.
+  const rows = [plainRow(), incRow(), plainRow(), incRow(), plainRow(), incRow(), plainRow()];
+
+  it('rebuilds the chart so the running count still reconciles', () => {
+    const out = regaugeSectionRows(rows, 30, 0.6);
+    expect(out.applied).toBe(true);
+    expect(out.castOn).toBe(18);
+    // The rebuild is only trustworthy because it was checked; assert the check's subject directly.
+    const before = sectionRowCounts(out.rows, out.castOn);
+    const final = rowStitchesAfter(out.rows[out.rows.length - 1], before[out.rows.length - 1]);
+    expect(final).toBe(22);
+  });
+
+  it('changes how many rows shape, not just the cast-on', () => {
+    const shaping = (rs: PatternRow[], castOn: number) => {
+      const before = sectionRowCounts(rs, castOn);
+      return rs.filter((r, i) => rowStitchesAfter(r, before[i]) !== before[i]).length;
+    };
+    expect(shaping(rows, 30)).toBe(3);
+    const out = regaugeSectionRows(rows, 30, 0.6);
+    expect(shaping(out.rows, out.castOn)).toBe(2);
+  });
+
+  it('keeps sides alternating through the rebuild', () => {
+    const out = regaugeSectionRows(rows, 30, 0.6);
+    for (let i = 1; i < out.rows.length; i++) {
+      expect(out.rows[i].side).not.toBe(out.rows[i - 1].side);
+    }
+  });
+
+  it('gives every rebuilt row and stitch group a fresh id', () => {
+    const out = regaugeSectionRows(rows, 30, 0.6);
+    const ids = out.rows.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const groupIds = out.rows.flatMap((r) => r.stitches.map((g) => g.id));
+    expect(new Set(groupIds).size).toBe(groupIds.length);
+  });
+
+  it('leaves a section with no shaping alone — the spans absorb the change themselves', () => {
+    const plain = [plainRow(), plainRow(), plainRow()];
+    const out = regaugeSectionRows(plain, 40, 0.75);
+    expect(out.castOn).toBe(30);
+    expect(out.rows).toBe(plain);
+    expect(out.applied).toBe(true);
+  });
+
+  it('changes nothing when the gauges match', () => {
+    const out = regaugeSectionRows(rows, 30, 1);
+    expect(out.castOn).toBe(30);
+    const before = sectionRowCounts(out.rows, 30);
+    expect(rowStitchesAfter(out.rows[out.rows.length - 1], before[out.rows.length - 1])).toBe(36);
+  });
+
+  // The fallback that makes the rest safe to ship: a rebuild it can't stand behind isn't applied.
+  it('keeps the pattern’s own chart when there is no plain row to space the shaping with', () => {
+    const allShaping = [incRow(), incRow(), incRow(), incRow()];
+    const out = regaugeSectionRows(allShaping, 30, 0.5);
+    expect(out.applied).toBe(false);
+    expect(out.rows).toBe(allShaping);
+    expect(out.issues.join(' ')).toContain('no plain row');
   });
 });
