@@ -11,6 +11,12 @@ import {
   ProgressBar,
   StatusBadge,
 } from '@/components/knitwit-ui';
+import {
+  materialLabel,
+  MaterialPicker,
+  toolLabel,
+  ToolPicker,
+} from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -38,11 +44,16 @@ export default function SectionDetailScreen() {
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
   const updateSection = useKnitwitStore((state) => state.updateSection);
   const deleteSection = useKnitwitStore((state) => state.deleteSection);
+  const setSectionMaterial = useKnitwitStore((state) => state.setSectionMaterial);
+  const setSectionTool = useKnitwitStore((state) => state.setSectionTool);
   const seconds = useLiveSeconds(key, sectionIndex);
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftRows, setDraftRows] = useState('');
+  // Only one picker open at a time — two dropdowns unfurled at once on a phone leaves nothing of
+  // the section itself on screen.
+  const [picking, setPicking] = useState<'material' | 'tool' | null>(null);
 
   if (!project) return null;
   const section = project.sections[sectionIndex];
@@ -126,22 +137,49 @@ export default function SectionDetailScreen() {
             <ThemedText type="smallBold">{formatClock(seconds)}</ThemedText>
           </Card>
 
+          {/* Tap the card to open the picker. These two read as buttons — "+ Add material" — and
+              for a long time weren't: nothing at all was wired behind them, and a section's yarn
+              and needles could only ever be set by the pattern a project was stamped from. */}
           <Card style={styles.card}>
-            <ThemedText type="small" themeColor="inkSoft">
-              Material
-            </ThemedText>
-            <ThemedText type="smallBold">
-              {material ? `${material.brand} — ${material.colorName}` : '+ Add material'}
-            </ThemedText>
+            {picking === 'material' ? (
+              <MaterialPicker
+                value={section.materialId}
+                onChange={(id) => {
+                  setSectionMaterial(key, sectionIndex, id);
+                  setPicking(null);
+                }}
+              />
+            ) : (
+              <Pressable style={styles.pickRow} onPress={() => setPicking('material')}>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Material
+                </ThemedText>
+                <ThemedText type="smallBold" themeColor={material ? 'ink' : 'sageDeep'}>
+                  {material ? materialLabel(material) : '+ Add material'}
+                </ThemedText>
+              </Pressable>
+            )}
           </Card>
 
           <Card style={styles.card}>
-            <ThemedText type="small" themeColor="inkSoft">
-              Tool
-            </ThemedText>
-            <ThemedText type="smallBold">
-              {tool ? `${tool.thickness} ${tool.length}` : '+ Add tool'}
-            </ThemedText>
+            {picking === 'tool' ? (
+              <ToolPicker
+                value={section.toolId}
+                onChange={(id) => {
+                  setSectionTool(key, sectionIndex, id);
+                  setPicking(null);
+                }}
+              />
+            ) : (
+              <Pressable style={styles.pickRow} onPress={() => setPicking('tool')}>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Tool
+                </ThemedText>
+                <ThemedText type="smallBold" themeColor={tool ? 'ink' : 'sageDeep'}>
+                  {tool ? toolLabel(tool) : '+ Add tool'}
+                </ThemedText>
+              </Pressable>
+            )}
           </Card>
 
           {sortedNotes.length > 0 && (
@@ -207,6 +245,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   card: {
+    gap: 2,
+  },
+  pickRow: {
     gap: 2,
   },
   notesTitle: {

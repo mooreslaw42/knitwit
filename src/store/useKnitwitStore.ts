@@ -32,6 +32,7 @@ import type {
   PatternRow,
   PatternSection,
   Project,
+  ProjectSection,
   ProjectStatus,
   Technique,
   TechniqueCraft,
@@ -105,12 +106,20 @@ type KnitwitState = {
   ) => void;
   deleteProject: (key: string) => void;
 
-  addSection: (projectKey: string, draft: { name: string; totalRows: number }) => void;
+  addSection: (
+    projectKey: string,
+    draft: { name: string; totalRows: number; materialId?: string | null; toolId?: string | null },
+  ) => void;
   updateSection: (
     projectKey: string,
     index: number,
     patch: { name: string; totalRows: number },
   ) => void;
+  // Which yarn and needles out of the knitter's own stash this section is worked with. Separate
+  // from updateSection because it's a different gesture: name and rows are typed into a form and
+  // saved, this is picked from a list and takes effect there and then.
+  setSectionMaterial: (projectKey: string, index: number, materialId: string | null) => void;
+  setSectionTool: (projectKey: string, index: number, toolId: string | null) => void;
   deleteSection: (projectKey: string, index: number) => void;
 
   saveMaterial: (id: string | null, data: Material) => string;
@@ -192,6 +201,27 @@ function bumpTotal(a: Achievements, key: keyof Achievements['totals']): Achievem
 function withRecent(recent: string[], projectKey: string, sectionIndex: number): string[] {
   const entry = `${projectKey}|${sectionIndex}`;
   return [entry, ...recent.filter((r) => r !== entry)].slice(0, 12);
+}
+
+// Rewrites one section of one project, leaving everything else identical. Returns an empty patch
+// for a section that isn't there, so a stale route parameter is a no-op rather than a crash.
+function patchSection(
+  state: KnitwitState,
+  projectKey: string,
+  index: number,
+  change: (section: ProjectSection) => ProjectSection,
+): Partial<KnitwitState> {
+  const project = state.projects[projectKey];
+  if (!project?.sections[index]) return {};
+  return {
+    projects: {
+      ...state.projects,
+      [projectKey]: {
+        ...project,
+        sections: project.sections.map((s, i) => (i === index ? change(s) : s)),
+      },
+    },
+  };
 }
 
 function clampSectionIndex(projects: Record<string, Project>, projectKey: string, index: number) {
@@ -397,7 +427,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         set(patch);
       },
 
-      addSection: (projectKey, { name, totalRows }) => {
+      addSection: (projectKey, { name, totalRows, materialId = null, toolId = null }) => {
         const { projects } = get();
         const project = projects[projectKey];
         if (!project) return;
@@ -415,8 +445,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                   complete: false,
                   seconds: 0,
                   notes: [],
-                  materialId: null,
-                  toolId: null,
+                  materialId,
+                  toolId,
                   markers: [],
                   castOn: 0,
                   rows: [],
@@ -453,6 +483,22 @@ export const useKnitwitStore = create<KnitwitState>()(
           },
         });
       },
+
+      // Both go through the same patch, since the only difference is which field moves. An id that
+      // isn't in the stash is refused rather than stored: a section pointing at a yarn that doesn't
+      // exist reads as "no material" everywhere anyway, so storing it would just be a lie the
+      // screens can't see.
+      setSectionMaterial: (projectKey, index, materialId) =>
+        set(patchSection(get(), projectKey, index, (s) => ({
+          ...s,
+          materialId: materialId && get().materials[materialId] ? materialId : null,
+        }))),
+
+      setSectionTool: (projectKey, index, toolId) =>
+        set(patchSection(get(), projectKey, index, (s) => ({
+          ...s,
+          toolId: toolId && get().tools[toolId] ? toolId : null,
+        }))),
 
       deleteSection: (projectKey, index) => {
         const { projects, activeProjectKey, activeSectionIndex, timerKey } = get();

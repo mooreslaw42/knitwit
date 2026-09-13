@@ -712,3 +712,86 @@ describe('savePatternFromProject', () => {
     expect(store().patterns[id]).toBeDefined();
   });
 });
+
+describe('a section’s yarn and needles', () => {
+  const store = () => useKnitwitStore.getState();
+  const section = () => store().projects.clover.sections[0];
+
+  it('assigns a material out of the stash', () => {
+    const [id] = Object.keys(store().materials);
+    store().setSectionMaterial('clover', 0, id);
+    expect(section().materialId).toBe(id);
+  });
+
+  it('assigns a tool out of the stash', () => {
+    const [id] = Object.keys(store().tools);
+    store().setSectionTool('clover', 0, id);
+    expect(section().toolId).toBe(id);
+  });
+
+  it('clears one back to nothing', () => {
+    const [id] = Object.keys(store().materials);
+    store().setSectionMaterial('clover', 0, id);
+    store().setSectionMaterial('clover', 0, null);
+    expect(section().materialId).toBeNull();
+  });
+
+  // A section pointing at a yarn that isn't in the stash reads as "no material" on every screen
+  // that renders it, so storing the id would be a lie none of them could see.
+  it('refuses an id that is not in the stash', () => {
+    store().setSectionMaterial('clover', 0, 'not-a-yarn');
+    expect(section().materialId).toBeNull();
+    store().setSectionTool('clover', 0, 'not-a-needle');
+    expect(section().toolId).toBeNull();
+  });
+
+  it('touches nothing else about the section', () => {
+    const before = section();
+    const [id] = Object.keys(store().materials);
+    store().setSectionMaterial('clover', 0, id);
+    const after = section();
+    expect(after.row).toBe(before.row);
+    expect(after.totalRows).toBe(before.totalRows);
+    expect(after.seconds).toBe(before.seconds);
+    expect(after.notes).toEqual(before.notes);
+    expect(after.toolId).toBe(before.toolId);
+  });
+
+  it('leaves the other sections alone', () => {
+    const before = store().projects.meadow.sections[1];
+    const [id] = Object.keys(store().materials);
+    store().setSectionMaterial('meadow', 0, id);
+    expect(store().projects.meadow.sections[1]).toEqual(before);
+  });
+
+  it('shrugs off a section index that is not there', () => {
+    const before = store().projects.clover;
+    store().setSectionMaterial('clover', 99, 'm1');
+    store().setSectionMaterial('nope', 0, 'm1');
+    expect(store().projects.clover).toEqual(before);
+  });
+
+  // Deleting the yarn already unassigns it everywhere; this is the other half of that contract.
+  it('is undone by deleting the yarn from the library', () => {
+    const [id] = Object.keys(store().materials);
+    store().setSectionMaterial('clover', 0, id);
+    store().deleteMaterial(id);
+    expect(section().materialId).toBeNull();
+  });
+
+  it('can be set as the section is created', () => {
+    const [m] = Object.keys(store().materials);
+    const [t] = Object.keys(store().tools);
+    store().addSection('clover', { name: 'Edging', totalRows: 12, materialId: m, toolId: t });
+    const added = store().projects.clover.sections.at(-1)!;
+    expect(added).toMatchObject({ name: 'Edging', materialId: m, toolId: t });
+  });
+
+  it('still defaults to nothing when a section is added without them', () => {
+    store().addSection('clover', { name: 'Edging', totalRows: 12 });
+    expect(store().projects.clover.sections.at(-1)).toMatchObject({
+      materialId: null,
+      toolId: null,
+    });
+  });
+});
