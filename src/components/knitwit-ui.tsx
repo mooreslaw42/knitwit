@@ -17,6 +17,18 @@ import { PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing, type ThemeColor } from '@/constants/theme';
 import type { ProjectStatus, SectionStatus } from '@/types/knitwit';
 
+// The one text-input look, exported so the platform-split AutoGrowInput can wear it without
+// keeping a second copy that drifts.
+export const InputStyle = {
+  backgroundColor: Colors.white,
+  borderRadius: Radii.medium,
+  paddingHorizontal: Spacing.three,
+  paddingVertical: Spacing.three,
+  fontFamily: Fonts.bodySemibold,
+  fontSize: 15,
+  color: Colors.ink,
+} as const;
+
 export function Card({ style, ...props }: ViewProps) {
   return <View style={[styles.card, style]} {...props} />;
 }
@@ -314,15 +326,7 @@ const styles = StyleSheet.create({
   field: {
     gap: Spacing.one,
   },
-  input: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 15,
-    color: Colors.ink,
-  },
+  input: InputStyle,
   selectBox: {
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,

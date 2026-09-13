@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { GaugeField } from '@/components/gauge-field';
@@ -278,15 +279,14 @@ export default function NewPatternWizardScreen() {
                 <ThemedText type="smallBold" themeColor="inkSoft">
                   Or paste the pattern text
                 </ThemedText>
-                <TextInput
+                <AutoGrowInput
                   value={form.sourceText}
                   onChangeText={(v) => {
                     set('sourceText', v);
                     setImported(null);
                   }}
                   placeholder="Paste the pattern here…"
-                  placeholderTextColor={Colors.inkSoft}
-                  multiline
+                  minHeight={72}
                   style={styles.pasteBox}
                 />
               </View>

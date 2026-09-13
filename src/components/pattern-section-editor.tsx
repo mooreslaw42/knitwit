@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { StitchChart } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
@@ -422,13 +423,11 @@ export function PatternSectionsEditor({
               Write or paste this section&apos;s instructions. Save the pattern and open the section
               to chart them stitch by stitch.
             </ThemedText>
-            <TextInput
+            <AutoGrowInput
               value={section.description}
               onChangeText={(v) => updateSection(i, { description: v })}
               placeholder="e.g. Row 1 (RS): K2, *yo, k2tog; rep from * to last 2 sts, k2."
-              placeholderTextColor={Colors.inkSoft}
-              multiline
-              style={[styles.input, styles.patternText]}
+              style={styles.patternText}
             />
           </View>
 

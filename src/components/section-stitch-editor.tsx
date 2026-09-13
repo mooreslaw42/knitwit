@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
+import { AutoGrowInput } from '@/components/auto-grow-input';
 import {
   Card,
   FormField,
@@ -329,13 +330,11 @@ export function SectionStitchEditor({
         <ThemedText type="smallBold" themeColor="inkSoft">
           Pattern text
         </ThemedText>
-        <TextInput
+        <AutoGrowInput
           value={description}
           onChangeText={setDescription}
           placeholder="Write or paste this section's instructions…"
-          placeholderTextColor={Colors.inkSoft}
-          multiline
-          style={[styles.input, styles.patternText]}
+          style={styles.patternText}
         />
         {description.trim().length > 0 && (
           <PillButton

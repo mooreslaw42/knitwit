@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton } from '@/components/knitwit-ui';
 import { SectionKitEditor, type SectionKit } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
@@ -86,12 +87,11 @@ export function ProjectSectionsEditor({
             <ThemedText type="small" themeColor="inkSoft">
               Anything you want to remember. You can chart it stitch by stitch afterwards.
             </ThemedText>
-            <TextInput
+            <AutoGrowInput
               value={section.description}
               onChangeText={(v) => update(i, { description: v })}
               placeholder="e.g. K2, *yo, k2tog; rep from * to last 2 sts, k2."
-              placeholderTextColor={Colors.inkSoft}
-              multiline
+              minHeight={72}
               style={styles.pasteBox}
             />
           </View>
