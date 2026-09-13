@@ -8,12 +8,13 @@ import {
   parseSizeRun,
   patternSectionMarkers,
   projectProgress,
+  projectState,
   resolveRowGroups,
   rowStitchesAfter,
   sectionRowCounts,
   sectionStatus,
-  todayStarted,
   sizeValue,
+  todayStarted,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
@@ -306,5 +307,29 @@ describe('todayStarted', () => {
   it('formats as the seeded projects do', () => {
     expect(todayStarted(new Date(2026, 5, 14))).toBe('Started Jun 14');
     expect(todayStarted(new Date(2026, 0, 1))).toBe('Started Jan 1');
+  });
+});
+
+describe('projectState', () => {
+  const partWorked = () => project([section({ row: 10, totalRows: 20 })]);
+  const allCounted = () => project([section({ row: 20, totalRows: 20 })]);
+
+  it('is active while there are rows left', () => {
+    expect(projectState(partWorked())).toBe('active');
+  });
+
+  it('is finished once every row is counted, without anyone saying so', () => {
+    expect(projectState(allCounted())).toBe('finished');
+  });
+
+  it('honours a status the knitter set, over what the rows say', () => {
+    expect(projectState({ ...partWorked(), status: 'finished' })).toBe('finished');
+    expect(projectState({ ...allCounted(), status: 'frogged' })).toBe('frogged');
+  });
+
+  // The bug this fixes: a frogged project was filed by its row count, so it turned up under
+  // "In progress" or "Completed" depending on how far it had got before being ripped out.
+  it('keeps a part-worked frogged project out of "in progress"', () => {
+    expect(projectState({ ...partWorked(), status: 'frogged' })).toBe('frogged');
   });
 });

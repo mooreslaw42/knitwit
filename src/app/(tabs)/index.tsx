@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday } from '@/lib/achievements';
 import { nextAward } from '@/lib/awards';
-import { currentSectionIndexOf, projectProgress } from '@/lib/knitwit-helpers';
+import { currentSectionIndexOf, projectProgress, projectState } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Project } from '@/types/knitwit';
 
@@ -28,9 +28,7 @@ export default function HomeScreen() {
   const entries = Object.entries(projects);
   // Home is a "what's on the needles" view — only projects still in progress. The full list,
   // including finished and frogged ones, lives on the Projects tab.
-  const incomplete = entries.filter(
-    ([, p]) => p.status === 'active' && projectProgress(p).pct < 1,
-  );
+  const incomplete = entries.filter(([, p]) => projectState(p) === 'active');
   const activeCount = incomplete.length;
 
   // Where "Continue" picks up. It has to land somewhere you can actually knit, so a project that
@@ -38,8 +36,7 @@ export default function HomeScreen() {
   // sections most recently worked on until one is still on the needles, and falling back to the
   // first WIP project if none of them are.
   const resume = (() => {
-    const onNeedles = (project: Project | undefined) =>
-      !!project && project.status === 'active' && projectProgress(project).pct < 1;
+    const onNeedles = (project: Project | undefined) => !!project && projectState(project) === 'active';
 
     const trail = [`${activeProjectKey}|${activeSectionIndex}`, ...(recentSections ?? [])];
     for (const entry of trail) {

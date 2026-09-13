@@ -7,15 +7,16 @@ import { Card, PillButton, ProgressBar, Thumb } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { currentSectionIndexOf, projectProgress } from '@/lib/knitwit-helpers';
+import { currentSectionIndexOf, projectProgress, projectState } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
-type StatusFilter = 'all' | 'active' | 'done';
+type StatusFilter = 'all' | 'active' | 'finished' | 'frogged';
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'In progress' },
-  { value: 'done', label: 'Completed' },
+  { value: 'finished', label: 'Completed' },
+  { value: 'frogged', label: 'Frogged' },
 ];
 
 export default function ProjectsScreen() {
@@ -29,9 +30,9 @@ export default function ProjectsScreen() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return Object.entries(projects).filter(([, p]) => {
-      const done = projectProgress(p).pct >= 1;
-      if (filter === 'active' && done) return false;
-      if (filter === 'done' && !done) return false;
+      // Filtering on the project's actual state, not just its row count — a frogged project was
+      // showing up under "In progress" or "Completed" depending on how far it had got.
+      if (filter !== 'all' && projectState(p) !== filter) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });

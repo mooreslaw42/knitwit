@@ -5,6 +5,7 @@ import type {
   PatternStitchGroup,
   Project,
   ProjectSection,
+  ProjectStatus,
   SectionStatus,
   SizedNumber,
 } from '@/types/knitwit';
@@ -123,6 +124,17 @@ export function patternSectionMarkers(section: {
 }
 
 // ---- Project / section helpers ----
+
+// What a project actually is right now. A stored status wins — frogged and finished are things
+// the knitter declared — and an 'active' project still reads as finished once every row has been
+// counted, which is how completion worked before there was a status at all.
+//
+// Shared because Home, the Projects filter and anything else asking "is this on the needles?"
+// have to agree; three copies of the rule would drift the first time one of them changed.
+export function projectState(project: Project): ProjectStatus {
+  if (project.status === 'frogged' || project.status === 'finished') return project.status;
+  return projectProgress(project).pct >= 1 ? 'finished' : 'active';
+}
 
 export function projectProgress(p: Project): { done: number; total: number; pct: number } {
   let done = 0;
