@@ -28,8 +28,9 @@ function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
     complete: false,
     seconds: 0,
     notes: [],
-    materialId: null,
-    toolId: null,
+    materialIds: [],
+    toolIds: [],
+    techniqueIds: [],
     markers: [],
     castOn: 0,
     rows: [],
@@ -187,11 +188,11 @@ describe('toolInUseCount', () => {
   it('counts one per unfinished section that calls for the tool, across projects', () => {
     const projects = {
       a: project([
-        section({ toolId: 't1', complete: false }),
-        section({ toolId: 't1', complete: true }), // finished — releases the tool
+        section({ toolIds: ['t1'], complete: false }),
+        section({ toolIds: ['t1'], complete: true }), // finished — releases the tool
       ]),
-      b: project([section({ toolId: 't1', complete: false })]),
-      c: project([section({ toolId: 't2', complete: false })]),
+      b: project([section({ toolIds: ['t1'], complete: false })]),
+      c: project([section({ toolIds: ['t2'], complete: false })]),
     };
     expect(toolInUseCount(projects, 't1')).toBe(2);
     expect(toolInUseCount(projects, 't2')).toBe(1);

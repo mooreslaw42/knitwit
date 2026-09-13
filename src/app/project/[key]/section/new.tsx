@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton } from '@/components/knitwit-ui';
-import { MaterialPicker, ToolPicker } from '@/components/stash-picker';
+import { EMPTY_KIT, SectionKitEditor } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -18,8 +18,7 @@ export default function NewSectionScreen() {
 
   const [name, setName] = useState('');
   const [totalRows, setTotalRows] = useState('60');
-  const [materialId, setMaterialId] = useState<string | null>(null);
-  const [toolId, setToolId] = useState<string | null>(null);
+  const [kit, setKit] = useState(EMPTY_KIT);
 
   return (
     <ThemedView style={styles.container}>
@@ -48,18 +47,12 @@ export default function NewSectionScreen() {
           {/* Offered here as well as on the section itself, because a sleeve knitted in the
               contrast colour on smaller needles is something you know when you add it, not
               something you go back and fill in afterwards. */}
-          <MaterialPicker value={materialId} onChange={setMaterialId} />
-          <ToolPicker value={toolId} onChange={setToolId} />
+          <SectionKitEditor value={kit} onChange={setKit} />
 
           <PillButton
             style={styles.saveBtn}
             onPress={() => {
-              addSection(key, {
-                name,
-                totalRows: parseInt(totalRows, 10) || 60,
-                materialId,
-                toolId,
-              });
+              addSection(key, { name, totalRows: parseInt(totalRows, 10) || 60, ...kit });
               goBackOr(router, `/project/${key}`);
             }}>
             <ThemedText type="smallBold" themeColor="white">

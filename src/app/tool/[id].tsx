@@ -36,7 +36,7 @@ export default function ToolEditScreen() {
     if (isNew) return [];
     return Object.values(projects).flatMap((p) =>
       p.sections
-        .filter((s) => s.toolId === id && !s.complete)
+        .filter((s) => s.toolIds.includes(id) && !s.complete)
         .map((s) => ({ projectName: p.name, sectionName: s.name })),
     );
   }, [isNew, projects, id]);

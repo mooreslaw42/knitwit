@@ -272,8 +272,17 @@ export type ProjectSection = {
   complete: boolean;
   seconds: number;
   notes: ProjectNote[];
-  materialId: string | null;
-  toolId: string | null;
+  // What this section is worked with, as ids into the knitter's own stash — Material, Tool and
+  // Technique in the store. Lists, because a pattern section already carries lists and a real
+  // section genuinely uses more than one of each: a yoke in two colours, a body swapped from
+  // circulars to DPNs at the crown. These used to be one `materialId` and one `toolId`, which
+  // meant a two-colour section resolved to neither.
+  materialIds: string[];
+  toolIds: string[];
+  // A project has techniques of its own for the first time here. A pattern names them inline
+  // (PatternTechnique); a project points at the ones in the knitter's library, the same way it
+  // points at their yarn.
+  techniqueIds: string[];
   markers: number[];
   // The stitch chart is copied from the pattern when the project is created, not read live from
   // it: a project in progress shouldn't silently change under the knitter because the pattern was

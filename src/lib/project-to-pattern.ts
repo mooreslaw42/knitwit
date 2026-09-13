@@ -5,17 +5,20 @@ import type {
   PatternCategory,
   PatternMaterial,
   PatternSection,
+  PatternTechnique,
   PatternTool,
   Project,
+  Technique,
   Tool,
 } from '@/types/knitwit';
 
-// The knitter's own yarns and needles, keyed the way the store keys them. A project section points
-// at these by id; a pattern can't, because a pattern is generic — so the ids have to be turned into
-// slots on the way across.
+// The knitter's own yarn, needles and techniques, keyed the way the store keys them. A project
+// section points at these by id; a pattern can't, because a pattern is generic — so the ids have to
+// be turned into slots on the way across.
 export type Stash = {
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
+  techniques: Record<string, Technique>;
 };
 
 let uid = 0;
@@ -24,10 +27,10 @@ const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${uid++}`
 const shortForIndex = (i: number) => String.fromCharCode(65 + (i % 26));
 
 // First-use order, so slot A is the yarn the first section calls for rather than whichever the
-// store happened to list first.
-function distinct(ids: (string | null)[]): string[] {
+// store happened to list first. Flattened across sections, because a section names several.
+function distinct(perSection: string[][]): string[] {
   const seen: string[] = [];
-  for (const id of ids) if (id && !seen.includes(id)) seen.push(id);
+  for (const ids of perSection) for (const id of ids) if (id && !seen.includes(id)) seen.push(id);
   return seen;
 }
 
@@ -79,11 +82,13 @@ function toolLabel(tool: Tool | undefined): string {
 // `source` is the pattern the project was made from, if any. Everything taken from it is something
 // the project genuinely has no record of — the wording, the techniques, the size's name.
 export function projectToPattern(project: Project, stash: Stash, source: Pattern | null): Pattern {
-  const materialIds = distinct(project.sections.map((s) => s.materialId));
-  const toolIds = distinct(project.sections.map((s) => s.toolId));
+  const materialIds = distinct(project.sections.map((s) => s.materialIds));
+  const toolIds = distinct(project.sections.map((s) => s.toolIds));
+  const techniqueIds = distinct(project.sections.map((s) => s.techniqueIds));
 
   const materialSlots = new Map(materialIds.map((id) => [id, nextId('ms')]));
   const toolSlots = new Map(toolIds.map((id) => [id, nextId('ts')]));
+  const techniqueSlots = new Map(techniqueIds.map((id) => [id, nextId('pte')]));
 
   const materials: PatternMaterial[] = materialIds.map((id, i) => {
     const m = stash.materials[id];
@@ -104,6 +109,13 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
     };
   });
 
+  // A project points at the knitter's own technique library; a pattern names its techniques
+  // inline, so each one used is copied out as a slot of the pattern's own.
+  const ownTechniques: PatternTechnique[] = techniqueIds.map((id) => {
+    const t = stash.techniques[id];
+    return { id: techniqueSlots.get(id)!, name: t?.name ?? 'Technique', note: t?.notes ?? '' };
+  });
+
   // Matched by name because that's the only thing the two share: a project's sections are stamped
   // from the pattern's in order, but sections get added, renamed and deleted afterwards, so the
   // index means nothing by the time anyone converts.
@@ -115,11 +127,13 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
       name: s.name,
       totalRows: s.totalRows,
       castOn: s.castOn,
-      materials: s.materialId ? [materialSlots.get(s.materialId)!] : [],
-      tools: s.toolId ? [toolSlots.get(s.toolId)!] : [],
-      // Technique ids point into `techniques` below, which is copied from the same source pattern
-      // with its ids intact — so these still resolve.
-      techniques: from?.techniques ?? [],
+      materials: s.materialIds.map((id) => materialSlots.get(id)!),
+      tools: s.toolIds.map((id) => toolSlots.get(id)!),
+      // The knitter's own techniques where the section names any; otherwise the source pattern's,
+      // whose ids stay resolvable because its whole technique list is copied across with them.
+      techniques: s.techniqueIds.length
+        ? s.techniqueIds.map((id) => techniqueSlots.get(id)!)
+        : (from?.techniques ?? []),
       description: from?.description ?? '',
       rows: s.rows,
       notes: s.notes,
@@ -154,7 +168,9 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
     sizes: [source?.sizes[project.sizeIndex] ?? 'One size'],
     materials,
     tools,
-    techniques: source?.techniques ?? [],
+    // Both, when the project added techniques of its own to a pattern that already had some:
+    // dropping either would leave a section pointing at an id that resolves to nothing.
+    techniques: [...(source?.techniques ?? []), ...ownTechniques],
     sections,
   };
 }

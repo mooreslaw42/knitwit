@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { projectToPattern } from '@/lib/project-to-pattern';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
@@ -121,7 +123,7 @@ describe('materials and tools', () => {
     useKnitwitStore.getState().deleteMaterial('m1');
     expect(useKnitwitStore.getState().materials.m1).toBeUndefined();
     const stillReferenced = Object.values(useKnitwitStore.getState().projects).some((p) =>
-      p.sections.some((s) => s.materialId === 'm1'),
+      p.sections.some((s) => s.materialIds.includes('m1')),
     );
     expect(stillReferenced).toBe(false);
   });
@@ -129,7 +131,7 @@ describe('materials and tools', () => {
   it('clears the reference from any section using a deleted tool', () => {
     useKnitwitStore.getState().deleteTool('t1');
     const stillReferenced = Object.values(useKnitwitStore.getState().projects).some((p) =>
-      p.sections.some((s) => s.toolId === 't1'),
+      p.sections.some((s) => s.toolIds.includes('t1')),
     );
     expect(stillReferenced).toBe(false);
   });
@@ -231,8 +233,8 @@ describe('createProject', () => {
     });
     const project = useKnitwitStore.getState().projects[key];
     // Body/Sleeve both call for p1m1 (→ m3) and p1t1 (→ t3).
-    expect(project.sections[0].materialId).toBe('m3');
-    expect(project.sections[0].toolId).toBe('t3');
+    expect(project.sections[0].materialIds).toEqual(['m3']);
+    expect(project.sections[0].toolIds).toEqual(['t3']);
     // The full mapping is kept on the project for later reference.
     expect(project.slotMaterials).toEqual({ p1m1: 'm3', p1m2: 'm1' });
     expect(project.slotTools).toEqual({ p1t1: 't3' });
@@ -243,8 +245,8 @@ describe('createProject', () => {
       .getState()
       .createProject({ name: 'Cardi', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     const project = useKnitwitStore.getState().projects[key];
-    expect(project.sections[0].materialId).toBeNull();
-    expect(project.sections[0].toolId).toBeNull();
+    expect(project.sections[0].materialIds).toEqual([]);
+    expect(project.sections[0].toolIds).toEqual([]);
   });
 
   it('carries stitch markers flagged on charted rows into the project the counter reads', () => {
@@ -669,7 +671,11 @@ describe('savePatternFromProject', () => {
 
   const draft = () => {
     const project = store().projects.clover;
-    return projectToPattern(project, { materials: store().materials, tools: store().tools }, null);
+    return projectToPattern(
+      project,
+      { materials: store().materials, tools: store().tools, techniques: store().techniques },
+      null,
+    );
   };
 
   it('saves the pattern and links the project to it in one go', () => {
@@ -713,85 +719,211 @@ describe('savePatternFromProject', () => {
   });
 });
 
-describe('a section’s yarn and needles', () => {
+describe('a section’s yarn, tools and techniques', () => {
   const store = () => useKnitwitStore.getState();
   const section = () => store().projects.clover.sections[0];
 
-  it('assigns a material out of the stash', () => {
-    const [id] = Object.keys(store().materials);
-    store().setSectionMaterial('clover', 0, id);
-    expect(section().materialId).toBe(id);
+  it('takes more than one yarn, which is the whole point', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1', 'm2'] });
+    expect(section().materialIds).toEqual(['m1', 'm2']);
   });
 
-  it('assigns a tool out of the stash', () => {
-    const [id] = Object.keys(store().tools);
-    store().setSectionTool('clover', 0, id);
-    expect(section().toolId).toBe(id);
+  it('takes more than one tool', () => {
+    store().setSectionKit('clover', 0, { toolIds: ['t1', 't2'] });
+    expect(section().toolIds).toEqual(['t1', 't2']);
   });
 
-  it('clears one back to nothing', () => {
-    const [id] = Object.keys(store().materials);
-    store().setSectionMaterial('clover', 0, id);
-    store().setSectionMaterial('clover', 0, null);
-    expect(section().materialId).toBeNull();
+  it('gives a project techniques, which it never had before', () => {
+    const [id] = Object.keys(store().techniques);
+    store().setSectionKit('clover', 0, { techniqueIds: [id] });
+    expect(section().techniqueIds).toEqual([id]);
   });
 
-  // A section pointing at a yarn that isn't in the stash reads as "no material" on every screen
-  // that renders it, so storing the id would be a lie none of them could see.
-  it('refuses an id that is not in the stash', () => {
-    store().setSectionMaterial('clover', 0, 'not-a-yarn');
-    expect(section().materialId).toBeNull();
-    store().setSectionTool('clover', 0, 'not-a-needle');
-    expect(section().toolId).toBeNull();
+  it('clears a list back to empty', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1'] });
+    store().setSectionKit('clover', 0, { materialIds: [] });
+    expect(section().materialIds).toEqual([]);
+  });
+
+  // An omitted list means "not touching that one" — toggling a yarn must not clear the needles.
+  it('leaves a list the patch does not mention alone', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1'], toolIds: ['t1'] });
+    store().setSectionKit('clover', 0, { materialIds: ['m2'] });
+    expect(section().toolIds).toEqual(['t1']);
+  });
+
+  // A section pointing at a yarn that isn't in the stash renders as nothing on every screen, so
+  // storing the id would be a lie none of them could see.
+  it('drops ids that are not in the stash, keeping the ones that are', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1', 'not-a-yarn'] });
+    expect(section().materialIds).toEqual(['m1']);
+  });
+
+  it('does not store the same id twice', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1', 'm1'] });
+    expect(section().materialIds).toEqual(['m1']);
   });
 
   it('touches nothing else about the section', () => {
     const before = section();
-    const [id] = Object.keys(store().materials);
-    store().setSectionMaterial('clover', 0, id);
+    store().setSectionKit('clover', 0, { materialIds: ['m1'] });
     const after = section();
     expect(after.row).toBe(before.row);
     expect(after.totalRows).toBe(before.totalRows);
     expect(after.seconds).toBe(before.seconds);
     expect(after.notes).toEqual(before.notes);
-    expect(after.toolId).toBe(before.toolId);
   });
 
   it('leaves the other sections alone', () => {
     const before = store().projects.meadow.sections[1];
-    const [id] = Object.keys(store().materials);
-    store().setSectionMaterial('meadow', 0, id);
+    store().setSectionKit('meadow', 0, { materialIds: ['m1'] });
     expect(store().projects.meadow.sections[1]).toEqual(before);
   });
 
   it('shrugs off a section index that is not there', () => {
     const before = store().projects.clover;
-    store().setSectionMaterial('clover', 99, 'm1');
-    store().setSectionMaterial('nope', 0, 'm1');
+    store().setSectionKit('clover', 99, { materialIds: ['m1'] });
+    store().setSectionKit('nope', 0, { materialIds: ['m1'] });
     expect(store().projects.clover).toEqual(before);
   });
 
-  // Deleting the yarn already unassigns it everywhere; this is the other half of that contract.
-  it('is undone by deleting the yarn from the library', () => {
-    const [id] = Object.keys(store().materials);
-    store().setSectionMaterial('clover', 0, id);
-    store().deleteMaterial(id);
-    expect(section().materialId).toBeNull();
-  });
-
   it('can be set as the section is created', () => {
-    const [m] = Object.keys(store().materials);
-    const [t] = Object.keys(store().tools);
-    store().addSection('clover', { name: 'Edging', totalRows: 12, materialId: m, toolId: t });
-    const added = store().projects.clover.sections.at(-1)!;
-    expect(added).toMatchObject({ name: 'Edging', materialId: m, toolId: t });
+    const [q] = Object.keys(store().techniques);
+    store().addSection('clover', {
+      name: 'Edging',
+      totalRows: 12,
+      materialIds: ['m1', 'm2'],
+      toolIds: ['t1'],
+      techniqueIds: [q],
+    });
+    expect(store().projects.clover.sections.at(-1)).toMatchObject({
+      name: 'Edging',
+      materialIds: ['m1', 'm2'],
+      toolIds: ['t1'],
+      techniqueIds: [q],
+    });
   });
 
-  it('still defaults to nothing when a section is added without them', () => {
+  it('still defaults to empty when a section is added without them', () => {
     store().addSection('clover', { name: 'Edging', totalRows: 12 });
     expect(store().projects.clover.sections.at(-1)).toMatchObject({
-      materialId: null,
-      toolId: null,
+      materialIds: [],
+      toolIds: [],
+      techniqueIds: [],
     });
+  });
+});
+
+describe('deleting a stash item lets its sections go', () => {
+  const store = () => useKnitwitStore.getState();
+  const section = () => store().projects.clover.sections[0];
+
+  it('removes a deleted yarn without disturbing the others', () => {
+    store().setSectionKit('clover', 0, { materialIds: ['m1', 'm2'] });
+    store().deleteMaterial('m1');
+    expect(section().materialIds).toEqual(['m2']);
+  });
+
+  it('removes a deleted tool without disturbing the others', () => {
+    store().setSectionKit('clover', 0, { toolIds: ['t1', 't2'] });
+    store().deleteTool('t1');
+    expect(section().toolIds).toEqual(['t2']);
+  });
+
+  // Techniques never needed this before, because a project couldn't reference one.
+  it('removes a deleted technique', () => {
+    const [id] = Object.keys(store().techniques);
+    store().setSectionKit('clover', 0, { techniqueIds: [id] });
+    store().deleteTechnique(id);
+    expect(section().techniqueIds).toEqual([]);
+  });
+});
+
+// The repair that this pins is the one that already went wrong once: it lived inside `migrate`,
+// zustand skips `migrate` when the stored version already matches, and a store written by a build
+// that had the bumped version but not yet the back-fill could never be repaired. It lives in
+// `merge` now, which runs every hydration, and keys off the shape rather than the version.
+describe('hydrating a store saved before sections had kit lists', () => {
+  const persist = useKnitwitStore.persist;
+
+  const saved = (sections: unknown[], extra: Record<string, unknown> = {}) => ({
+    state: {
+      projects: {
+        p: { name: 'Improvised', patternId: null, sections, ...extra },
+      },
+      patterns: {},
+    },
+    // Deliberately the current version, so migrate does not run at all.
+    version: 24,
+  });
+
+  const hydrate = async (payload: unknown) => {
+    await AsyncStorage.setItem('knitwit-store', JSON.stringify(payload));
+    await persist.rehydrate();
+    return useKnitwitStore.getState().projects.p.sections;
+  };
+
+  it('turns the old single yarn and tool into lists', async () => {
+    const [section] = await hydrate(
+      saved([{ name: 'Main', materialId: 'm1', toolId: 't1', notes: [], markers: [], rows: [] }]),
+    );
+    expect(section.materialIds).toEqual(['m1']);
+    expect(section.toolIds).toEqual(['t1']);
+    expect(section.techniqueIds).toEqual([]);
+    expect(section).not.toHaveProperty('materialId');
+  });
+
+  it('reads a section that had neither as empty rather than undefined', async () => {
+    const [section] = await hydrate(
+      saved([{ name: 'Main', materialId: null, toolId: null, notes: [], markers: [], rows: [] }]),
+    );
+    expect(section.materialIds).toEqual([]);
+    expect(section.toolIds).toEqual([]);
+  });
+
+  // The recovery half: a two-colour section used to resolve to no yarn at all, because a stash
+  // item was only banked when the pattern named exactly one slot. The pattern still knows.
+  it('recovers both yarns of a section the old code could only drop', async () => {
+    const [section] = await hydrate({
+      state: {
+        patterns: {
+          pat: {
+            sections: [{ name: 'Yoke', materials: ['sA', 'sB'], tools: ['sT'] }],
+          },
+        },
+        projects: {
+          p: {
+            name: 'Fair Isle',
+            patternId: 'pat',
+            slotMaterials: { sA: 'm1', sB: 'm2' },
+            slotTools: { sT: 't1' },
+            sections: [
+              { name: 'Yoke', materialId: null, toolId: null, notes: [], markers: [], rows: [] },
+            ],
+          },
+        },
+      },
+      version: 24,
+    });
+    expect(section.materialIds).toEqual(['m1', 'm2']);
+    expect(section.toolIds).toEqual(['t1']);
+  });
+
+  it('leaves a section that already has lists exactly as it is', async () => {
+    const [section] = await hydrate(
+      saved([
+        {
+          name: 'Main',
+          materialIds: ['m2'],
+          toolIds: [],
+          techniqueIds: ['q1'],
+          notes: [],
+          markers: [],
+          rows: [],
+        },
+      ]),
+    );
+    expect(section.materialIds).toEqual(['m2']);
+    expect(section.techniqueIds).toEqual(['q1']);
   });
 });

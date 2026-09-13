@@ -1,38 +1,36 @@
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
-import { Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Material, Tool } from '@/types/knitwit';
+import type { Material, ProjectSection, Tool } from '@/types/knitwit';
 
 export const materialLabel = (m: Material) => `${m.brand} — ${m.colorName}`;
 export const toolLabel = (t: Tool) => `${t.thickness} ${TOOL_TYPE_LABELS[t.type]}`;
 
-// The empty string stands for "none" because SelectField is backed by a Picker, and a Picker item
-// can't carry null as its value.
-const NONE = '';
+export type SectionKit = Pick<ProjectSection, 'materialIds' | 'toolIds' | 'techniqueIds'>;
 
-// Picking the yarn or the needles a section is worked with, out of the knitter's own stash.
-//
-// Both halves are the same shape, so they share one body: a list to choose from, and a way out to
-// the library for the case the thing isn't in the stash yet — which is most of the time the first
-// few weeks, and used to be a dead end.
-function StashPicker({
+export const EMPTY_KIT: SectionKit = { materialIds: [], toolIds: [], techniqueIds: [] };
+
+// A row of everything in the stash, the chosen ones filled in. Same control the pattern editor
+// uses for its slots, because it's the same question — what does this section use? — and a project
+// section carries lists for exactly the reasons a pattern section does: a yoke worked in two
+// colours, a body that swaps to DPNs at the crown.
+function ChipToggles({
   label,
   options,
-  value,
-  onChange,
+  selected,
+  onToggle,
   emptyHint,
   addLabel,
   addHref,
 }: {
   label: string;
-  options: { value: string; label: string }[];
-  value: string | null;
-  onChange: (id: string | null) => void;
+  options: { id: string; label: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
   emptyHint: string;
   addLabel: string;
   addHref: Href;
@@ -40,24 +38,37 @@ function StashPicker({
   const router = useRouter();
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.group}>
+      <ThemedText type="smallBold" themeColor="inkSoft">
+        {label}
+      </ThemedText>
       {options.length > 0 ? (
-        <SelectField
-          label={label}
-          options={[{ value: NONE, label: `No ${label.toLowerCase()}` }, ...options]}
-          value={value ?? NONE}
-          onChange={(v) => onChange(v === NONE ? null : v)}
-        />
-      ) : (
-        <View style={styles.empty}>
-          <ThemedText type="smallBold" themeColor="inkSoft">
-            {label}
-          </ThemedText>
-          <ThemedText type="small" themeColor="inkSoft">
-            {emptyHint}
-          </ThemedText>
+        <View style={styles.chipRow}>
+          {options.map((opt) => {
+            const on = selected.includes(opt.id);
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => onToggle(opt.id)}
+                style={[styles.chip, on && styles.chipOn]}>
+                <ThemedText
+                  type="smallBold"
+                  numberOfLines={1}
+                  style={styles.chipText}
+                  themeColor={on ? 'white' : 'inkSoft'}>
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
         </View>
+      ) : (
+        <ThemedText type="small" themeColor="inkSoft">
+          {emptyHint}
+        </ThemedText>
       )}
+      {/* The stash is empty far more often than it looks from seed data, and without this the
+          answer to "my yarn isn't here" was nothing at all. */}
       <Pressable hitSlop={6} style={styles.addLink} onPress={() => router.push(addHref)}>
         <ThemedText type="smallBold" themeColor="sageDeep">
           {addLabel}
@@ -67,50 +78,88 @@ function StashPicker({
   );
 }
 
-export function MaterialPicker({
+// Yarn, tools and techniques for one project section, picked out of the knitter's own library.
+//
+// The same three a pattern carries, offered on a project whether or not it came from one — an
+// improvised make has yarn and needles and calls for a tubular cast-on just as much as a written
+// pattern does.
+export function SectionKitEditor({
   value,
   onChange,
 }: {
-  value: string | null;
-  onChange: (id: string | null) => void;
+  value: SectionKit;
+  onChange: (kit: SectionKit) => void;
 }) {
   const materials = useKnitwitStore((state) => state.materials);
+  const tools = useKnitwitStore((state) => state.tools);
+  const techniques = useKnitwitStore((state) => state.techniques);
+
+  const toggle = (field: keyof SectionKit, id: string) =>
+    onChange({
+      ...value,
+      [field]: value[field].includes(id)
+        ? value[field].filter((x) => x !== id)
+        : [...value[field], id],
+    });
+
   return (
-    <StashPicker
-      label="Material"
-      options={Object.entries(materials).map(([id, m]) => ({ value: id, label: materialLabel(m) }))}
-      value={value}
-      onChange={onChange}
-      emptyHint="No yarn in your library yet."
-      addLabel="+ Add a yarn to your library"
-      addHref="/material/new"
-    />
+    <View style={styles.wrap}>
+      <ChipToggles
+        label="Yarn"
+        options={Object.entries(materials).map(([id, m]) => ({ id, label: materialLabel(m) }))}
+        selected={value.materialIds}
+        onToggle={(id) => toggle('materialIds', id)}
+        emptyHint="No yarn in your library yet."
+        addLabel="+ Add a yarn to your library"
+        addHref="/material/new"
+      />
+      <ChipToggles
+        label="Tools"
+        options={Object.entries(tools).map(([id, t]) => ({ id, label: toolLabel(t) }))}
+        selected={value.toolIds}
+        onToggle={(id) => toggle('toolIds', id)}
+        emptyHint="No needles or hooks in your library yet."
+        addLabel="+ Add a tool to your library"
+        addHref="/tool/new"
+      />
+      <ChipToggles
+        label="Techniques"
+        options={Object.entries(techniques).map(([id, t]) => ({ id, label: t.name }))}
+        selected={value.techniqueIds}
+        onToggle={(id) => toggle('techniqueIds', id)}
+        emptyHint="No techniques in your library yet."
+        addLabel="+ Add a technique to your library"
+        addHref="/technique/new"
+      />
+    </View>
   );
 }
 
-export function ToolPicker({
-  value,
-  onChange,
-}: {
-  value: string | null;
-  onChange: (id: string | null) => void;
-}) {
-  const tools = useKnitwitStore((state) => state.tools);
-  return (
-    <StashPicker
-      label="Tool"
-      options={Object.entries(tools).map(([id, t]) => ({ value: id, label: toolLabel(t) }))}
-      value={value}
-      onChange={onChange}
-      emptyHint="No needles or hooks in your library yet."
-      addLabel="+ Add a tool to your library"
-      addHref="/tool/new"
-    />
-  );
+// "Rico Design — Blossom Pink, Drops — Sage Green" — what a section is worked with, for the places
+// that only need to show it. Empty string when there's nothing, so the caller can fall back.
+export function kitSummary<T>(
+  ids: string[],
+  stash: Record<string, T>,
+  label: (item: T) => string,
+): string {
+  return ids
+    .filter((id) => id in stash)
+    .map((id) => label(stash[id]))
+    .join(', ');
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: Spacing.one },
-  empty: { gap: Spacing.one },
+  wrap: { gap: Spacing.three },
+  group: { gap: Spacing.one },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  chipOn: { backgroundColor: Colors.blushDeep },
+  // A chip grows to its text; without a ceiling one long yarn name pushes past the card edge.
+  chipText: { maxWidth: 260 },
   addLink: { alignSelf: 'flex-start', paddingVertical: Spacing.one },
 });

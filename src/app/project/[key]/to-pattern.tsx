@@ -44,6 +44,7 @@ export default function ProjectToPatternScreen() {
   const patterns = useKnitwitStore((state) => state.patterns);
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
+  const techniques = useKnitwitStore((state) => state.techniques);
   const savePatternFromProject = useKnitwitStore((state) => state.savePatternFromProject);
 
   const source = project?.patternId ? (patterns[project.patternId] ?? null) : null;
@@ -51,7 +52,7 @@ export default function ProjectToPatternScreen() {
   // Converted once on arrival and then edited like any other draft. Recomputing it as the knitter
   // types would throw away every correction they'd made.
   const converted = useMemo(
-    () => (project ? projectToPattern(project, { materials, tools }, source) : null),
+    () => (project ? projectToPattern(project, { materials, tools, techniques }, source) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the draft is seeded once, on purpose.
     [],
   );

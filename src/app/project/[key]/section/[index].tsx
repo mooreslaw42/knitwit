@@ -12,10 +12,10 @@ import {
   StatusBadge,
 } from '@/components/knitwit-ui';
 import {
+  kitSummary,
   materialLabel,
-  MaterialPicker,
+  SectionKitEditor,
   toolLabel,
-  ToolPicker,
 } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -31,29 +31,19 @@ export default function SectionDetailScreen() {
   const router = useRouter();
 
   const project = useKnitwitStore((state) => state.projects[key]);
-  const material = useKnitwitStore((state) =>
-    project?.sections[sectionIndex]?.materialId
-      ? state.materials[project.sections[sectionIndex].materialId!]
-      : null,
-  );
-  const tool = useKnitwitStore((state) =>
-    project?.sections[sectionIndex]?.toolId
-      ? state.tools[project.sections[sectionIndex].toolId!]
-      : null,
-  );
+  const materials = useKnitwitStore((state) => state.materials);
+  const tools = useKnitwitStore((state) => state.tools);
+  const techniques = useKnitwitStore((state) => state.techniques);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
   const updateSection = useKnitwitStore((state) => state.updateSection);
   const deleteSection = useKnitwitStore((state) => state.deleteSection);
-  const setSectionMaterial = useKnitwitStore((state) => state.setSectionMaterial);
-  const setSectionTool = useKnitwitStore((state) => state.setSectionTool);
+  const setSectionKit = useKnitwitStore((state) => state.setSectionKit);
   const seconds = useLiveSeconds(key, sectionIndex);
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftRows, setDraftRows] = useState('');
-  // Only one picker open at a time — two dropdowns unfurled at once on a phone leaves nothing of
-  // the section itself on screen.
-  const [picking, setPicking] = useState<'material' | 'tool' | null>(null);
+  const [picking, setPicking] = useState(false);
 
   if (!project) return null;
   const section = project.sections[sectionIndex];
@@ -62,6 +52,21 @@ export default function SectionDetailScreen() {
   const status = sectionStatus(section);
   const pct = section.totalRows ? section.row / section.totalRows : 0;
   const sortedNotes = [...section.notes].sort((a, b) => a.row - b.row);
+
+  const kit = {
+    materialIds: section.materialIds,
+    toolIds: section.toolIds,
+    techniqueIds: section.techniqueIds,
+  };
+  // Everything the section is worked with, on one line. Yarn first because that's what a knitter
+  // reaches for the section by.
+  const worksWith = [
+    kitSummary(section.materialIds, materials, materialLabel),
+    kitSummary(section.toolIds, tools, toolLabel),
+    kitSummary(section.techniqueIds, techniques, (t) => t.name),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <ThemedView style={styles.container}>
@@ -137,46 +142,33 @@ export default function SectionDetailScreen() {
             <ThemedText type="smallBold">{formatClock(seconds)}</ThemedText>
           </Card>
 
-          {/* Tap the card to open the picker. These two read as buttons — "+ Add material" — and
-              for a long time weren't: nothing at all was wired behind them, and a section's yarn
-              and needles could only ever be set by the pattern a project was stamped from. */}
+          {/* One card, three lists. It used to be two cards showing one yarn and one tool, styled
+              to read as buttons — "+ Add material" — with nothing at all wired behind them. The
+              singular was wrong twice over: nothing could be set, and a section worked in two
+              colours had nowhere to say so. */}
           <Card style={styles.card}>
-            {picking === 'material' ? (
-              <MaterialPicker
-                value={section.materialId}
-                onChange={(id) => {
-                  setSectionMaterial(key, sectionIndex, id);
-                  setPicking(null);
-                }}
-              />
+            {picking ? (
+              <>
+                <SectionKitEditor
+                  value={kit}
+                  onChange={(next) => setSectionKit(key, sectionIndex, next)}
+                />
+                <Pressable
+                  hitSlop={6}
+                  style={styles.pickDone}
+                  onPress={() => setPicking(false)}>
+                  <ThemedText type="smallBold" themeColor="inkSoft">
+                    Done
+                  </ThemedText>
+                </Pressable>
+              </>
             ) : (
-              <Pressable style={styles.pickRow} onPress={() => setPicking('material')}>
+              <Pressable style={styles.pickRow} onPress={() => setPicking(true)}>
                 <ThemedText type="small" themeColor="inkSoft">
-                  Material
+                  Worked with
                 </ThemedText>
-                <ThemedText type="smallBold" themeColor={material ? 'ink' : 'sageDeep'}>
-                  {material ? materialLabel(material) : '+ Add material'}
-                </ThemedText>
-              </Pressable>
-            )}
-          </Card>
-
-          <Card style={styles.card}>
-            {picking === 'tool' ? (
-              <ToolPicker
-                value={section.toolId}
-                onChange={(id) => {
-                  setSectionTool(key, sectionIndex, id);
-                  setPicking(null);
-                }}
-              />
-            ) : (
-              <Pressable style={styles.pickRow} onPress={() => setPicking('tool')}>
-                <ThemedText type="small" themeColor="inkSoft">
-                  Tool
-                </ThemedText>
-                <ThemedText type="smallBold" themeColor={tool ? 'ink' : 'sageDeep'}>
-                  {tool ? toolLabel(tool) : '+ Add tool'}
+                <ThemedText type="smallBold" themeColor={worksWith ? 'ink' : 'sageDeep'}>
+                  {worksWith || '+ Add yarn, tools & techniques'}
                 </ThemedText>
               </Pressable>
             )}
@@ -249,6 +241,10 @@ const styles = StyleSheet.create({
   },
   pickRow: {
     gap: 2,
+  },
+  pickDone: {
+    alignSelf: 'flex-start',
+    paddingTop: Spacing.two,
   },
   notesTitle: {
     marginTop: Spacing.three,

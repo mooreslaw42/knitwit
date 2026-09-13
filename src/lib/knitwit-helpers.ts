@@ -151,7 +151,7 @@ export function projectProgress(p: Project): { done: number; total: number; pct:
 // two are in use. Finished sections release their tool.
 export function toolInUseCount(projects: Record<string, Project>, toolId: string): number {
   return Object.values(projects).reduce(
-    (n, p) => n + p.sections.filter((s) => s.toolId === toolId && !s.complete).length,
+    (n, p) => n + p.sections.filter((s) => s.toolIds.includes(toolId) && !s.complete).length,
     0,
   );
 }

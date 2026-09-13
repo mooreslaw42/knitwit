@@ -43,8 +43,9 @@ const section = (over: Partial<ProjectSection> = {}): ProjectSection => ({
   complete: false,
   seconds: 900,
   notes: [],
-  materialId: null,
-  toolId: null,
+  materialIds: [],
+  toolIds: [],
+  techniqueIds: [],
   markers: [],
   castOn: 88,
   rows: [],
@@ -69,9 +70,13 @@ const project = (over: Partial<Project> = {}): Project => ({
 const stash: Stash = {
   materials: { m1: material('Rico Design', 'Blossom Pink'), m2: material('Drops', 'Sage Green') },
   tools: { t1: tool('4.5mm'), t2: tool('3.0mm') },
+  techniques: {
+    q1: { name: 'German short rows', craft: 'knit', notes: 'Turn without a wrap.', link: '' },
+    q2: { name: 'Tubular cast-on', craft: 'knit', notes: '', link: '' },
+  },
 };
 
-const bare: Stash = { materials: {}, tools: {} };
+const bare: Stash = { materials: {}, tools: {}, techniques: {} };
 
 describe('projectToPattern', () => {
   it('carries the project across as a pattern of its own', () => {
@@ -125,7 +130,7 @@ describe('stash slots', () => {
   it('turns each yarn the project used into one slot, labelled from the stash', () => {
     const p = projectToPattern(
       project({
-        sections: [section({ materialId: 'm1' }), section({ name: 'Front', materialId: 'm2' })],
+        sections: [section({ materialIds: ['m1'] }), section({ name: 'Front', materialIds: ['m2'] })],
       }),
       stash,
       null,
@@ -140,7 +145,7 @@ describe('stash slots', () => {
   it('gives two sections on the same yarn one slot, not two', () => {
     const p = projectToPattern(
       project({
-        sections: [section({ materialId: 'm1' }), section({ name: 'Front', materialId: 'm1' })],
+        sections: [section({ materialIds: ['m1'] }), section({ name: 'Front', materialIds: ['m1'] })],
       }),
       stash,
       null,
@@ -152,7 +157,7 @@ describe('stash slots', () => {
   it('points each section at its own slot id', () => {
     const p = projectToPattern(
       project({
-        sections: [section({ materialId: 'm2', toolId: 't1' }), section({ name: 'Front' })],
+        sections: [section({ materialIds: ['m2'], toolIds: ['t1'] }), section({ name: 'Front' })],
       }),
       stash,
       null,
@@ -165,13 +170,13 @@ describe('stash slots', () => {
   });
 
   it('numbers a yarn that is no longer in the stash rather than dropping the slot', () => {
-    const p = projectToPattern(project({ sections: [section({ materialId: 'gone' })] }), bare, null);
+    const p = projectToPattern(project({ sections: [section({ materialIds: ['gone'] })] }), bare, null);
     expect(p.materials[0].label).toBe('Yarn A');
     expect(p.sections[0].materials).toEqual([p.materials[0].id]);
   });
 
   it('reads the needle size off the first tool the project used', () => {
-    const p = projectToPattern(project({ sections: [section({ toolId: 't2' })] }), stash, null);
+    const p = projectToPattern(project({ sections: [section({ toolIds: ['t2'] })] }), stash, null);
     expect(p.needleSize).toBe('3.0mm Circular');
   });
 });
@@ -245,7 +250,7 @@ describe('carrying a source pattern across', () => {
   });
 
   it('does not carry the source pattern slot ids, which mean nothing here', () => {
-    const p = projectToPattern(project({ sections: [section({ materialId: 'm1' })] }), stash, source);
+    const p = projectToPattern(project({ sections: [section({ materialIds: ['m1'] })] }), stash, source);
     expect(p.sections[0].materials).toEqual([p.materials[0].id]);
   });
 
@@ -264,7 +269,7 @@ describe('describeConversion', () => {
     const p = projectToPattern(
       project({
         sections: [
-          section({ rows: [row('1'), row('2')], materialId: 'm1', toolId: 't1' }),
+          section({ rows: [row('1'), row('2')], materialIds: ['m1'], toolIds: ['t1'] }),
           section({ name: 'Front', rows: [row('1')] }),
         ],
       }),
@@ -304,5 +309,97 @@ describe('categoryFromName', () => {
 
   it('does not care about case', () => {
     expect(categoryFromName('BIG STRIPY BLANKET')).toBe('blankets');
+  });
+});
+
+// The whole point of the plural: a section worked in two colours used to resolve to neither,
+// because a stash item was only ever banked when the pattern named exactly one slot.
+describe('a section worked with more than one of a thing', () => {
+  it('gives every yarn its own slot and points the section at all of them', () => {
+    const p = projectToPattern(
+      project({ sections: [section({ materialIds: ['m1', 'm2'] })] }),
+      stash,
+      null,
+    );
+    expect(p.materials).toHaveLength(2);
+    expect(p.sections[0].materials).toEqual(p.materials.map((m) => m.id));
+    expect(p.materials.map((m) => m.short)).toEqual(['A', 'B']);
+  });
+
+  it('does the same for tools', () => {
+    const p = projectToPattern(project({ sections: [section({ toolIds: ['t1', 't2'] })] }), stash, null);
+    expect(p.tools.map((t) => t.thickness)).toEqual(['4.5mm', '3.0mm']);
+    expect(p.sections[0].tools).toHaveLength(2);
+  });
+
+  it('shares a slot between sections that use the same yarn, and adds one for the extra', () => {
+    const p = projectToPattern(
+      project({
+        sections: [
+          section({ materialIds: ['m1'] }),
+          section({ name: 'Yoke', materialIds: ['m1', 'm2'] }),
+        ],
+      }),
+      stash,
+      null,
+    );
+    expect(p.materials).toHaveLength(2);
+    expect(p.sections[0].materials).toEqual([p.materials[0].id]);
+    expect(p.sections[1].materials).toEqual([p.materials[0].id, p.materials[1].id]);
+  });
+});
+
+describe('techniques', () => {
+  // A project points at the knitter's technique library; a pattern names its techniques inline.
+  it('copies the technique out of the library as a slot of the pattern’s own', () => {
+    const p = projectToPattern(
+      project({ sections: [section({ techniqueIds: ['q1'] })] }),
+      stash,
+      null,
+    );
+    expect(p.techniques).toHaveLength(1);
+    expect(p.techniques[0]).toMatchObject({
+      name: 'German short rows',
+      note: 'Turn without a wrap.',
+    });
+    expect(p.sections[0].techniques).toEqual([p.techniques[0].id]);
+  });
+
+  it('does not give the same technique two slots for two sections', () => {
+    const p = projectToPattern(
+      project({
+        sections: [section({ techniqueIds: ['q1'] }), section({ name: 'Front', techniqueIds: ['q1'] })],
+      }),
+      stash,
+      null,
+    );
+    expect(p.techniques).toHaveLength(1);
+  });
+
+  it('names an unknown technique rather than dropping the reference', () => {
+    const p = projectToPattern(project({ sections: [section({ techniqueIds: ['gone'] })] }), bare, null);
+    expect(p.techniques[0].name).toBe('Technique');
+    expect(p.sections[0].techniques).toEqual([p.techniques[0].id]);
+  });
+
+  // A section that added its own techniques to a pattern that already had some: dropping either
+  // list would leave a section pointing at an id that resolves to nothing.
+  it('keeps the source pattern’s techniques alongside the project’s own', () => {
+    const source = {
+      sizes: [],
+      techniques: [{ id: 'tq1', name: 'Kitchener stitch', note: '' }],
+      sections: [{ name: 'Back', description: '', techniques: ['tq1'], stitchMultiple: null }],
+    } as unknown as Pattern;
+    const p = projectToPattern(
+      project({
+        sections: [section({ name: 'Back' }), section({ name: 'Yoke', techniqueIds: ['q1'] })],
+      }),
+      stash,
+      source,
+    );
+    const ids = p.techniques.map((t) => t.id);
+    expect(p.sections[0].techniques.every((id) => ids.includes(id))).toBe(true);
+    expect(p.sections[1].techniques.every((id) => ids.includes(id))).toBe(true);
+    expect(p.techniques.map((t) => t.name)).toEqual(['Kitchener stitch', 'German short rows']);
   });
 });

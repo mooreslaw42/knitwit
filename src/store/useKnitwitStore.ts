@@ -108,18 +108,17 @@ type KnitwitState = {
 
   addSection: (
     projectKey: string,
-    draft: { name: string; totalRows: number; materialId?: string | null; toolId?: string | null },
+    draft: { name: string; totalRows: number } & Partial<SectionKit>,
   ) => void;
   updateSection: (
     projectKey: string,
     index: number,
     patch: { name: string; totalRows: number },
   ) => void;
-  // Which yarn and needles out of the knitter's own stash this section is worked with. Separate
-  // from updateSection because it's a different gesture: name and rows are typed into a form and
-  // saved, this is picked from a list and takes effect there and then.
-  setSectionMaterial: (projectKey: string, index: number, materialId: string | null) => void;
-  setSectionTool: (projectKey: string, index: number, toolId: string | null) => void;
+  // What this section is worked with, out of the knitter's own stash. Separate from updateSection
+  // because it's a different gesture: name and rows are typed into a form and saved, this is
+  // toggled on and off and takes effect there and then.
+  setSectionKit: (projectKey: string, index: number, patch: Partial<SectionKit>) => void;
   deleteSection: (projectKey: string, index: number) => void;
 
   saveMaterial: (id: string | null, data: Material) => string;
@@ -201,6 +200,65 @@ function bumpTotal(a: Achievements, key: keyof Achievements['totals']): Achievem
 function withRecent(recent: string[], projectKey: string, sectionIndex: number): string[] {
   const entry = `${projectKey}|${sectionIndex}`;
   return [entry, ...recent.filter((r) => r !== entry)].slice(0, 12);
+}
+
+// The three lists a project section carries: what it is worked with, as ids into the knitter's
+// own stash. Named as a set because every screen that offers one offers all three.
+type SectionKit = Pick<ProjectSection, 'materialIds' | 'toolIds' | 'techniqueIds'>;
+
+// Ids that still exist in the stash, de-duplicated, in the order given.
+function keepKnown(ids: string[], stash: Record<string, unknown>): string[] {
+  return [...new Set(ids)].filter((id) => id in stash);
+}
+
+// A project section's yarn/tool/technique lists, repaired in place.
+//
+// Shape-driven, not version-gated, and called from `merge` rather than `migrate` — which is the
+// whole point. `migrate` only runs when the stored version differs from the current one, so a
+// back-fill living inside it is gated by exactly the thing it exists to escape: bump the version
+// in one commit and add the back-fill in the next, and it can never run again. `merge` runs on
+// every hydration, so the invariant "these three are arrays" holds however the store got here.
+//
+// The conversion itself recovers data as well as widening it. A project stamped from a pattern
+// only ever banked a stash item when the pattern section named exactly one slot, so a two-colour
+// yoke resolved to no yarn at all. Where the pattern is still around, its slots are re-resolved
+// through the project's own mappings; sections match by name, since they're stamped in order but
+// renamed afterwards.
+function repairSectionKits(state: {
+  projects?: Record<string, Record<string, unknown>>;
+  patterns?: Record<string, Record<string, unknown>>;
+}): void {
+  for (const project of Object.values(state.projects ?? {})) {
+    const patternId = project.patternId as string | null | undefined;
+    const source = patternId ? state.patterns?.[patternId] : undefined;
+    const sourceSections = (source?.sections as Record<string, unknown>[] | undefined) ?? [];
+    const slotMaterials = (project.slotMaterials ?? {}) as Record<string, string>;
+    const slotTools = (project.slotTools ?? {}) as Record<string, string>;
+
+    for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
+      if (Array.isArray(section.materialIds) && Array.isArray(section.toolIds)) {
+        if (!Array.isArray(section.techniqueIds)) section.techniqueIds = [];
+        continue;
+      }
+
+      const from = sourceSections.find((ps) => ps.name === section.name);
+      const viaPattern = (slots: unknown, map: Record<string, string>) =>
+        (Array.isArray(slots) ? (slots as string[]) : []).map((slot) => map[slot]).filter(Boolean);
+
+      const materials = viaPattern(from?.materials, slotMaterials);
+      const tools = viaPattern(from?.tools, slotTools);
+      const ownMaterial = section.materialId as string | null | undefined;
+      const ownTool = section.toolId as string | null | undefined;
+
+      // The pattern's mapping wins when it resolves to anything, since it can only be richer than
+      // the single id that was kept; otherwise carry that single id across.
+      section.materialIds = materials.length ? materials : ownMaterial ? [ownMaterial] : [];
+      section.toolIds = tools.length ? tools : ownTool ? [ownTool] : [];
+      if (!Array.isArray(section.techniqueIds)) section.techniqueIds = [];
+      delete section.materialId;
+      delete section.toolId;
+    }
+  }
 }
 
 // Rewrites one section of one project, leaving everything else identical. Returns an empty patch
@@ -328,8 +386,11 @@ export const useKnitwitStore = create<KnitwitState>()(
                 complete: false,
                 seconds: 0,
                 notes: ps.notes.map((n) => ({ id: nextNoteSeq++, row: n.row, text: n.text })),
-                materialId: ps.materials.length === 1 ? (slotMaterials[ps.materials[0]] ?? null) : null,
-                toolId: ps.tools.length === 1 ? (slotTools[ps.tools[0]] ?? null) : null,
+                materialIds: ps.materials.map((slot) => slotMaterials[slot]).filter(Boolean),
+                toolIds: ps.tools.map((slot) => slotTools[slot]).filter(Boolean),
+                // A pattern names its techniques inline rather than pointing at the knitter's
+                // library, so there is nothing to resolve them to. Left for the knitter to set.
+                techniqueIds: [],
                 // Markers flagged on charted rows count too, not just bare section markers.
                 markers: patternSectionMarkers(ps),
                 // The chart is copied, not referenced, so later pattern edits leave a project in
@@ -346,8 +407,9 @@ export const useKnitwitStore = create<KnitwitState>()(
                   complete: false,
                   seconds: 0,
                   notes: [],
-                  materialId: null,
-                  toolId: null,
+                  materialIds: [],
+                  toolIds: [],
+                  techniqueIds: [],
                   markers: [],
                   castOn: 0,
                   rows: [],
@@ -427,7 +489,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         set(patch);
       },
 
-      addSection: (projectKey, { name, totalRows, materialId = null, toolId = null }) => {
+      addSection: (projectKey, { name, totalRows, materialIds = [], toolIds = [], techniqueIds = [] }) => {
         const { projects } = get();
         const project = projects[projectKey];
         if (!project) return;
@@ -445,8 +507,9 @@ export const useKnitwitStore = create<KnitwitState>()(
                   complete: false,
                   seconds: 0,
                   notes: [],
-                  materialId,
-                  toolId,
+                  materialIds,
+                  toolIds,
+                  techniqueIds,
                   markers: [],
                   castOn: 0,
                   rows: [],
@@ -488,17 +551,22 @@ export const useKnitwitStore = create<KnitwitState>()(
       // isn't in the stash is refused rather than stored: a section pointing at a yarn that doesn't
       // exist reads as "no material" everywhere anyway, so storing it would just be a lie the
       // screens can't see.
-      setSectionMaterial: (projectKey, index, materialId) =>
-        set(patchSection(get(), projectKey, index, (s) => ({
-          ...s,
-          materialId: materialId && get().materials[materialId] ? materialId : null,
-        }))),
-
-      setSectionTool: (projectKey, index, toolId) =>
-        set(patchSection(get(), projectKey, index, (s) => ({
-          ...s,
-          toolId: toolId && get().tools[toolId] ? toolId : null,
-        }))),
+      // Ids that aren't in the stash are dropped rather than stored: a section pointing at a yarn
+      // that doesn't exist renders as nothing everywhere anyway, so keeping it would be a lie the
+      // screens can't see. An omitted list is left alone, so toggling a yarn never touches tools.
+      setSectionKit: (projectKey, index, patch) => {
+        const { materials, tools, techniques } = get();
+        set(
+          patchSection(get(), projectKey, index, (s) => ({
+            ...s,
+            materialIds: patch.materialIds ? keepKnown(patch.materialIds, materials) : s.materialIds,
+            toolIds: patch.toolIds ? keepKnown(patch.toolIds, tools) : s.toolIds,
+            techniqueIds: patch.techniqueIds
+              ? keepKnown(patch.techniqueIds, techniques)
+              : s.techniqueIds,
+          })),
+        );
+      },
 
       deleteSection: (projectKey, index) => {
         const { projects, activeProjectKey, activeSectionIndex, timerKey } = get();
@@ -541,7 +609,9 @@ export const useKnitwitStore = create<KnitwitState>()(
             {
               ...p,
               sections: p.sections.map((s) =>
-                s.materialId === id ? { ...s, materialId: null } : s,
+                s.materialIds.includes(id)
+                  ? { ...s, materialIds: s.materialIds.filter((m) => m !== id) }
+                  : s,
               ),
             },
           ]),
@@ -568,7 +638,9 @@ export const useKnitwitStore = create<KnitwitState>()(
             key,
             {
               ...p,
-              sections: p.sections.map((s) => (s.toolId === id ? { ...s, toolId: null } : s)),
+              sections: p.sections.map((s) =>
+                s.toolIds.includes(id) ? { ...s, toolIds: s.toolIds.filter((t) => t !== id) } : s,
+              ),
             },
           ]),
         );
@@ -631,10 +703,27 @@ export const useKnitwitStore = create<KnitwitState>()(
       },
 
       deleteTechnique: (id) => {
-        const { techniques } = get();
+        const { techniques, projects } = get();
         const next = { ...techniques };
         delete next[id];
-        set({ techniques: next });
+        // Sections referencing it have to let go too, the same way they do for a deleted yarn or
+        // tool. Techniques never needed this before, because a project couldn't reference one.
+        set({
+          techniques: next,
+          projects: Object.fromEntries(
+            Object.entries(projects).map(([key, p]) => [
+              key,
+              {
+                ...p,
+                sections: p.sections.map((s) =>
+                  s.techniqueIds.includes(id)
+                    ? { ...s, techniqueIds: s.techniqueIds.filter((t) => t !== id) }
+                    : s,
+                ),
+              },
+            ]),
+          ),
+        });
       },
 
       setActiveSection: (projectKey, sectionIndex) => {
@@ -808,9 +897,21 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v23 turns the free-text start into a date and gives a project its own craft.
-      version: 23,
+      // v24 turns a project section's single yarn and single tool into lists, and adds techniques.
+      version: 24,
       storage: createJSONStorage(() => AsyncStorage),
+
+      // Runs on every hydration, unlike migrate, which zustand skips whenever the stored version
+      // already matches the current one. Shape invariants belong here: a repair that only runs on
+      // a version change is one bump away from never running again.
+      merge: (persisted, current) => {
+        const state = (persisted ?? {}) as Partial<KnitwitState> & Record<string, unknown>;
+        repairSectionKits(state as Parameters<typeof repairSectionKits>[0]);
+        // Same reasoning — a field added to Achievements after this store shipped is filled in
+        // here rather than by a migration nobody will re-run.
+        state.achievements = normaliseAchievements(state.achievements);
+        return { ...current, ...state };
+      },
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
       // carries generic material/tool slots (Pattern.materials/tools) and its sections reference
