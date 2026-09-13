@@ -42,14 +42,24 @@ function distinct(perSection: string[][]): string[] {
 // This is a form default the knitter is looking at, not a claim — anything unrecognised falls
 // through to the top of the list rather than guessing harder.
 const CATEGORY_WORDS: [PatternCategory, string[]][] = [
-  ['socks', ['sock', 'bootie', 'slipper']],
+  ['slippers', ['slipper', 'bootie', 'bed sock']],
+  ['socks', ['sock']],
   ['blankets', ['blanket', 'throw', 'afghan']],
-  ['hats', ['hat', 'beanie', 'bonnet', 'balaclava']],
-  ['scarves', ['scarf', 'scarves', 'cowl', 'shawl', 'snood', 'wrap']],
-  ['toys', ['toy', 'amigurumi', 'bear', 'bunny', 'doll', 'plushie']],
-  ['home', ['cushion', 'pillow', 'coaster', 'basket', 'placemat', 'tea cosy', 'dishcloth']],
-  ['accessories', ['mitten', 'mitt', 'glove', 'bag', 'headband', 'legwarmer', 'sock yarn']],
-  ['sweaters', ['sweater', 'cardigan', 'jumper', 'pullover', 'vest', 'tank', 'camisole']],
+  ['hats', ['hat', 'beanie', 'bonnet', 'balaclava', 'toque']],
+  ['shawls', ['shawl', 'wrap', 'stole', 'poncho']],
+  ['scarves', ['scarf', 'scarves', 'cowl', 'snood', 'neckwarmer']],
+  ['mittens', ['mitten', 'mitt', 'glove', 'wristwarmer']],
+  ['toys', ['toy', 'amigurumi', 'stuffed', 'plushie', 'bear', 'bunny', 'doll', 'softie']],
+  ['cushions', ['cushion', 'pillow']],
+  ['dishcloths', ['dishcloth', 'washcloth', 'facecloth', 'scrubby']],
+  ['bags', ['bag', 'purse', 'tote', 'pouch', 'backpack']],
+  ['home', ['coaster', 'basket', 'placemat', 'tea cosy', 'garland', 'ornament', 'rug']],
+  ['cardigans', ['cardigan', 'cardi']],
+  ['dresses', ['dress', 'skirt', 'pinafore']],
+  ['tops', ['tee', 'top', 'tank', 'camisole', 'blouse']],
+  ['sweaters', ['sweater', 'jumper', 'pullover', 'vest', 'yoke']],
+  ['swatches', ['swatch', 'gauge', 'tension square']],
+  ['accessories', ['headband', 'legwarmer', 'belt', 'tie']],
   ['baby', ['baby', 'newborn', 'toddler']],
 ];
 

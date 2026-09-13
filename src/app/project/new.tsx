@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
+  CATEGORY_ORDER,
   CRAFT_LABELS,
   CRAFT_ORDER,
   TOOL_TYPE_LABELS,
@@ -24,8 +25,9 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 
 import { localDate } from '@/lib/achievements';
 import { goBackOr } from '@/lib/navigation';
+import { categoryFromName } from '@/lib/project-to-pattern';
 import { formatGaugeIn, isUsableGauge, stitchRatio } from '@/lib/gauge';
-import type { Gauge, TechniqueCraft } from '@/types/knitwit';
+import type { Gauge, PatternCategory, TechniqueCraft } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 type StepId = 'basics' | 'pattern' | 'match' | 'kit' | 'plan';
@@ -33,6 +35,11 @@ type StepId = 'basics' | 'pattern' | 'match' | 'kit' | 'plan';
 const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
   value: c,
   label: CRAFT_LABELS[c],
+}));
+
+const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_ORDER.map((c) => ({
+  value: c,
+  label: CATEGORY_LABELS[c],
 }));
 
 export default function NewProjectWizardScreen() {
@@ -47,6 +54,10 @@ export default function NewProjectWizardScreen() {
   const [name, setName] = useState('');
   const [startedOn, setStartedOn] = useState<string | null>(localDate());
   const [craft, setCraft] = useState<TechniqueCraft>('knit');
+  // Read off the name until the knitter says otherwise, the same guess createProject would make —
+  // just made where they can see and correct it rather than behind their back.
+  const [category, setCategory] = useState<PatternCategory>('sweaters');
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [patternId, setPatternId] = useState<string | null>(null);
   // Picking a pattern moves the craft to match it — a project usually is whatever its pattern is,
   // and the selector stays there for the cases where it isn't.
@@ -177,6 +188,7 @@ export default function NewProjectWizardScreen() {
       craft,
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
+      category,
       sizeIndex,
       swatchGauge,
       slotMaterials,
@@ -232,7 +244,10 @@ export default function NewProjectWizardScreen() {
               <FormField
                 label="Project name"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(v) => {
+                  setName(v);
+                  if (!categoryTouched) setCategory(categoryFromName(v));
+                }}
                 placeholder="e.g. Summer Tee"
               />
               {nameTouched && nameMissing && (
@@ -252,6 +267,15 @@ export default function NewProjectWizardScreen() {
                 onChange={(v) => {
                   setCraft(v);
                   setCraftTouched(true);
+                }}
+              />
+              <SelectField
+                label="Category"
+                options={CATEGORY_OPTIONS}
+                value={category}
+                onChange={(v) => {
+                  setCategory(v);
+                  setCategoryTouched(true);
                 }}
               />
             </>

@@ -8,15 +8,26 @@ import type {
 } from '@/types/knitwit';
 
 export const CATEGORY_LABELS: Record<PatternCategory, string> = {
-  sweaters: 'Sweater',
+  sweaters: 'Sweater & jumper',
+  cardigans: 'Cardigan',
+  tops: 'Top & tee',
+  dresses: 'Dress & skirt',
   accessories: 'Accessory',
-  hats: 'Hat',
+  hats: 'Hat & beanie',
   scarves: 'Scarf & cowl',
+  shawls: 'Shawl & wrap',
+  mittens: 'Mittens & gloves',
   socks: 'Socks',
-  blankets: 'Blanket',
-  toys: 'Toy',
-  home: 'Home decor',
+  slippers: 'Slippers',
+  bags: 'Bag & purse',
+  blankets: 'Blanket & throw',
+  cushions: 'Cushion & pillow',
+  dishcloths: 'Dishcloth & washcloth',
+  home: 'Home & decor',
+  toys: 'Toy & stuffed animal',
   baby: 'Baby & kids',
+  swatches: 'Swatch',
+  other: 'Other',
   queue: 'Queue',
 };
 
@@ -30,16 +41,30 @@ export const CRAFT_LABELS: Record<TechniqueCraft, string> = {
 
 export const CRAFT_ORDER: TechniqueCraft[] = ['knit', 'crochet', 'both'];
 
+// Grouped the way a knitter would look for them — worn on the body, then worn as accessories,
+// then made for the house, then everything else — rather than alphabetically or by when each was
+// added. "Other" and "Queue" sit at the bottom because they are answers of last resort.
 export const CATEGORY_ORDER: PatternCategory[] = [
   'sweaters',
-  'accessories',
+  'cardigans',
+  'tops',
+  'dresses',
   'hats',
   'scarves',
+  'shawls',
+  'mittens',
   'socks',
+  'slippers',
+  'bags',
+  'accessories',
   'blankets',
-  'toys',
+  'cushions',
+  'dishcloths',
   'home',
+  'toys',
   'baby',
+  'swatches',
+  'other',
   'queue',
 ];
 

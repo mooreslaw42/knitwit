@@ -125,16 +125,30 @@ export type Tool = {
   quantity: number; // how many of this tool the user owns
 };
 
+// Only ever added to. Every value here may be sitting in someone's saved pattern, in their
+// achievements' finishedByCategory tally, or in an award id — renaming one would orphan all three.
+// The labels are free to change; these strings are not.
 export type PatternCategory =
   | 'sweaters'
+  | 'cardigans'
+  | 'tops'
+  | 'dresses'
   | 'accessories'
   | 'hats'
   | 'scarves'
+  | 'shawls'
+  | 'mittens'
   | 'socks'
+  | 'slippers'
+  | 'bags'
   | 'blankets'
-  | 'toys'
+  | 'cushions'
+  | 'dishcloths'
   | 'home'
+  | 'toys'
   | 'baby'
+  | 'swatches'
+  | 'other'
   | 'queue';
 
 export type PatternLevel = 'beginner' | 'easy' | 'intermediate' | 'advanced';

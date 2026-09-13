@@ -314,13 +314,29 @@ describe('categoryFromName', () => {
   it('reads the category off the name when the name says it', () => {
     expect(categoryFromName('Rowan Socks')).toBe('socks');
     expect(categoryFromName('Autumn Cowl')).toBe('scarves');
-    expect(categoryFromName('Meadow Cardigan')).toBe('sweaters');
+    expect(categoryFromName('Meadow Cardigan')).toBe('cardigans');
+  });
+
+  // The list is fine-grained enough now to tell these apart, where it used to lump them together.
+  it('separates things a coarser list would have merged', () => {
+    expect(categoryFromName('Winter Shawl')).toBe('shawls');
+    expect(categoryFromName('Cabled Mittens')).toBe('mittens');
+    expect(categoryFromName('Stripy Cushion')).toBe('cushions');
+    expect(categoryFromName('Cotton Washcloth')).toBe('dishcloths');
+    expect(categoryFromName('Market Tote')).toBe('bags');
+    expect(categoryFromName('Summer Tee')).toBe('tops');
+    expect(categoryFromName('Gauge Swatch')).toBe('swatches');
+  });
+
+  it('reads a stuffed animal as a toy', () => {
+    expect(categoryFromName('Stuffed Bear')).toBe('toys');
+    expect(categoryFromName('Amigurumi Bunny')).toBe('toys');
   });
 
   // "Clover Baby Blanket" is a blanket that happens to be for a baby. The object noun wins.
   it('prefers the thing over who it is for', () => {
     expect(categoryFromName('Clover Baby Blanket')).toBe('blankets');
-    expect(categoryFromName('Baby Booties')).toBe('socks');
+    expect(categoryFromName('Baby Booties')).toBe('slippers');
   });
 
   it('still categorises a name that only says who it is for', () => {

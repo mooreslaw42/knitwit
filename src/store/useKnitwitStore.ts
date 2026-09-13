@@ -30,6 +30,7 @@ import type {
   Gauge,
   Material,
   Pattern,
+  PatternCategory,
   PatternRow,
   PatternSection,
   Project,
@@ -85,6 +86,8 @@ type KnitwitState = {
     craft: TechniqueCraft;
     patternId: string | null;
     totalRows: number;
+    // Chosen in the wizard. Omitted, it's read off the name — the same guess, made a moment later.
+    category?: PatternCategory;
     // Which of the pattern's sizes this project is being knitted in.
     sizeIndex?: number;
     // The knitter's swatch gauge. When it differs from the pattern's, the sections below are
@@ -405,6 +408,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         slotMaterials = {},
         slotTools = {},
         sections: planned = [],
+        category,
       }) => {
         const { projects, patterns, projectSeq, noteSeq } = get();
         const key = `proj${projectSeq}`;
@@ -491,7 +495,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               // pattern is a sweater. Improvised, it reads its own name and leaves the rest blank
               // for the knitter to fill in — the same reading the conversion screen used to do,
               // moved to the moment the project is created.
-              category: pattern?.category ?? categoryFromName(name),
+              category: category ?? pattern?.category ?? categoryFromName(name),
               level: pattern?.level ?? 'intermediate',
               needleSize: pattern?.needleSize ?? '',
               video: pattern?.video ?? '',

@@ -148,12 +148,15 @@ export const AWARDS: Award[] = [
       (((a.finishedByCraft.knit ?? 0) + (a.finishedByCraft.both ?? 0) > 0 ? 1 : 0) +
         ((a.finishedByCraft.crochet ?? 0) + (a.finishedByCraft.both ?? 0) > 0 ? 1 : 0)),
   },
+  // A fixed six rather than "every category". It used to be CATEGORY_ORDER.length, which was fine
+  // at ten and absurd at twenty-one — and it counted Queue and Swatch, neither of which is a thing
+  // you finish. An award nobody can reach isn't an award.
   {
     id: 'range-all',
     name: 'A bit of everything',
-    description: 'Finish a project in every category.',
+    description: 'Finish a project in six different categories.',
     group: 'range',
-    goal: CATEGORY_ORDER.length,
+    goal: 6,
     points: 50,
     measure: finishedCategories,
   },

@@ -30,16 +30,29 @@ export const SPANS = ['exact', 'all', 'to-last'] as const;
 
 // Mirrors PatternCategory / PatternLevel / ToolType in src/types/knitwit.ts. Constraining the
 // model to these means the wizard never has to cope with a category it has no label for.
+// Must stay in step with PatternCategory in src/types/knitwit.ts. The model can only answer with
+// what is listed here, so a category the app knows and this doesn't is one it will never pick.
 export const CATEGORIES = [
   'sweaters',
+  'cardigans',
+  'tops',
+  'dresses',
   'accessories',
   'hats',
   'scarves',
+  'shawls',
+  'mittens',
   'socks',
+  'slippers',
+  'bags',
   'blankets',
-  'toys',
+  'cushions',
+  'dishcloths',
   'home',
+  'toys',
   'baby',
+  'swatches',
+  'other',
   'queue',
 ] as const;
 
