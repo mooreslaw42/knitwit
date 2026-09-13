@@ -6,8 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/constants/catalogs';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  TOOL_ICONS,
+  TOOL_TYPE_LABELS,
+  yarnWeightLabel,
+} from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { toolInUseCount } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { PatternCategory, TechniqueCraft } from '@/types/knitwit';
 
@@ -17,12 +24,34 @@ const CRAFT_LABELS: Record<TechniqueCraft, string> = {
   both: 'Knitting & crochet',
 };
 
+// Everything a knitter keeps rather than works on: patterns, the techniques they've noted down,
+// and the yarn and tools in their stash. Materials used to be its own menu item; four segments in
+// one place beats two top-level entries that both mean "my reference material".
+type LibraryView = 'patterns' | 'techniques' | 'materials' | 'tools';
+
+const VIEWS: { id: LibraryView; label: string; singular: string }[] = [
+  { id: 'patterns', label: 'Patterns', singular: 'pattern' },
+  { id: 'techniques', label: 'Techniques', singular: 'technique' },
+  { id: 'materials', label: 'Yarn', singular: 'material' },
+  { id: 'tools', label: 'Tools', singular: 'tool' },
+];
+
+const NEW_ROUTE = {
+  patterns: '/pattern/new',
+  techniques: '/technique/new',
+  materials: '/material/new',
+  tools: '/tool/new',
+} as const satisfies Record<LibraryView, string>;
+
 export default function LibraryScreen() {
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
   const techniques = useKnitwitStore((state) => state.techniques);
+  const materials = useKnitwitStore((state) => state.materials);
+  const tools = useKnitwitStore((state) => state.tools);
+  const projects = useKnitwitStore((state) => state.projects);
   const toggleFavorite = useKnitwitStore((state) => state.toggleFavorite);
-  const [view, setView] = useState<'patterns' | 'techniques'>('patterns');
+  const [view, setView] = useState<LibraryView>('patterns');
   const [filter, setFilter] = useState<'all' | PatternCategory>('all');
 
   const entries = Object.entries(patterns);
@@ -36,28 +65,22 @@ export default function LibraryScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
             <ThemedText type="title">Library</ThemedText>
-            <PillButton
-              style={styles.newBtn}
-              onPress={() =>
-                router.push(view === 'patterns' ? '/pattern/new' : '/technique/new')
-              }>
+            <PillButton style={styles.newBtn} onPress={() => router.push(NEW_ROUTE[view])}>
               <ThemedText type="smallBold" themeColor="white">
-                + New {view === 'patterns' ? 'pattern' : 'technique'}
+                + New {VIEWS.find((v) => v.id === view)?.singular}
               </ThemedText>
             </PillButton>
           </View>
 
           <View style={styles.segment}>
-            <SegButton
-              label="Patterns"
-              active={view === 'patterns'}
-              onPress={() => setView('patterns')}
-            />
-            <SegButton
-              label="Techniques"
-              active={view === 'techniques'}
-              onPress={() => setView('techniques')}
-            />
+            {VIEWS.map((v) => (
+              <SegButton
+                key={v.id}
+                label={v.label}
+                active={view === v.id}
+                onPress={() => setView(v.id)}
+              />
+            ))}
           </View>
 
           {view === 'patterns' ? (
@@ -108,29 +131,90 @@ export default function LibraryScreen() {
                 ))}
               </View>
             </>
-          ) : techniqueEntries.length === 0 ? (
-            <Card style={styles.emptyCard}>
-              <ThemedText type="smallBold">No techniques yet</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Tap “+ New technique” to jot down a cast-on, decrease or finishing trick.
-              </ThemedText>
-            </Card>
+          ) : view === 'techniques' ? (
+            techniqueEntries.length === 0 ? (
+              <Card style={styles.emptyCard}>
+                <ThemedText type="smallBold">No techniques yet</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Tap “+ New technique” to jot down a cast-on, decrease or finishing trick.
+                </ThemedText>
+              </Card>
+            ) : (
+              <View style={styles.techList}>
+                {techniqueEntries.map(([id, t]) => (
+                  <Pressable
+                    key={id}
+                    style={styles.techRow}
+                    onPress={() => router.push(`/technique/${id}`)}>
+                    <View style={styles.techInfo}>
+                      <ThemedText type="smallBold">{t.name}</ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft" numberOfLines={2}>
+                        {CRAFT_LABELS[t.craft]}
+                        {t.notes ? ` · ${t.notes}` : ''}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )
+          ) : view === 'materials' ? (
+            <View style={styles.techList}>
+              {Object.entries(materials).map(([id, m]) => {
+                const meta = [
+                  m.composition,
+                  m.weight ? yarnWeightLabel(m.weight) : '',
+                  `${m.grams || '?'}g / ${m.meters || '?'}m`,
+                  m.price ? `€${m.price}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <Pressable
+                    key={id}
+                    style={styles.stashRow}
+                    onPress={() => router.push(`/material/${id}`)}>
+                    <View style={styles.thumb} />
+                    <View style={styles.techInfo}>
+                      <ThemedText type="smallBold">
+                        {m.brand} — {m.colorName}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft">
+                        {meta}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : (
             <View style={styles.techList}>
-              {techniqueEntries.map(([id, t]) => (
-                <Pressable
-                  key={id}
-                  style={styles.techRow}
-                  onPress={() => router.push(`/technique/${id}`)}>
-                  <View style={styles.techInfo}>
-                    <ThemedText type="smallBold">{t.name}</ThemedText>
-                    <ThemedText type="small" themeColor="inkSoft" numberOfLines={2}>
-                      {CRAFT_LABELS[t.craft]}
-                      {t.notes ? ` · ${t.notes}` : ''}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              ))}
+              {Object.entries(tools).map(([id, t]) => {
+                const owned = t.quantity ?? 1;
+                const inUse = toolInUseCount(projects, id);
+                return (
+                  <Pressable
+                    key={id}
+                    style={styles.stashRow}
+                    onPress={() => router.push(`/tool/${id}`)}>
+                    <View style={[styles.thumb, styles.iconThumb]}>
+                      <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
+                    </View>
+                    <View style={styles.techInfo}>
+                      <ThemedText type="smallBold">
+                        {t.thickness} {TOOL_TYPE_LABELS[t.type]}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft">
+                        {t.length}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.qtyPill, inUse > 0 && styles.qtyPillActive]}>
+                      <ThemedText type="small" themeColor={inUse > 0 ? 'coralDeep' : 'inkSoft'}>
+                        {inUse > 0 ? `${owned} · ${inUse} in use` : `${owned} in stash`}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -261,6 +345,33 @@ const styles = StyleSheet.create({
   emptyCard: {
     gap: Spacing.one,
   },
+  stashRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    padding: Spacing.three,
+  },
+  thumb: {
+    width: 44,
+    height: 44,
+    borderRadius: Radii.small,
+    backgroundColor: Colors.creamDeep,
+  },
+  iconThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyPill: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  qtyPillActive: {
+    backgroundColor: Colors.butter,
+  },
   techList: {
     gap: Spacing.two,
   },
@@ -270,6 +381,7 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
   },
   techInfo: {
+    flex: 1,
     gap: 2,
   },
 });

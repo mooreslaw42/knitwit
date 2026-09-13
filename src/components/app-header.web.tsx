@@ -13,7 +13,6 @@ const NAV = [
   { href: '/projects', label: 'Projects' },
   { href: '/library', label: 'Library' },
   { href: '/counter', label: 'Counter' },
-  { href: '/materials', label: 'Materials' },
   { href: '/calculator', label: 'Calculator' },
   { href: '/account', label: 'Account' },
 ] as const;
@@ -22,7 +21,8 @@ const NAV = [
 function activeHref(pathname: string): string | null {
   if (pathname.startsWith('/pattern') || pathname.startsWith('/technique')) return '/library';
   if (pathname.startsWith('/project')) return '/projects';
-  if (pathname.startsWith('/material') || pathname.startsWith('/tool')) return '/materials';
+  // Yarn and tools live under the Library now, so their detail screens light it up too.
+  if (pathname.startsWith('/material') || pathname.startsWith('/tool')) return '/library';
   return null;
 }
 

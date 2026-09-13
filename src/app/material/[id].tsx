@@ -136,7 +136,7 @@ export default function MaterialEditScreen() {
                 brand: form.brand || 'Unbranded',
                 colorName: form.colorName || 'Unnamed color',
               });
-              goBackOr(router, '/materials');
+              goBackOr(router, '/library');
             }}>
             <ThemedText type="smallBold" themeColor="white">
               Save
@@ -147,7 +147,7 @@ export default function MaterialEditScreen() {
             <DeleteButton
               onPress={() => {
                 deleteMaterial(id);
-                goBackOr(router, '/materials');
+                goBackOr(router, '/library');
               }}
             />
           )}

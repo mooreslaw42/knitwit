@@ -69,14 +69,14 @@ export default function NewMaterialWizardScreen() {
       brand: form.brand.trim() || 'Unbranded',
       colorName: form.colorName.trim() || 'Unnamed color',
     });
-    goBackOr(router, '/materials');
+    goBackOr(router, '/library');
   };
 
   const handleBack = () => {
     if (step > 0) {
       setStep((s) => s - 1);
     } else {
-      goBackOr(router, '/materials');
+      goBackOr(router, '/library');
     }
   };
 

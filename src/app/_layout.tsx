@@ -23,7 +23,7 @@ SplashScreen.preventAutoHideAsync();
 
 // The tab screens already render their own navigation; everything else is pushed onto this stack
 // and needs the shared header so navigation stays reachable while editing.
-const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/materials', '/calculator', '/account'];
+const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/calculator', '/account'];
 
 export default function RootLayout() {
   // Saved projects are read off the device asynchronously; hold the splash screen until they

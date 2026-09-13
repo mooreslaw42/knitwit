@@ -28,13 +28,6 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf={{ default: 'number', selected: 'number.circle.fill' }} />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="materials">
-        <NativeTabs.Trigger.Label>Materials</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'shippingbox', selected: 'shippingbox.fill' }}
-        />
-      </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="calculator">
         <NativeTabs.Trigger.Label>Calculator</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

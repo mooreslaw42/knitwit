@@ -10,7 +10,6 @@ const TABS = [
   { name: 'projects', href: '/projects', label: 'Projects' },
   { name: 'library', href: '/library', label: 'Library' },
   { name: 'counter', href: '/counter', label: 'Counter' },
-  { name: 'materials', href: '/materials', label: 'Materials' },
   { name: 'calculator', href: '/calculator', label: 'Calculator' },
   { name: 'account', href: '/account', label: 'Account' },
 ] as const;

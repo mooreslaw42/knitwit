@@ -106,7 +106,7 @@ export default function ToolEditScreen() {
                 length: form.length || '—',
                 quantity: owned,
               });
-              goBackOr(router, '/materials');
+              goBackOr(router, '/library');
             }}>
             <ThemedText type="smallBold" themeColor="white">
               Save
@@ -117,7 +117,7 @@ export default function ToolEditScreen() {
             <DeleteButton
               onPress={() => {
                 deleteTool(id);
-                goBackOr(router, '/materials');
+                goBackOr(router, '/library');
               }}
             />
           )}
