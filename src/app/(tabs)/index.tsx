@@ -6,23 +6,30 @@ import { Card, PillButton, ProgressBar } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { currentStreak, knittedToday } from '@/lib/achievements';
+import { nextAward } from '@/lib/awards';
 import { currentSectionIndexOf, projectProgress } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function HomeScreen() {
   const router = useRouter();
   const projects = useKnitwitStore((state) => state.projects);
-  const patterns = useKnitwitStore((state) => state.patterns);
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
   const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
+  const achievements = useKnitwitStore((state) => state.achievements);
+
+  const streak = currentStreak(achievements);
+  const todayCounted = knittedToday(achievements);
+  const next = nextAward(achievements);
 
   const entries = Object.entries(projects);
   // Home is a "what's on the needles" view — only projects still in progress. The full list,
-  // including finished ones, lives on the Projects tab.
-  const incomplete = entries.filter(([, p]) => projectProgress(p).pct < 1);
+  // including finished and frogged ones, lives on the Projects tab.
+  const incomplete = entries.filter(
+    ([, p]) => p.status === 'active' && projectProgress(p).pct < 1,
+  );
   const activeCount = incomplete.length;
-  const doneCount = entries.length - incomplete.length;
 
   // Where "Continue" picks up: the section last counted, or — if that project has since been
   // deleted — the current section of the first project still on the needles.
@@ -54,9 +61,18 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.stats}>
-            <MiniStat num={activeCount} label="Active" />
-            <MiniStat num={Object.keys(patterns).length} label="Saved patterns" />
-            <MiniStat num={doneCount} label="Done" />
+            <MiniStat num={activeCount} label="WIP" />
+            <MiniStat
+              num={streak}
+              label={streak === 0 ? 'Start a streak' : todayCounted ? 'Day streak' : 'Knit today'}
+            />
+            <Pressable style={styles.grow} onPress={() => router.push('/awards')}>
+              {next ? (
+                <MiniStat text={next.label.split(' of ')[0]} label={next.award.name} />
+              ) : (
+                <MiniStat text="All" label="Awards earned" />
+              )}
+            </Pressable>
           </View>
 
           {resume && (
@@ -138,13 +154,15 @@ export default function HomeScreen() {
   );
 }
 
-function MiniStat({ num, label }: { num: number; label: string }) {
+// `text` for stats whose value isn't a bare count — "4,200" toward an award reads better than a
+// number formatted the same way as "3 WIP".
+function MiniStat({ num, text, label }: { num?: number; text?: string; label: string }) {
   return (
     <Card style={styles.miniStat}>
-      <ThemedText type="title" style={styles.miniNum}>
-        {num}
+      <ThemedText type="title" style={styles.miniNum} numberOfLines={1}>
+        {text ?? num}
       </ThemedText>
-      <ThemedText type="small" themeColor="inkSoft">
+      <ThemedText type="small" themeColor="inkSoft" numberOfLines={2}>
         {label}
       </ThemedText>
     </Card>
@@ -173,6 +191,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
   },
+  grow: { flex: 1 },
   miniStat: {
     flex: 1,
     alignItems: 'center',

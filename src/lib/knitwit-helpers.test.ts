@@ -44,6 +44,7 @@ function project(sections: ProjectSection[]): Project {
     colorDeep: '#E58AA0',
     patternId: null,
     sizeIndex: 0,
+    status: 'active',
     gauge: null,
     sections,
   };

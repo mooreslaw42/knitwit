@@ -15,15 +15,18 @@ import {
   patternSectionMarkers,
   sizeValue,
 } from '@/lib/knitwit-helpers';
+import { emptyAchievements, recordActivity, stitchesForRow } from '@/lib/achievements';
 import { stitchRatio } from '@/lib/gauge';
 import { regaugeSectionRows } from '@/lib/regauge';
 import type {
+  Achievements,
   Gauge,
   Material,
   Pattern,
   PatternRow,
   PatternSection,
   Project,
+  ProjectStatus,
   Technique,
   Tool,
   UserSettings,
@@ -37,6 +40,9 @@ type KnitwitState = {
 
   settings: UserSettings;
   updateSettings: (patch: Partial<UserSettings>) => void;
+
+  achievements: Achievements;
+  setProjectStatus: (key: string, status: ProjectStatus) => void;
 
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
@@ -138,6 +144,28 @@ function resolveSection(
   return { castOn: out.castOn, rows: out.rows };
 }
 
+// Counted the moment the last row of the last section lands. Recorded rather than derived, so it
+// survives the project being deleted or the pattern being changed afterwards — and counted once,
+// because the guard in changeRow only fires on the transition.
+function recordFinish(a: Achievements, project: Project, pattern: Pattern | null): Achievements {
+  const patternId = project.patternId;
+  const category = pattern?.category;
+  return {
+    ...a,
+    totals: { ...a.totals, projectsFinished: a.totals.projectsFinished + 1 },
+    finishedByPattern: patternId
+      ? { ...a.finishedByPattern, [patternId]: (a.finishedByPattern[patternId] ?? 0) + 1 }
+      : a.finishedByPattern,
+    finishedByCategory: category
+      ? { ...a.finishedByCategory, [category]: (a.finishedByCategory[category] ?? 0) + 1 }
+      : a.finishedByCategory,
+  };
+}
+
+function bumpTotal(a: Achievements, key: keyof Achievements['totals']): Achievements {
+  return { ...a, totals: { ...a.totals, [key]: a.totals[key] + 1 } };
+}
+
 function clampSectionIndex(projects: Record<string, Project>, projectKey: string, index: number) {
   const n = projects[projectKey]?.sections.length ?? 0;
   if (!n) return 0;
@@ -155,6 +183,29 @@ export const useKnitwitStore = create<KnitwitState>()(
       // written per 10cm.
       settings: { gaugeUnit: 'cm' },
       updateSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
+
+      achievements: emptyAchievements(),
+
+      setProjectStatus: (key, status) => {
+        const { projects, achievements } = get();
+        const project = projects[key];
+        if (!project || project.status === status) return;
+        set({
+          projects: { ...projects, [key]: { ...project, status } },
+          // Lifetime and one-way: unfrogging later doesn't take the badge back, because the
+          // knitter did in fact rip it out.
+          achievements:
+            status === 'frogged'
+              ? {
+                  ...achievements,
+                  totals: {
+                    ...achievements.totals,
+                    projectsFrogged: achievements.totals.projectsFrogged + 1,
+                  },
+                }
+              : achievements,
+        });
+      },
 
       materials: SEED_MATERIALS,
       tools: SEED_TOOLS,
@@ -253,6 +304,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...deriveProjectColors(accent),
               patternId,
               sizeIndex,
+              status: 'active',
               gauge: regauged && pattern?.gauge && swatchGauge
                 ? { pattern: pattern.gauge, mine: swatchGauge }
                 : null,
@@ -444,6 +496,8 @@ export const useKnitwitStore = create<KnitwitState>()(
         set({
           patterns: { ...patterns, [resolvedId]: data },
           patternSeq: id ? patternSeq : patternSeq + 1,
+          // Only a new pattern counts; editing one you already had isn't making another.
+          achievements: id ? get().achievements : bumpTotal(get().achievements, 'patternsCreated'),
         });
         return resolvedId;
       },
@@ -469,6 +523,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         set({
           techniques: { ...techniques, [resolvedId]: data },
           techniqueSeq: id ? techniqueSeq : techniqueSeq + 1,
+          achievements: id ? get().achievements : bumpTotal(get().achievements, 'techniquesAdded'),
         });
         return resolvedId;
       },
@@ -492,19 +547,38 @@ export const useKnitwitStore = create<KnitwitState>()(
       },
 
       changeRow: (delta) => {
-        const { projects, activeProjectKey, activeSectionIndex, dismissedMarkerRow } = get();
-        const section = projects[activeProjectKey].sections[activeSectionIndex];
+        const { projects, patterns, activeProjectKey, activeSectionIndex, dismissedMarkerRow, achievements } =
+          get();
+        const project = projects[activeProjectKey];
+        const section = project.sections[activeSectionIndex];
         const nextRow = Math.min(section.totalRows, Math.max(0, section.row + delta));
+
+        // Only forward counts. Tapping back doesn't subtract — the row was knitted — and doesn't
+        // add either. Each newly reached row is worth the stitches it actually contains.
+        let earned = achievements;
+        for (let row = section.row + 1; row <= nextRow; row++) {
+          earned = recordActivity(earned, { rows: 1, stitches: stitchesForRow(section, row) });
+        }
+
+        const finishing =
+          nextRow >= section.totalRows &&
+          section.row < section.totalRows &&
+          project.sections.every((s, i) => (i === activeSectionIndex ? true : s.row >= s.totalRows));
+        if (finishing) {
+          earned = recordFinish(earned, project, project.patternId ? patterns[project.patternId] : null);
+        }
+
         set({
           projects: {
             ...projects,
             [activeProjectKey]: {
-              ...projects[activeProjectKey],
-              sections: projects[activeProjectKey].sections.map((s, i) =>
+              ...project,
+              sections: project.sections.map((s, i) =>
                 i === activeSectionIndex ? { ...s, row: nextRow } : s,
               ),
             },
           },
+          achievements: earned,
           dismissedMarkerRow: nextRow === dismissedMarkerRow ? dismissedMarkerRow : null,
         });
         get().ensureTimerRunning();
@@ -539,6 +613,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         const index = Number(indexStr);
         const elapsed = Math.round((Date.now() - timerStartedAt) / 1000);
         set({
+          achievements: recordActivity(get().achievements, { seconds: elapsed }),
           projects: {
             ...projects,
             [projectKey]: {
@@ -618,8 +693,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v18 adds user settings — see the back-fill in migrate().
-      version: 18,
+      // v19 adds the achievement record and project status — see the back-fill in migrate().
+      version: 19,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -741,6 +816,19 @@ export const useKnitwitStore = create<KnitwitState>()(
             for (const craft of Object.values(crafts ?? {})) migrateGauge(craft);
           }
         }
+        // v18 → v19: awards need a record of what happened, and a project needs a status. Both
+        // start empty: there is no history to reconstruct, because nothing was ever dated. An
+        // existing project is active unless it has already been knitted to the end, which the
+        // progress calculation still works out on its own.
+        if (version < 19 && state) {
+          const withAwards = state as { achievements?: unknown };
+          if (typeof withAwards.achievements !== 'object' || withAwards.achievements === null) {
+            withAwards.achievements = emptyAchievements();
+          }
+          for (const project of Object.values(state.projects ?? {})) {
+            if (typeof project.status !== 'string') project.status = 'active';
+          }
+        }
         // v17 → v18: preferences move into the store. An existing install was working in
         // centimetres, because that was the only thing the app could express.
         if (version < 18 && state) {
@@ -806,6 +894,7 @@ export const useKnitwitStore = create<KnitwitState>()(
       // already banked into section.seconds does persist.
       partialize: (state) => ({
         settings: state.settings,
+        achievements: state.achievements,
         materials: state.materials,
         tools: state.tools,
         patterns: state.patterns,

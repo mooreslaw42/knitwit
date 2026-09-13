@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { allProgress, standing } from '@/lib/awards';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { LengthUnit } from '@/types/knitwit';
 
@@ -19,6 +21,10 @@ const UNITS: { id: LengthUnit; label: string }[] = [
 export default function AccountScreen() {
   const [name, setName] = useState('Pim');
   const [savedName, setSavedName] = useState('Pim');
+  const router = useRouter();
+  const achievements = useKnitwitStore((state) => state.achievements);
+  const level = standing(achievements);
+  const earned = allProgress(achievements).filter((p) => p.earned).length;
   const settings = useKnitwitStore((state) => state.settings);
   const updateSettings = useKnitwitStore((state) => state.updateSettings);
 
@@ -45,6 +51,15 @@ export default function AccountScreen() {
         <PillButton onPress={() => setSavedName(name.trim() || 'Knitter')} style={styles.saveBtn}>
           <ThemedText type="smallBold" themeColor="white">
             Save
+          </ThemedText>
+        </PillButton>
+
+        <ThemedText type="smallBold" style={styles.label}>
+          Awards
+        </ThemedText>
+        <PillButton variant="secondary" onPress={() => router.push('/awards')} style={styles.saveBtn}>
+          <ThemedText type="smallBold" themeColor="ink">
+            Level {level.level} · {earned} awards →
           </ThemedText>
         </PillButton>
 

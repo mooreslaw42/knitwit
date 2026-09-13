@@ -37,6 +37,41 @@ export type UserSettings = {
   gaugeUnit: LengthUnit;
 };
 
+// One entry per day the knitter actually knitted. Keyed by *local* date, because a streak is
+// about their days rather than UTC's: knitting at 11pm and again at 1am is two days, at 11pm and
+// 00:30 is one.
+export type ActivityDay = {
+  date: string; // YYYY-MM-DD, local
+  rows: number;
+  stitches: number;
+  seconds: number;
+};
+
+// What the awards are computed from. Nothing else in the app is dated, so this is the only record
+// of what happened rather than what is currently true.
+export type Achievements = {
+  // Monotonic: deleting, frogging or tidying up never takes back what was knitted. An award you
+  // can lose by housekeeping is worse than no award.
+  totals: {
+    rows: number;
+    stitches: number;
+    seconds: number;
+    projectsFinished: number;
+    projectsFrogged: number;
+    patternsCreated: number;
+    techniquesAdded: number;
+  };
+  finishedByCategory: Partial<Record<PatternCategory, number>>;
+  finishedByPattern: Record<string, number>;
+  days: ActivityDay[];
+  earned: Record<string, string>; // award id → the date it was earned
+};
+
+// A stored status wins; an 'active' project still reads as finished once every row is counted, so
+// today's derived behaviour is unchanged and two things it couldn't express are now possible —
+// calling something done before the last row, and frogging it.
+export type ProjectStatus = 'active' | 'finished' | 'frogged';
+
 export type Craft = {
   thickness: string;
   gauge: Gauge | null;
@@ -251,6 +286,7 @@ export type Project = {
   // Which of the pattern's sizes this project is being knitted in. Every per-size number is
   // resolved against this when the project is created, so the project itself holds plain numbers.
   sizeIndex: number;
+  status: ProjectStatus;
   // Both gauges as they stood when the project was cast on. The pattern's is snapshotted too,
   // because a pattern can be edited afterwards and a project already on the needles must not
   // silently re-scale underneath the knitter. Null means it was worked at the pattern's gauge.

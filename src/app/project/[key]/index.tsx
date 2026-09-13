@@ -9,6 +9,13 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentSectionIndexOf, projectProgress, sectionStatus } from '@/lib/knitwit-helpers';
 import { formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import type { ProjectStatus } from '@/types/knitwit';
+
+const STATUSES: { id: ProjectStatus; label: string }[] = [
+  { id: 'active', label: 'On the needles' },
+  { id: 'finished', label: 'Finished' },
+  { id: 'frogged', label: 'Frogged' },
+];
 
 export default function ProjectDetailScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
@@ -18,6 +25,7 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
+  const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
 
   if (!project) return null;
 
@@ -72,6 +80,25 @@ export default function ProjectDetailScreen() {
               <ThemedText type="smallBold">No pattern linked</ThemedText>
             )}
           </Card>
+
+          {/* A project can now be more than "in progress" or "all rows counted": you can call it
+              done early, and you can rip it out. Frogging keeps it in your history rather than
+              pretending it never happened. */}
+          <View style={styles.statusRow}>
+            {STATUSES.map((option) => {
+              const on = project.status === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => setProjectStatus(key, option.id)}
+                  style={[styles.statusChip, on && styles.statusChipOn]}>
+                  <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                    {option.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
 
           <View style={styles.sectionsHeader}>
             <ThemedText type="subtitle">Sections</ThemedText>
@@ -146,6 +173,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  statusChip: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  statusChipOn: { backgroundColor: Colors.blushDeep },
   sectionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
