@@ -204,22 +204,30 @@ export function deriveProjectColors(accentColor: string | null): {
   return { color: accentColor, colorDeep: darken(accentColor, 0.28) };
 }
 
-export function todayStarted(date = new Date()): string {
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return `Started ${months[date.getMonth()]} ${date.getDate()}`;
+// A date the way a knitter reads it. Kept out of the stored value: the store holds an ISO date so
+// it can be compared and sorted, and the wording lives here.
+export function formatStarted(startedOn: string | null): string {
+  if (!startedOn) return 'Just cast on';
+  const [y, m, d] = startedOn.split('-').map(Number);
+  if (!y || !m || !d) return 'Just cast on';
+  const at = new Date(y, m - 1, d);
+  return `Started ${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+}
+
+// Free text a previous version stored ("Started Jun 14") turned into a date, so the years of
+// projects already in the app don't all reset to blank. The year was never recorded, so it's
+// inferred as the most recent one that isn't in the future — you cannot have cast on next month.
+export function parseStartedText(text: string, today = new Date()): string | null {
+  const match = text.match(/([A-Za-z]{3,})\s+(\d{1,2})/);
+  if (!match) return null;
+  const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  const month = months.indexOf(match[1].slice(0, 3).toLowerCase());
+  const day = Number(match[2]);
+  if (month < 0 || day < 1 || day > 31) return null;
+  let year = today.getFullYear();
+  if (new Date(year, month, day).getTime() > today.getTime()) year -= 1;
+  const iso = (n: number) => String(n).padStart(2, '0');
+  return `${year}-${iso(month + 1)}-${iso(day)}`;
 }
 
 export function formatClock(sec: number): string {

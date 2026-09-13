@@ -12,6 +12,7 @@ import {
 import {
   currentSectionIndexOf,
   deriveProjectColors,
+  parseStartedText,
   patternSectionMarkers,
   sizeValue,
 } from '@/lib/knitwit-helpers';
@@ -33,6 +34,7 @@ import type {
   Project,
   ProjectStatus,
   Technique,
+  TechniqueCraft,
   Tool,
   UserSettings,
 } from '@/types/knitwit';
@@ -77,7 +79,8 @@ type KnitwitState = {
 
   createProject: (draft: {
     name: string;
-    started: string;
+    startedOn: string | null;
+    craft: TechniqueCraft;
     patternId: string | null;
     totalRows: number;
     // Which of the pattern's sizes this project is being knitted in.
@@ -92,7 +95,13 @@ type KnitwitState = {
   }) => string;
   updateProject: (
     key: string,
-    patch: { name: string; started: string; patternId: string | null; photo?: string | null },
+    patch: {
+      name: string;
+      startedOn: string | null;
+      craft: TechniqueCraft;
+      patternId: string | null;
+      photo?: string | null;
+    },
   ) => void;
   deleteProject: (key: string) => void;
 
@@ -250,7 +259,8 @@ export const useKnitwitStore = create<KnitwitState>()(
 
       createProject: ({
         name,
-        started,
+        startedOn,
+        craft,
         patternId,
         totalRows,
         sizeIndex = 0,
@@ -318,7 +328,8 @@ export const useKnitwitStore = create<KnitwitState>()(
             ...projects,
             [key]: {
               name: name.trim() || 'Untitled project',
-              started: started.trim() || 'Just cast on',
+              startedOn,
+              craft,
               photo: null,
               ...deriveProjectColors(accent),
               patternId,
@@ -338,7 +349,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         return key;
       },
 
-      updateProject: (key, { name, started, patternId, photo }) => {
+      updateProject: (key, { name, startedOn, craft, patternId, photo }) => {
         const { projects, patterns } = get();
         const project = projects[key];
         if (!project) return;
@@ -349,7 +360,8 @@ export const useKnitwitStore = create<KnitwitState>()(
             [key]: {
               ...project,
               name: name.trim() || 'Untitled project',
-              started: started.trim() || 'Just cast on',
+              startedOn,
+              craft,
               patternId,
               // Undefined means the caller isn't touching the photo; null means remove it.
               photo: photo === undefined ? project.photo : photo,
@@ -732,8 +744,8 @@ export const useKnitwitStore = create<KnitwitState>()(
     }),
     {
       name: 'knitwit-store',
-      // v22 also repairs sections marked complete while short of their last row.
-      version: 22,
+      // v23 turns the free-text start into a date and gives a project its own craft.
+      version: 23,
       storage: createJSONStorage(() => AsyncStorage),
 
       // v1 → v2 added Pattern.sections. v2 → v3 moved patterns off the user's stash: a pattern now
@@ -862,6 +874,23 @@ export const useKnitwitStore = create<KnitwitState>()(
         // start empty: there is no history to reconstruct, because nothing was ever dated. An
         // existing project is active unless it has already been knitted to the end, which the
         // progress calculation still works out on its own.
+        // v22 → v23: "Started Jun 14" becomes a date, and a project carries its own craft. The
+        // year was never recorded, so parseStartedText infers the most recent one that isn't in
+        // the future. A project takes its pattern's craft where it has one — that is what it was
+        // being knitted in — and knitting otherwise, which is all the app could express.
+        if (version < 23 && state?.projects) {
+          for (const project of Object.values(state.projects)) {
+            if (!('startedOn' in project)) {
+              project.startedOn = parseStartedText(String(project.started ?? ''));
+            }
+            delete project.started;
+            if (typeof project.craft !== 'string') {
+              const patternId = project.patternId as string | null | undefined;
+              const pattern = patternId ? state.patterns?.[patternId] : undefined;
+              project.craft = (pattern?.craft as string | undefined) ?? 'knit';
+            }
+          }
+        }
         // A section marked complete while its row count says otherwise is a contradiction the
         // counter read as "finished" — repaired rather than left to sit there confusing people.
         for (const project of Object.values(state?.projects ?? {})) {

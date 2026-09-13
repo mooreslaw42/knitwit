@@ -4,12 +4,20 @@ import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import type { TechniqueCraft } from '@/types/knitwit';
+
+const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
+  value: c,
+  label: CRAFT_LABELS[c],
+}));
 
 export default function ProjectEditScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
@@ -22,7 +30,8 @@ export default function ProjectEditScreen() {
   const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
 
   const [name, setName] = useState(project?.name ?? '');
-  const [started, setStarted] = useState(project?.started ?? '');
+  const [startedOn, setStartedOn] = useState<string | null>(project?.startedOn ?? null);
+  const [craft, setCraft] = useState<TechniqueCraft>(project?.craft ?? 'knit');
   const [patternId, setPatternId] = useState(project?.patternId ?? '');
   const [photo, setPhoto] = useState<string | null>(project?.photo ?? null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -76,7 +85,13 @@ export default function ProjectEditScreen() {
           )}
 
           <FormField label="Project name" value={name} onChangeText={setName} />
-          <FormField label="Started" value={started} onChangeText={setStarted} />
+          <DateField label="Started" value={startedOn} onChange={setStartedOn} />
+          <SelectField
+            label="Craft"
+            options={CRAFT_OPTIONS}
+            value={craft}
+            onChange={setCraft}
+          />
           <SelectField
             label="Pattern"
             options={patternOptions}
@@ -87,7 +102,7 @@ export default function ProjectEditScreen() {
           <PillButton
             style={styles.saveBtn}
             onPress={() => {
-              updateProject(key, { name, started, patternId: patternId || null, photo });
+              updateProject(key, { name, startedOn, craft, patternId: patternId || null, photo });
               goBackOr(router, `/project/${key}`);
             }}>
             <ThemedText type="smallBold" themeColor="white">

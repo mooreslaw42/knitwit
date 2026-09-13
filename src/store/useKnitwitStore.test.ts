@@ -154,7 +154,7 @@ describe('createProject', () => {
   it('adds a countable project and leaves it at row zero', () => {
     const key = useKnitwitStore.getState().createProject({
       name: 'Summer Tee',
-      started: 'Started Aug 19',
+      startedOn: null, craft: 'knit',
       patternId: null,
       totalRows: 40,
     });
@@ -167,13 +167,13 @@ describe('createProject', () => {
   it('takes its colour from the linked pattern, and stays neutral without one', () => {
     const withPattern = useKnitwitStore.getState().createProject({
       name: 'A',
-      started: '',
+      startedOn: null, craft: 'knit',
       patternId: 'p1',
       totalRows: 10,
     });
     const improvised = useKnitwitStore.getState().createProject({
       name: 'B',
-      started: '',
+      startedOn: null, craft: 'knit',
       patternId: null,
       totalRows: 10,
     });
@@ -185,10 +185,11 @@ describe('createProject', () => {
   it('falls back to placeholder text rather than saving an empty name', () => {
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: '   ', started: '  ', patternId: null, totalRows: 0 });
+      .createProject({ name: '   ', startedOn: null, craft: 'knit', patternId: null, totalRows: 0 });
     const p = useKnitwitStore.getState().projects[key];
     expect(p.name).toBe('Untitled project');
-    expect(p.started).toBe('Just cast on');
+    // No date given is a real answer — "I don't remember when I cast this on".
+    expect(p.startedOn).toBeNull();
     // A zero-row section would be uncountable, so it must be coerced to a usable default.
     expect(p.sections[0].totalRows).toBe(60);
   });
@@ -197,7 +198,7 @@ describe('createProject', () => {
     const { patterns, noteSeq } = useKnitwitStore.getState();
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+      .createProject({ name: 'Cardi', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     const project = useKnitwitStore.getState().projects[key];
 
     // p1 defines two sections; the manual totalRows is ignored in favour of them.
@@ -221,7 +222,7 @@ describe('createProject', () => {
     // p1's sections each use exactly the p1m1 yarn slot and p1t1 tool slot.
     const key = useKnitwitStore.getState().createProject({
       name: 'Cardi',
-      started: '',
+      startedOn: null, craft: 'knit',
       patternId: 'p1',
       totalRows: 10,
       slotMaterials: { p1m1: 'm3', p1m2: 'm1' },
@@ -239,7 +240,7 @@ describe('createProject', () => {
   it('leaves an unmapped slot section without a concrete stash item', () => {
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+      .createProject({ name: 'Cardi', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     const project = useKnitwitStore.getState().projects[key];
     expect(project.sections[0].materialId).toBeNull();
     expect(project.sections[0].toolId).toBeNull();
@@ -271,7 +272,7 @@ describe('createProject', () => {
 
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+      .createProject({ name: 'Cardi', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     // The counter prompts off section.markers, so the flagged row must land there (row 3),
     // merged with the section's own markers (20, 40).
     expect(useKnitwitStore.getState().projects[key].sections[0].markers).toEqual([3, 20, 40]);
@@ -305,7 +306,7 @@ describe('createProject', () => {
 
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'Cardi', started: '', patternId: 'p1', totalRows: 10 });
+      .createProject({ name: 'Cardi', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     expect(useKnitwitStore.getState().projects[key].sections[0]).toMatchObject({
       castOn: 20,
       rows: [expect.objectContaining({ instruction: 'Knit all.' })],
@@ -369,7 +370,7 @@ describe('createProject', () => {
 
     const key = useKnitwitStore.getState().createProject({
       name: 'Medium',
-      started: '',
+      startedOn: null, craft: 'knit',
       patternId: 'p1',
       totalRows: 10,
       sizeIndex: 1, // "M"
@@ -403,7 +404,7 @@ describe('createProject', () => {
 
     const key = useKnitwitStore.getState().createProject({
       name: 'Looser',
-      started: '',
+      startedOn: null, craft: 'knit',
       patternId: 'p1',
       totalRows: 10,
       // Half the pattern's stitch gauge, so every count halves.
@@ -435,7 +436,7 @@ describe('createProject', () => {
     });
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'As written', started: '', patternId: 'p1', totalRows: 10 });
+      .createProject({ name: 'As written', startedOn: null, craft: 'knit', patternId: 'p1', totalRows: 10 });
     const project = useKnitwitStore.getState().projects[key];
     expect(project.sections[0].castOn).toBe(40);
     expect(project.gauge).toBeNull();
@@ -444,7 +445,7 @@ describe('createProject', () => {
   it('falls back to a single section for a pattern that defines none', () => {
     const key = useKnitwitStore
       .getState()
-      .createProject({ name: 'Mitts', started: '', patternId: 'p3', totalRows: 24 });
+      .createProject({ name: 'Mitts', startedOn: null, craft: 'knit', patternId: 'p3', totalRows: 24 });
     const project = useKnitwitStore.getState().projects[key];
     expect(project.sections).toHaveLength(1);
     expect(project.sections[0]).toMatchObject({ name: 'Main', totalRows: 24 });
@@ -453,10 +454,10 @@ describe('createProject', () => {
   it('gives each project a distinct key', () => {
     const a = useKnitwitStore
       .getState()
-      .createProject({ name: 'A', started: '', patternId: null, totalRows: 10 });
+      .createProject({ name: 'A', startedOn: null, craft: 'knit', patternId: null, totalRows: 10 });
     const b = useKnitwitStore
       .getState()
-      .createProject({ name: 'B', started: '', patternId: null, totalRows: 10 });
+      .createProject({ name: 'B', startedOn: null, craft: 'knit', patternId: null, totalRows: 10 });
     expect(a).not.toBe(b);
     expect(Object.keys(useKnitwitStore.getState().projects)).toContain(b);
   });
@@ -467,12 +468,12 @@ describe('updateProject', () => {
     const patterns = useKnitwitStore.getState().patterns;
     useKnitwitStore
       .getState()
-      .updateProject('clover', { name: 'Clover', started: 'x', patternId: 'p2' });
+      .updateProject('clover', { name: 'Clover', startedOn: null, craft: 'knit', patternId: 'p2' });
     expect(useKnitwitStore.getState().projects.clover.color).toBe(patterns.p2.accentColor);
 
     useKnitwitStore
       .getState()
-      .updateProject('clover', { name: 'Clover', started: 'x', patternId: null });
+      .updateProject('clover', { name: 'Clover', startedOn: null, craft: 'knit', patternId: null });
     expect(useKnitwitStore.getState().projects.clover.color).toBe('#F7EBDD');
   });
 
@@ -480,7 +481,7 @@ describe('updateProject', () => {
     const before = useKnitwitStore.getState().projects.clover.sections;
     useKnitwitStore
       .getState()
-      .updateProject('clover', { name: 'Renamed', started: 'x', patternId: null });
+      .updateProject('clover', { name: 'Renamed', startedOn: null, craft: 'knit', patternId: null });
     expect(useKnitwitStore.getState().projects.clover.sections).toEqual(before);
   });
 });

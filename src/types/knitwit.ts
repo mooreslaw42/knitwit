@@ -284,7 +284,12 @@ export type ProjectSection = {
 
 export type Project = {
   name: string;
-  started: string;
+  // ISO YYYY-MM-DD, or null when the knitter didn't say. A real date rather than the free text it
+  // used to be, so it can be sorted, compared and shown in whatever form suits the screen.
+  startedOn: string | null;
+  // A project can be a different craft from the pattern it came from — crocheting an edging onto
+  // a knitted pattern, say — so it carries its own rather than reading the pattern's.
+  craft: TechniqueCraft;
   photo: string | null;
   color: string;
   colorDeep: string;

@@ -4,8 +4,10 @@ import {
   deriveProjectColors,
   formatClock,
   formatSizeRun,
+  formatStarted,
   inUseLabel,
   parseSizeRun,
+  parseStartedText,
   patternSectionMarkers,
   projectProgress,
   projectState,
@@ -14,7 +16,6 @@ import {
   sectionRowCounts,
   sectionStatus,
   sizeValue,
-  todayStarted,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
@@ -39,7 +40,7 @@ function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
 function project(sections: ProjectSection[]): Project {
   return {
     name: 'Project',
-    started: 'Started Jun 1',
+    startedOn: null, craft: 'knit',
     photo: null,
     color: '#F4C6D3',
     colorDeep: '#E58AA0',
@@ -303,10 +304,36 @@ describe('deriveProjectColors', () => {
   });
 });
 
-describe('todayStarted', () => {
-  it('formats as the seeded projects do', () => {
-    expect(todayStarted(new Date(2026, 5, 14))).toBe('Started Jun 14');
-    expect(todayStarted(new Date(2026, 0, 1))).toBe('Started Jan 1');
+describe('formatStarted', () => {
+  it('reads the way a person writes a date', () => {
+    expect(formatStarted('2026-06-14')).toBe('Started 14 June 2026');
+  });
+
+  // No date is a real answer, not an error — plenty of projects are already on the needles when
+  // they get added.
+  it('says something sensible when no date was given', () => {
+    expect(formatStarted(null)).toBe('Just cast on');
+    expect(formatStarted('not a date')).toBe('Just cast on');
+  });
+});
+
+describe('parseStartedText', () => {
+  const today = new Date(2026, 8, 13); // 13 September 2026
+
+  it('reads the free text a previous version stored', () => {
+    expect(parseStartedText('Started Jun 14', today)).toBe('2026-06-14');
+    expect(parseStartedText('Started Jan 1', today)).toBe('2026-01-01');
+  });
+
+  // The year was never recorded, so it's inferred — and a date later this year has to mean last
+  // year, because you cannot have cast on next month.
+  it('puts a date still to come this year into last year', () => {
+    expect(parseStartedText('Started Dec 25', today)).toBe('2025-12-25');
+  });
+
+  it('gives up rather than inventing a date', () => {
+    expect(parseStartedText('')).toBeNull();
+    expect(parseStartedText('Just cast on')).toBeNull();
   });
 });
 

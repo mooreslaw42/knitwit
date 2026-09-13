@@ -5,8 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CRAFT_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { currentSectionIndexOf, projectProgress, sectionStatus } from '@/lib/knitwit-helpers';
+import {
+  currentSectionIndexOf,
+  formatStarted,
+  projectProgress,
+  sectionStatus,
+} from '@/lib/knitwit-helpers';
 import { formatGaugeIn } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { ProjectStatus } from '@/types/knitwit';
@@ -52,7 +58,8 @@ export default function ProjectDetailScreen() {
             </Pressable>
           </View>
           <ThemedText type="default" themeColor="inkSoft">
-            {project.started} · {Math.round(pct * 100)}% complete
+            {formatStarted(project.startedOn)} · {CRAFT_LABELS[project.craft]} ·{' '}
+            {Math.round(pct * 100)}% complete
           </ThemedText>
 
           <Card style={styles.tagCard}>

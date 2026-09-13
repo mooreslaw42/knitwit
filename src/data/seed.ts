@@ -327,7 +327,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
 export const SEED_PROJECTS: Record<string, Project> = {
   meadow: {
     name: 'Meadow Cardigan',
-    started: 'Started Jun 14',
+    startedOn: null, craft: 'knit',
     photo: null,
     color: '#F4C6D3',
     colorDeep: '#E58AA0',
@@ -374,7 +374,7 @@ export const SEED_PROJECTS: Record<string, Project> = {
   },
   rowan: {
     name: 'Rowan Socks',
-    started: 'Started Jul 2',
+    startedOn: null, craft: 'knit',
     photo: null,
     color: '#B9CFAD',
     colorDeep: '#7FA06D',
@@ -417,7 +417,7 @@ export const SEED_PROJECTS: Record<string, Project> = {
   },
   clover: {
     name: 'Clover Baby Blanket',
-    started: 'Started May 20',
+    startedOn: null, craft: 'knit',
     photo: null,
     color: '#D9C9EA',
     colorDeep: '#A985CC',

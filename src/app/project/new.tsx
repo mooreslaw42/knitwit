@@ -4,18 +4,30 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { DateField } from '@/components/date-field';
 import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CATEGORY_LABELS, TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import {
+  CATEGORY_LABELS,
+  CRAFT_LABELS,
+  CRAFT_ORDER,
+  TOOL_TYPE_LABELS,
+} from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { todayStarted } from '@/lib/knitwit-helpers';
+
+import { localDate } from '@/lib/achievements';
 import { goBackOr } from '@/lib/navigation';
 import { formatGaugeIn, isUsableGauge, stitchRatio } from '@/lib/gauge';
-import type { Gauge } from '@/types/knitwit';
+import type { Gauge, TechniqueCraft } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 type StepId = 'basics' | 'pattern' | 'match' | 'plan';
+
+const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = CRAFT_ORDER.map((c) => ({
+  value: c,
+  label: CRAFT_LABELS[c],
+}));
 
 export default function NewProjectWizardScreen() {
   const router = useRouter();
@@ -27,8 +39,12 @@ export default function NewProjectWizardScreen() {
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
-  const [started, setStarted] = useState(todayStarted());
+  const [startedOn, setStartedOn] = useState<string | null>(localDate());
+  const [craft, setCraft] = useState<TechniqueCraft>('knit');
   const [patternId, setPatternId] = useState<string | null>(null);
+  // Picking a pattern moves the craft to match it — a project usually is whatever its pattern is,
+  // and the selector stays there for the cases where it isn't.
+  const [craftTouched, setCraftTouched] = useState(false);
   const [totalRows, setTotalRows] = useState('60');
   const [nameTouched, setNameTouched] = useState(false);
   // Chosen mappings from the pattern's generic slots to the user's own stash.
@@ -76,6 +92,12 @@ export default function NewProjectWizardScreen() {
   const choosePattern = (id: string | null) => {
     if (id === patternId) return;
     setPatternId(id);
+    // Follow the pattern's craft unless the knitter has already chosen one themselves — a project
+    // usually is whatever its pattern is, but overriding it is a real case (a crocheted edging).
+    if (!craftTouched && id) {
+      const pattern = patterns[id];
+      if (pattern) setCraft(pattern.craft);
+    }
     // The old mappings belonged to a different pattern's slots — clear them.
     setSlotMaterials({});
     setSlotTools({});
@@ -123,7 +145,8 @@ export default function NewProjectWizardScreen() {
     }
     const key = createProject({
       name,
-      started,
+      startedOn,
+      craft,
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
       sizeIndex,
@@ -179,11 +202,19 @@ export default function NewProjectWizardScreen() {
                   A name is needed to save the project.
                 </ThemedText>
               )}
-              <FormField
+              <DateField
                 label="Started"
-                value={started}
-                onChangeText={setStarted}
-                placeholder="e.g. Started Jun 14"
+                value={startedOn}
+                onChange={setStartedOn}
+              />
+              <SelectField
+                label="Craft"
+                options={CRAFT_OPTIONS}
+                value={craft}
+                onChange={(v) => {
+                  setCraft(v);
+                  setCraftTouched(true);
+                }}
               />
             </>
           )}
