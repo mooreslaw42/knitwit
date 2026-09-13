@@ -1,4 +1,5 @@
 import {
+  matchesCraft,
   currentSectionIndexOf,
   darken,
   deriveProjectColors,
@@ -367,5 +368,32 @@ describe('projectState', () => {
   // "In progress" or "Completed" depending on how far it had got before being ripped out.
   it('keeps a part-worked frogged project out of "in progress"', () => {
     expect(projectState({ ...partWorked(), status: 'frogged' })).toBe('frogged');
+  });
+});
+
+describe('matchesCraft', () => {
+  it('lets everything through when no craft is chosen', () => {
+    expect(matchesCraft('knit', 'all')).toBe(true);
+    expect(matchesCraft('crochet', 'all')).toBe(true);
+    expect(matchesCraft('both', 'all')).toBe(true);
+  });
+
+  it('matches the craft asked for', () => {
+    expect(matchesCraft('knit', 'knit')).toBe(true);
+    expect(matchesCraft('crochet', 'knit')).toBe(false);
+  });
+
+  // A knitted garment with a crocheted edging is something you'd go looking for under either, and
+  // it's the rule the craft awards already use.
+  it('shows a both-craft piece under knitting and under crochet alike', () => {
+    expect(matchesCraft('both', 'knit')).toBe(true);
+    expect(matchesCraft('both', 'crochet')).toBe(true);
+  });
+
+  // The narrow one: asking for Both means pieces that are actually a mix, not everything.
+  it('does not answer Both with a single-craft piece', () => {
+    expect(matchesCraft('knit', 'both')).toBe(false);
+    expect(matchesCraft('crochet', 'both')).toBe(false);
+    expect(matchesCraft('both', 'both')).toBe(true);
   });
 });

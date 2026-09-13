@@ -6,11 +6,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, PillButton, ProgressBar, ProjectStatusBadge, Thumb } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { currentSectionIndexOf, projectProgress, projectState } from '@/lib/knitwit-helpers';
+import {
+  currentSectionIndexOf,
+  matchesCraft,
+  projectProgress,
+  projectState,
+} from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import type { TechniqueCraft } from '@/types/knitwit';
 
 type StatusFilter = 'all' | 'active' | 'finished' | 'frogged';
+type CraftFilter = 'all' | TechniqueCraft;
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -19,10 +27,16 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'frogged', label: 'Frogged' },
 ];
 
+const CRAFT_FILTERS: { value: CraftFilter; label: string }[] = [
+  { value: 'all', label: 'All crafts' },
+  ...CRAFT_ORDER.map((c) => ({ value: c as CraftFilter, label: CRAFT_LABELS[c] })),
+];
+
 export default function ProjectsScreen() {
   const router = useRouter();
   const projects = useKnitwitStore((state) => state.projects);
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [craftFilter, setCraftFilter] = useState<CraftFilter>('all');
   const [query, setQuery] = useState('');
 
   // Derive the visible list in a memo off the raw store slice rather than inside the selector,
@@ -33,10 +47,11 @@ export default function ProjectsScreen() {
       // Filtering on the project's actual state, not just its row count — a frogged project was
       // showing up under "In progress" or "Completed" depending on how far it had got.
       if (filter !== 'all' && projectState(p) !== filter) return false;
+      if (!matchesCraft(p.craft, craftFilter)) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [projects, filter, query]);
+  }, [projects, filter, craftFilter, query]);
 
   const total = Object.keys(projects).length;
 
@@ -68,6 +83,23 @@ export default function ProjectsScreen() {
                 onPress={() => setFilter(f.value)}
                 style={[styles.chip, filter === f.value && styles.chipActive]}>
                 <ThemedText type="smallBold" themeColor={filter === f.value ? 'white' : 'inkSoft'}>
+                  {f.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* A second row rather than one long one: these are two independent questions, and
+              "All" meaning two different things in the same row would read as a single choice. */}
+          <View style={styles.filters}>
+            {CRAFT_FILTERS.map((f) => (
+              <Pressable
+                key={f.value}
+                onPress={() => setCraftFilter(f.value)}
+                style={[styles.chip, craftFilter === f.value && styles.chipCraftActive]}>
+                <ThemedText
+                  type="smallBold"
+                  themeColor={craftFilter === f.value ? 'white' : 'inkSoft'}>
                   {f.label}
                 </ThemedText>
               </Pressable>
@@ -107,7 +139,7 @@ export default function ProjectsScreen() {
                       <View style={styles.projMeta}>
                         <ProjectStatusBadge status={projectState(p)} />
                         <ThemedText type="small" themeColor="inkSoft" numberOfLines={1} style={styles.projWhere}>
-                          {cur.name} · row {cur.row} of {cur.totalRows}
+                          {CRAFT_LABELS[p.craft]} · {cur.name} · row {cur.row} of {cur.totalRows}
                         </ThemedText>
                       </View>
                       <View style={{ marginTop: Spacing.one }}>
@@ -174,6 +206,11 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     backgroundColor: Colors.blushDeep,
+  },
+  // A different accent from the status row, so which of the two filters is set is readable at a
+  // glance rather than by counting rows.
+  chipCraftActive: {
+    backgroundColor: Colors.lavenderDeep,
   },
   emptyCard: {
     gap: Spacing.one,

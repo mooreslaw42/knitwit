@@ -8,6 +8,7 @@ import type {
   ProjectStatus,
   SectionStatus,
   SizedNumber,
+  TechniqueCraft,
 } from '@/types/knitwit';
 
 // ---- Per-size numbers ----
@@ -154,6 +155,18 @@ export function toolInUseCount(projects: Record<string, Project>, toolId: string
     (n, p) => n + p.sections.filter((s) => s.toolIds.includes(toolId) && !s.complete).length,
     0,
   );
+}
+
+// Whether a project or pattern of this craft answers to a craft filter.
+//
+// A piece that is both is genuinely both, so it shows under Knitting and under Crochet alike —
+// the same rule the craft awards use, and the useful one: a knitted garment with a crocheted
+// edging is a thing you'd go looking for under either. "Both" is the narrow filter, asking for
+// pieces that are actually a mix rather than for everything.
+export function matchesCraft(craft: TechniqueCraft, filter: TechniqueCraft | 'all'): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'both') return craft === 'both';
+  return craft === filter || craft === 'both';
 }
 
 // "1 in use" / "2 are in use" / "None in use" — the subject-verb agreement the UI asks for.
