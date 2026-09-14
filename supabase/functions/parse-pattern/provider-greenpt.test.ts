@@ -10,7 +10,7 @@ const request: ModelRequest = {
   system: 'system',
   user: 'user',
   schema: { type: 'object' },
-  model: 'glm-5.3-flash',
+  model: 'glm-5.2', // the provider's current default; the fallback is the other one
   maxTokens: 100,
 };
 
@@ -122,30 +122,27 @@ describe('a GreenPT call that hits a transient failure', () => {
     await expect(settle(greenptProvider('key').complete(request))).rejects.toThrow(
       /GreenPT returned 503/,
     );
-    // Three on the default, then three more on the fallback.
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    // Two on the default, then two more on the other model.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  // Measured on the day: glm-5.3-flash was 503ing while glm-5.2 answered fine. Retrying the dead
-  // one forever is not a fix; this is.
-  it('moves to the fallback model when the default is the thing that is down', async () => {
+  // Measured on the day: whichever of the two is unwell, the other answers. The fallback is
+  // "try the other model", so this test does not care which name is currently primary.
+  it('moves to the other model when the default is the thing that is down', async () => {
     const bodies: string[] = [];
     const fetchMock = jest.fn().mockImplementation((_url: string, init: { body: string }) => {
       bodies.push(init.body);
       const model = JSON.parse(init.body).model as string;
-      return Promise.resolve(model === 'glm-5.3-flash' ? fail(503) : ok());
+      return Promise.resolve(model === request.model ? fail(503) : ok());
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const result = await settle(greenptProvider('key').complete(request));
 
     expect(result.text).toBe('{"a":1}');
-    expect(bodies.map((b) => JSON.parse(b).model)).toEqual([
-      'glm-5.3-flash',
-      'glm-5.3-flash',
-      'glm-5.3-flash',
-      'glm-5.2',
-    ]);
+    const tried = bodies.map((b) => JSON.parse(b).model);
+    expect(tried.slice(0, 2)).toEqual([request.model, request.model]);
+    expect(tried[2]).not.toBe(request.model);
   });
 
   it('leaves a pinned model pinned, rather than answering as a model nobody asked for', async () => {
@@ -153,9 +150,22 @@ describe('a GreenPT call that hits a transient failure', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     await expect(
-      settle(greenptProvider('key').complete({ ...request, model: 'glm-5.2' })),
+      settle(greenptProvider('key').complete({ ...request, model: 'some-pinned-model' })),
     ).rejects.toThrow(/GreenPT returned 503/);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  // The regression the knitter actually felt: a provider that stopped answering, retried with no
+  // clock, turned a slow import into one that never came back.
+  it('gives every attempt a leash so a hanging provider cannot stall the import', async () => {
+    const fetchMock = jest.fn().mockImplementation((_url: string, init: { signal?: AbortSignal }) => {
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+      return Promise.resolve(ok());
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await settle(greenptProvider('key').complete(request));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not reach for the fallback when the request itself is the problem', async () => {

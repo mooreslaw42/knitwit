@@ -7,29 +7,24 @@ import { EMPTY_USAGE, type ModelProvider, type ModelRequest, type ModelResult } 
 const BASE_URL = 'https://api.greenpt.ai/v1';
 
 // The job is small and tightly constrained: read one irregular row, emit a handful of stitch
-// groups against a fixed schema. That doesn't want a flagship coding model — glm-5.2 costs
-// €1.10/€4.40 per million tokens and is built for multi-file software engineering. glm-5.3-flash
-// is a tenth of that (€0.11/€0.44) and still has reasoning and tool use, and being the same
-// vendor family its schema handling should match what we've already seen work.
+// groups against a fixed schema. That doesn't want a flagship coding model, and glm-5.3-flash —
+// a tenth of glm-5.2's price at €0.11/€0.44 per million against €1.10/€4.40 — was the default
+// for exactly that reason.
+//
+// It is not the default today because it does not work. Measured against the deployed function
+// on 2026-09-14: glm-5.3-flash failed 9 of 11 calls with 503 "The model provider encountered an
+// error", then stopped answering at all — pinned requests hung past 50s where glm-5.2 returned
+// in 11s, 4 times out of 4. A tenth of the price is no bargain when the import never arrives.
+//
+// **Flip these two back when glm-5.3-flash recovers**, and check the usage log to confirm it is
+// answering rather than quietly falling through. The pairing below is symmetric on purpose: the
+// fallback is "try the other model", not "try a better one", so whichever is healthy wins.
 //
 // This is safe to be wrong about: rowStitchesAfter() reconciles every parsed row against the
 // count the pattern states for itself, so a model that reads rows worse shows up as rows flagged
 // for review, not as a silently bad chart. Override per call to compare.
-const DEFAULT_MODEL = 'glm-5.3-flash';
-
-// Where to go when the default model itself is down.
-//
-// Measured 2026-09-14: glm-5.3-flash returned 503 "The model provider encountered an error" on
-// 9 of 11 calls while glm-5.2 answered 4 of 4, so this is one model being unwell rather than
-// GreenPT being down — and no amount of retrying the same name fixes that.
-//
-// glm-5.2 is ten times the price (€1.10/€4.40 per million against €0.11/€0.44), which is exactly
-// why it isn't the default. It is still far cheaper than an import that doesn't work. The
-// fallback is deliberately narrow: only when the *default* was in play, and only after the
-// retries are spent, so a caller who pinned a model still gets the model they asked for and a
-// healthy day never touches it. Every response carries the model that answered, and the usage
-// log records it, so the cost of a bad week is visible rather than inferred.
-const FALLBACK_MODEL = 'glm-5.2';
+const DEFAULT_MODEL = 'glm-5.2';
+const FALLBACK_MODEL = 'glm-5.3-flash';
 
 // Whether this endpoint honours `response_format: {type:'json_schema'}` is not documented, so we
 // find out at runtime rather than assume: ask for the schema, and if the API rejects the
@@ -52,9 +47,20 @@ const RETRY_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 // Three in total, not more. Supabase Edge Functions have a wall-clock budget and a document call
 // is already slow, so the backoff stays short: a provider that is actually down should fail the
 // import quickly rather than hold the request open until the platform kills it.
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 2;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 4_000;
+
+// A failing provider used to answer 503 in about two seconds. Then it started not answering at
+// all, and a retry loop with no clock simply waited — three times over, which is what turned a
+// slow import into one that never came back. Every attempt now gets a leash, and the whole call
+// gets a deadline: no new attempt begins once the budget is spent, however many are left.
+//
+// The leash has to clear the slowest honest answer, not the fastest: a long pattern at 32k output
+// tokens genuinely takes a while, and cutting that off would break working imports to punish a
+// broken provider. Hence generous per attempt, and bounded overall.
+const ATTEMPT_TIMEOUT_MS = 60_000;
+const DEADLINE_MS = 100_000;
 
 export function isRetryableStatus(status: number): boolean {
   return RETRY_STATUSES.has(status);
@@ -120,6 +126,7 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
 
     return await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
+      signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -149,6 +156,7 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
   async function postWithRetry(
     req: ModelRequest,
     mode: 'json_schema' | 'json_object',
+    deadline: number,
   ): Promise<Response> {
     let lastError: unknown;
 
@@ -159,7 +167,9 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
       } catch (error) {
         lastError = error;
         if (attempt === MAX_ATTEMPTS) throw error;
-        await sleep(retryDelayMs(attempt, null));
+        const delay = retryDelayMs(attempt, null);
+        if (Date.now() + delay >= deadline) throw error;
+        await sleep(delay);
         continue;
       }
 
@@ -167,6 +177,10 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
       if (attempt === MAX_ATTEMPTS) return response;
 
       const delay = retryDelayMs(attempt, response.headers.get('retry-after'));
+      // Out of budget: hand back the failure now rather than spend the rest of the knitter's
+      // patience on an attempt that would land after we have already given up.
+      if (Date.now() + delay >= deadline) return response;
+
       console.warn(
         `GreenPT returned ${response.status}; retrying in ${delay}ms (attempt ${attempt} of ${MAX_ATTEMPTS}).`,
       );
@@ -184,20 +198,26 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
     defaultModel: DEFAULT_MODEL,
 
     async complete(req: ModelRequest): Promise<ModelResult> {
+      const deadline = Date.now() + DEADLINE_MS;
       let mode: 'json_schema' | 'json_object' =
         schemaMode === 'unknown' ? 'json_schema' : schemaMode;
-      let response = await postWithRetry(req, mode);
+      let response = await postWithRetry(req, mode, deadline);
 
       // The default model is down rather than busy — retries are spent and it is still failing
       // transiently. Try the fallback once before giving up. Only for the default: a pinned model
       // is a deliberate choice, and quietly answering with a different one would make a
       // comparison run lie about what it measured.
-      if (!response.ok && isRetryableStatus(response.status) && req.model === DEFAULT_MODEL) {
+      if (
+        !response.ok &&
+        isRetryableStatus(response.status) &&
+        req.model === DEFAULT_MODEL &&
+        Date.now() < deadline
+      ) {
         console.warn(
-          `GreenPT: ${DEFAULT_MODEL} still failing with ${response.status} after ${MAX_ATTEMPTS} attempts; falling back to ${FALLBACK_MODEL}, which costs more.`,
+          `GreenPT: ${DEFAULT_MODEL} still failing with ${response.status} after ${MAX_ATTEMPTS} attempts; trying ${FALLBACK_MODEL}.`,
         );
         await response.body?.cancel().catch(() => {});
-        response = await postWithRetry({ ...req, model: FALLBACK_MODEL }, mode);
+        response = await postWithRetry({ ...req, model: FALLBACK_MODEL }, mode, deadline);
       }
 
       // A 4xx on the first attempt is most likely the unsupported `response_format` — retry once
@@ -217,7 +237,7 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
         );
         schemaMode = 'json_object';
         mode = 'json_object';
-        response = await postWithRetry(req, mode);
+        response = await postWithRetry(req, mode, deadline);
       }
 
       if (!response.ok) {
