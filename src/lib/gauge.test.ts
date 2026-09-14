@@ -15,6 +15,9 @@ import {
   stitchesToCm,
   stitchRatio,
   toCm,
+  gaugeAtNeedle,
+  needleForGauge,
+  nearestToolSize,
 } from '@/lib/gauge';
 import type { Gauge } from '@/types/knitwit';
 
@@ -277,5 +280,113 @@ describe('defaultWindow', () => {
   it('uses each system’s own convention', () => {
     expect(defaultWindow('cm')).toEqual({ width: 10, height: 10, unit: 'cm' });
     expect(defaultWindow('inch')).toEqual({ width: 4, height: 4, unit: 'inch' });
+  });
+});
+
+describe('gauge and needle size', () => {
+  const g = (stitches: number, rows = 0): Gauge => ({
+    stitches, rows, width: 10, height: 10, unit: 'cm',
+  });
+
+  describe('gaugeAtNeedle', () => {
+    it('loosens on a bigger needle', () => {
+      // 22 sts/10cm on 4mm: a 4.5mm needle makes wider stitches, so fewer fit.
+      expect(gaugeAtNeedle(g(22), 4, 4.5)?.stitches).toBeCloseTo(19.6, 1);
+    });
+
+    it('tightens on a smaller needle', () => {
+      expect(gaugeAtNeedle(g(22), 4, 3.5)?.stitches).toBeCloseTo(25.1, 1);
+    });
+
+    it('changes nothing when the needle is the same', () => {
+      expect(gaugeAtNeedle(g(22, 30), 4, 4)).toMatchObject({ stitches: 22, rows: 30 });
+    });
+
+    // A taller stitch as well as a wider one.
+    it('moves row gauge too', () => {
+      expect(gaugeAtNeedle(g(22, 30), 4, 5)?.rows).toBeCloseTo(24, 1);
+    });
+
+    it('leaves row gauge at zero when there wasn’t one', () => {
+      expect(gaugeAtNeedle(g(22, 0), 4, 5)?.rows).toBe(0);
+    });
+
+    it('keeps the window it was measured over', () => {
+      const inches: Gauge = { stitches: 20, rows: 28, width: 4, height: 4, unit: 'inch' };
+      expect(gaugeAtNeedle(inches, 4, 5)).toMatchObject({ width: 4, height: 4, unit: 'inch' });
+    });
+
+    it('refuses nonsense rather than returning it', () => {
+      expect(gaugeAtNeedle(g(0), 4, 5)).toBeNull();
+      expect(gaugeAtNeedle(g(22), 0, 5)).toBeNull();
+      expect(gaugeAtNeedle(g(22), 4, 0)).toBeNull();
+    });
+  });
+
+  describe('needleForGauge', () => {
+    it('sends you smaller when you need more stitches', () => {
+      // Getting 20, want 22: a finer fabric needs a finer needle.
+      const mm = needleForGauge(g(20), 4.5, g(22));
+      expect(mm).toBeLessThan(4.5);
+      expect(mm).toBeCloseTo(4.09, 2);
+    });
+
+    it('sends you bigger when you need fewer', () => {
+      expect(needleForGauge(g(24), 4, g(22))!).toBeGreaterThan(4);
+    });
+
+    it('stays put when the gauges already match', () => {
+      expect(needleForGauge(g(22), 4.5, g(22))).toBeCloseTo(4.5, 5);
+    });
+
+    // The round trip has to hold, or the two halves of the panel would disagree with each other.
+    it('agrees with gaugeAtNeedle in both directions', () => {
+      const want = g(19.6);
+      const mm = needleForGauge(g(22), 4, want)!;
+      expect(gaugeAtNeedle(g(22), 4, mm)?.stitches).toBeCloseTo(19.6, 1);
+    });
+
+    // Both gauges are compared per centimetre, so a pattern written in inches and a swatch
+    // measured in cm are talking about the same fabric.
+    it('compares across measuring windows', () => {
+      // 22 sts to 10cm is 22.35 sts to 4in — the same fabric, stated the other way. Asking for it
+      // when you already have it should leave the needle where it is.
+      const sameInInches: Gauge = { stitches: 22.35, rows: 0, width: 4, height: 4, unit: 'inch' };
+      expect(needleForGauge(g(22), 4, sameInInches)).toBeCloseTo(4, 1);
+    });
+
+    it('reads a coarser window as a coarser fabric', () => {
+      // 8.8 sts to 4in is a much looser fabric than 22 sts to 10cm, and wants a much bigger hook.
+      const coarse: Gauge = { stitches: 8.8, rows: 0, width: 4, height: 4, unit: 'inch' };
+      expect(needleForGauge(g(22), 4, coarse)!).toBeGreaterThan(9);
+    });
+
+    it('refuses nonsense', () => {
+      expect(needleForGauge(g(0), 4, g(22))).toBeNull();
+      expect(needleForGauge(g(22), 0, g(22))).toBeNull();
+    });
+  });
+
+  describe('nearestToolSize', () => {
+    const sizes = [3, 3.25, 3.5, 3.75, 4, 4.5, 5];
+
+    it('snaps to a size that actually exists', () => {
+      expect(nearestToolSize(4.09, sizes)).toBe(4);
+      expect(nearestToolSize(4.4, sizes)).toBe(4.5);
+    });
+
+    it('picks the closer of two neighbours', () => {
+      expect(nearestToolSize(3.6, sizes)).toBe(3.5);
+      expect(nearestToolSize(3.7, sizes)).toBe(3.75);
+    });
+
+    it('clamps to the ends rather than inventing', () => {
+      expect(nearestToolSize(0.5, sizes)).toBe(3);
+      expect(nearestToolSize(40, sizes)).toBe(5);
+    });
+
+    it('has nothing to say about an empty scale', () => {
+      expect(nearestToolSize(4, [])).toBeNull();
+    });
   });
 });

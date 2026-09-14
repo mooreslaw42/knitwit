@@ -2,25 +2,40 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { GaugeField } from '@/components/gauge-field';
-import { Card, FormField } from '@/components/knitwit-ui';
+import { Card, FormField, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import {
   convertGauge,
   formatGauge,
+  gaugeAtNeedle,
   isUsableGauge,
+  nearestToolSize,
+  needleForGauge,
   rescaleStitches,
   rowsToCm,
   stitchesToCm,
   stitchRatio,
   type StitchMultiple,
 } from '@/lib/gauge';
+import {
+  parseToolSize,
+  TOOL_SIZES,
+  toolSizeLabel,
+  toolSizeOptions,
+  type SizeScale,
+} from '@/constants/catalogs';
 import type { Gauge } from '@/types/knitwit';
 
 // A workbench for the gauge maths, before any of it is wired into patterns. Everything here is
 // read-only and stores nothing — it exists so the arithmetic can be checked against real patterns
 // and a tape measure first. See ~/.claude/plans/knitwit-gauge-units-and-regauging.md.
+
+const CRAFT_OPTIONS: { value: SizeScale; label: string }[] = [
+  { value: 'knit', label: 'Knitting needles' },
+  { value: 'crochet', label: 'Crochet hooks' },
+];
 
 const DEFAULT_PATTERN: Gauge = { stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' };
 const DEFAULT_MINE: Gauge = { stitches: 20, rows: 28, width: 10, height: 10, unit: 'cm' };
@@ -37,6 +52,8 @@ export default function CalculatorScreen() {
   const [multipleOf, setMultipleOf] = useState('');
   const [multiplePlus, setMultiplePlus] = useState('');
   const [measure, setMeasure] = useState('88');
+  const [myNeedle, setMyNeedle] = useState('4mm');
+  const [sizeCraft, setSizeCraft] = useState<SizeScale>('knit');
 
   const ratio = stitchRatio(patternGauge ?? DEFAULT_PATTERN, myGauge ?? DEFAULT_MINE);
   const of = parseInt(multipleOf, 10);
@@ -50,6 +67,19 @@ export default function CalculatorScreen() {
 
   const rawMeasure = parseFloat(measure.replace(',', '.'));
   const hasMeasure = Number.isFinite(rawMeasure) && rawMeasure >= 0;
+
+  // What to swatch on next, and what that would get you. Computed together so the two halves of
+  // the answer can never disagree — the predicted gauge is the one for the size being suggested,
+  // not for the unrounded number behind it.
+  const myNeedleMm = parseToolSize(myNeedle);
+  const suggestion = (() => {
+    if (myNeedleMm === null || !isUsableGauge(myGauge) || !isUsableGauge(patternGauge)) return null;
+    const exact = needleForGauge(myGauge, myNeedleMm, patternGauge);
+    if (exact === null) return null;
+    const nearest = nearestToolSize(exact, TOOL_SIZES);
+    if (nearest === null) return null;
+    return { exact, nearest, predicted: gaugeAtNeedle(myGauge, myNeedleMm, nearest) };
+  })();
 
   return (
     <ThemedView style={styles.container}>
@@ -166,6 +196,72 @@ export default function CalculatorScreen() {
                 </View>
               )}
             </>
+          )}
+        </Card>
+
+        {/* The other way a knitter fixes a gauge that doesn't match: change the needle rather
+            than the numbers. Sits after the rescale because it is the alternative to it — if you
+            can get to the pattern's gauge, none of the arithmetic above is needed. */}
+        <Card style={styles.card}>
+          <ThemedText type="smallBold">Which needle or hook?</ThemedText>
+          <ThemedText type="small" themeColor="inkSoft">
+            A stitch comes out about as wide as the tool that made it, so gauge moves roughly with
+            1/size. Enough to tell you what to swatch on next — not enough to skip the swatch.
+          </ThemedText>
+
+          <SelectField
+            label="Craft"
+            options={CRAFT_OPTIONS}
+            value={sizeCraft}
+            onChange={setSizeCraft}
+          />
+          <SelectField
+            label="You swatched on"
+            options={toolSizeOptions(myNeedle, sizeCraft)}
+            value={myNeedle}
+            onChange={setMyNeedle}
+          />
+
+          {myNeedleMm === null ? (
+            <ThemedText type="small" themeColor="coralDeep">
+              Pick the size you swatched on.
+            </ThemedText>
+          ) : suggestion == null ? (
+            <ThemedText type="small" themeColor="coralDeep">
+              Both gauges need a stitch count over a real width.
+            </ThemedText>
+          ) : (
+            <View style={styles.result}>
+              {suggestion.nearest === myNeedleMm ? (
+                <>
+                  <ThemedText type="title">{toolSizeLabel(myNeedleMm, sizeCraft)}</ThemedText>
+                  <ThemedText type="small" themeColor="sageDeep">
+                    You&apos;re already on the closest size there is. Rescaling the stitch counts
+                    above is the way to fix the difference.
+                  </ThemedText>
+                </>
+              ) : (
+                <>
+                  <ThemedText type="title">
+                    Try {toolSizeLabel(suggestion.nearest, sizeCraft)}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {suggestion.nearest < myNeedleMm ? 'Smaller' : 'Bigger'} than the{' '}
+                    {toolSizeLabel(myNeedleMm, sizeCraft)} you used — you need{' '}
+                    {suggestion.nearest < myNeedleMm ? 'more' : 'fewer'} stitches to the
+                    centimetre. Exactly {round(suggestion.exact, 2)}mm, snapped to a size that
+                    exists.
+                  </ThemedText>
+                </>
+              )}
+              {suggestion.predicted ? (
+                <ThemedText type="small" themeColor="inkSoft">
+                  On {toolSizeLabel(suggestion.nearest, sizeCraft)} you&apos;d expect about{' '}
+                  {formatGauge(suggestion.predicted)} — the pattern wants{' '}
+                  {formatGauge(patternGauge)}.
+                </ThemedText>
+              ) : null}
+            </View>
           )}
         </Card>
 

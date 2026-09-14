@@ -222,3 +222,46 @@ export function presetIndexFor(g: Gauge | null | undefined): number {
     (p) => p.width === g.width && p.height === g.height && p.unit === g.unit,
   );
 }
+
+// ---- Gauge and needle size ----
+
+// Changing needle size is the usual way a knitter fixes a gauge that doesn't match, and the
+// arithmetic is worth doing before winding a second swatch.
+//
+// The model: a stitch is about as wide as the needle that made it, so stitches per centimetre
+// varies roughly with 1/needle. `stitchesPerCm × needleMm` is therefore about constant for one
+// yarn at one tension, and that constant is what these two functions move between.
+//
+// It is an estimate and the app says so wherever it shows one. Real gauge depends on the yarn,
+// the stitch pattern and how tightly the knitter holds the yarn, none of which this knows. It
+// gets you to the right needle to swatch on, not out of swatching.
+
+// What you'd get on a different needle, given what you get on this one.
+export function gaugeAtNeedle(from: Gauge, fromMm: number, toMm: number): Gauge | null {
+  if (!isUsableGauge(from) || fromMm <= 0 || toMm <= 0) return null;
+  const factor = fromMm / toMm;
+  const stitches = from.stitches * factor;
+  // Row gauge moves with needle size too, and by roughly the same proportion — a bigger needle
+  // makes a taller stitch as well as a wider one.
+  const rows = from.rows > 0 ? from.rows * factor : 0;
+  return { ...from, stitches: Math.round(stitches * 10) / 10, rows: Math.round(rows * 10) / 10 };
+}
+
+// The needle that would get you from the gauge you have to the gauge you want.
+//
+// Returns the unrounded millimetres. Callers snap it to a size that actually exists — there is no
+// 4.37mm needle, and offering one would be worse than useless.
+export function needleForGauge(have: Gauge, haveMm: number, want: Gauge): number | null {
+  if (!isUsableGauge(have) || !isUsableGauge(want) || haveMm <= 0) return null;
+  const havePerCm = stitchesPerCm(have);
+  const wantPerCm = stitchesPerCm(want);
+  if (havePerCm <= 0 || wantPerCm <= 0) return null;
+  // More stitches to the centimetre means a smaller needle, hence the inversion.
+  return (haveMm * havePerCm) / wantPerCm;
+}
+
+// The size on the shelf nearest a computed one, so the answer is something you can pick up.
+export function nearestToolSize(mm: number, sizes: number[]): number | null {
+  if (!Number.isFinite(mm) || sizes.length === 0) return null;
+  return sizes.reduce((best, s) => (Math.abs(s - mm) < Math.abs(best - mm) ? s : best), sizes[0]);
+}
