@@ -53,7 +53,12 @@ export function LabelField({
       {value.length > 0 ? (
         <View style={styles.chipRow}>
           {value.map((l) => (
-            <Pressable key={l} style={styles.chipOn} onPress={() => onChange(removeLabel(value, l))}>
+            <Pressable
+              key={l}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove the label ${l}`}
+              style={styles.chipOn}
+              onPress={() => onChange(removeLabel(value, l))}>
               <ThemedText type="smallBold" themeColor="white" numberOfLines={1} style={styles.chipText}>
                 {l} ✕
               </ThemedText>

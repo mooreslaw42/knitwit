@@ -25,6 +25,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatClock, sectionStatus } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function SectionDetailScreen() {
@@ -43,6 +44,7 @@ export default function SectionDetailScreen() {
   const setSectionKit = useKnitwitStore((state) => state.setSectionKit);
   const setSectionNotes = useKnitwitStore((state) => state.setSectionNotes);
   const seconds = useLiveSeconds(key, sectionIndex);
+  usePageTitle(project?.sections[sectionIndex]?.name);
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -81,10 +83,12 @@ export default function SectionDetailScreen() {
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
-            <ThemedText type="title">{section.name}</ThemedText>
+            <ThemedText type="title" heading={1}>{section.name}</ThemedText>
             <View style={styles.headerActions}>
               <StatusBadge status={status} />
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={editing ? 'Stop editing this section' : 'Edit this section'}
                 hitSlop={8}
                 onPress={() => {
                   setDraftName(section.name);
@@ -215,7 +219,7 @@ export default function SectionDetailScreen() {
 
           {sortedNotes.length > 0 && (
             <>
-              <ThemedText type="subtitle" style={styles.notesTitle}>
+              <ThemedText type="subtitle" heading={2} style={styles.notesTitle}>
                 Notes
               </ThemedText>
               <View style={styles.notesList}>

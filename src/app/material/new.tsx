@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { WASHING_LABELS, YARN_WEIGHTS,
@@ -51,6 +52,7 @@ const WASHING_OPTIONS = Object.entries(WASHING_LABELS).map(([value, label]) => (
 }));
 
 export default function NewMaterialWizardScreen() {
+  usePageTitle('New yarn');
   const router = useRouter();
   const saveMaterial = useKnitwitStore((state) => state.saveMaterial);
 

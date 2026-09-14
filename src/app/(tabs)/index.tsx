@@ -3,7 +3,9 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, Thumb } from '@/components/knitwit-ui';
+import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday } from '@/lib/achievements';
@@ -13,6 +15,7 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Project } from '@/types/knitwit';
 
 export default function HomeScreen() {
+  usePageTitle('Home');
   const router = useRouter();
   const projects = useKnitwitStore((state) => state.projects);
   const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
@@ -66,7 +69,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <ThemedText type="title">Good evening, Pim 🧶</ThemedText>
+            <ThemedText type="title" heading={1}>Good evening, Pim 🧶</ThemedText>
           </View>
 
           <View style={styles.stats}>
@@ -144,10 +147,10 @@ export default function HomeScreen() {
               const pct = projectProgress(p).pct;
               const cur = p.sections[currentSectionIndexOf(p)];
               return (
-                <Pressable
+                <CardLink
                   key={key}
                   style={styles.projRow}
-                  onPress={() => router.push(`/project/${key}`)}>
+                  href={`/project/${key}`}>
                   <Thumb photo={p.photo} color={p.color} />
                   <View style={styles.projInfo}>
                     <ThemedText type="smallBold">{p.name}</ThemedText>
@@ -161,7 +164,7 @@ export default function HomeScreen() {
                   <ThemedText type="smallBold" themeColor="sageDeep" style={styles.pct}>
                     {Math.round(pct * 100)}%
                   </ThemedText>
-                </Pressable>
+                </CardLink>
               );
             })}
           </View>

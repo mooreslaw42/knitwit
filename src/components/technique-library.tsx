@@ -1,8 +1,8 @@
-import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Card, Spinner } from '@/components/knitwit-ui';
+import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
@@ -36,7 +36,6 @@ const STATUS_COLOURS: Record<TechniqueStatus, string> = {
 // one tap away. Techniques are picked from the catalogue rather than typed, so two knitters'
 // German short rows are the same thing and a pattern can point at it.
 export function TechniqueLibrary() {
-  const router = useRouter();
   const mine = useKnitwitStore((state) => state.techniques);
   const catalogue = useKnitwitStore((state) => state.catalogue);
   const catalogueError = useKnitwitStore((state) => state.catalogueError);
@@ -177,7 +176,7 @@ export function TechniqueLibrary() {
           ) : null}
           {group.items.map((t) => (
             <View key={t.id} style={styles.row}>
-              <Pressable style={styles.rowMain} onPress={() => router.push(`/technique/${t.id}`)}>
+              <CardLink href={`/technique/${t.id}`} style={styles.rowMain}>
                 <ThemedText type="smallBold">
                   {t.name}
                   {t.isCustom ? ' · yours' : ''}
@@ -186,7 +185,7 @@ export function TechniqueLibrary() {
                   {CRAFT_LABELS[t.craft]}
                   {t.summary ? ` · ${t.summary}` : ''}
                 </ThemedText>
-              </Pressable>
+              </CardLink>
               {/* Status set from the row. Finding out you already know something shouldn't cost a
                   screen transition. Tapping the one that's already set clears it. */}
               <View style={styles.statusRow}>

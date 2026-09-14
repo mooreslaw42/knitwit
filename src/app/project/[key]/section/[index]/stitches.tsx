@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { sizeValue } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function ProjectSectionStitchesScreen() {
@@ -18,6 +19,7 @@ export default function ProjectSectionStitchesScreen() {
   const project = useKnitwitStore((state) => state.projects[key]);
   const setSectionStitches = useKnitwitStore((state) => state.setSectionStitches);
   const section = project?.sections[sectionIndex];
+  usePageTitle(section ? `${section.name} · stitches` : undefined);
 
   if (!project || !section) return null;
 
@@ -25,7 +27,7 @@ export default function ProjectSectionStitchesScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{section.name}</ThemedText>
+          <ThemedText type="title" heading={1}>{section.name}</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             {project.name} · stitch-by-stitch
           </ThemedText>

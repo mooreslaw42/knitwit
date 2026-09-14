@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, ProgressBar } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday, longestStreak } from '@/lib/achievements';
@@ -17,6 +18,7 @@ function hours(seconds: number): string {
 }
 
 export default function AwardsScreen() {
+  usePageTitle('Awards');
   const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
 
@@ -30,7 +32,7 @@ export default function AwardsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.content}>
-          <ThemedText type="title">Awards</ThemedText>
+          <ThemedText type="title" heading={1}>Awards</ThemedText>
 
           <Card style={styles.levelCard}>
             <ThemedText type="title">Level {level.level}</ThemedText>

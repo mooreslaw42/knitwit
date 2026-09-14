@@ -5,7 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton, Thumb } from '@/components/knitwit-ui';
 import { TechniqueLibrary } from '@/components/technique-library';
+import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
@@ -42,6 +44,7 @@ const NEW_ROUTE = {
 } as const satisfies Partial<Record<LibraryView, string>>;
 
 export default function LibraryScreen() {
+  usePageTitle('Library');
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
   const materials = useKnitwitStore((state) => state.materials);
@@ -69,7 +72,7 @@ export default function LibraryScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
-            <ThemedText type="title">Library</ThemedText>
+            <ThemedText type="title" heading={1}>Library</ThemedText>
             {/* No "+ New technique": a technique is picked from the shared catalogue, not
                 written. The techniques view has its own Browse tab for that. */}
             {view !== 'techniques' && (
@@ -126,31 +129,37 @@ export default function LibraryScreen() {
 
               <View style={styles.grid}>
                 {visible.map(([id, pt]) => (
-                  <Pressable
-                    key={id}
-                    style={styles.libCard}
-                    onPress={() => router.push(`/pattern/${id}`)}>
-                    <View style={[styles.libThumb, { backgroundColor: pt.accentColor }]}>
-                      {pt.photo ? (
-                        <Image source={{ uri: pt.photo }} style={styles.libPhoto} />
-                      ) : null}
-                    </View>
-                    <View style={styles.libInfo}>
-                      <Pressable
-                        onPress={() => toggleFavorite(id)}
-                        hitSlop={8}
-                        style={styles.heartBtn}>
-                        <ThemedText type="default">{pt.favorited ? '♥' : '♡'}</ThemedText>
-                      </Pressable>
-                      <ThemedText type="smallBold" numberOfLines={1}>
-                        {pt.name}
-                      </ThemedText>
-                      <ThemedText type="small" themeColor="inkSoft">
-                        {CATEGORY_LABELS[pt.category]}
-                        {pt.needleSize || pt.weight ? ` · ${pt.needleSize || pt.weight}` : ''}
-                      </ThemedText>
-                    </View>
-                  </Pressable>
+                  // The favourite toggle is a sibling of the link, not inside it. A button nested
+                  // in an anchor is invalid on web, and tapping the heart would follow the link
+                  // as well as toggling — so the card is a link and the heart sits on top of it.
+                  <View key={id} style={styles.libCardWrap}>
+                    <CardLink href={`/pattern/${id}`} style={styles.libCard}>
+                      <View style={[styles.libThumb, { backgroundColor: pt.accentColor }]}>
+                        {pt.photo ? (
+                          <Image source={{ uri: pt.photo }} style={styles.libPhoto} />
+                        ) : null}
+                      </View>
+                      <View style={styles.libInfo}>
+                        <ThemedText type="smallBold" numberOfLines={1}>
+                          {pt.name}
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="inkSoft">
+                          {CATEGORY_LABELS[pt.category]}
+                          {pt.needleSize || pt.weight ? ` · ${pt.needleSize || pt.weight}` : ''}
+                        </ThemedText>
+                      </View>
+                    </CardLink>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        pt.favorited ? `Unfavourite ${pt.name}` : `Favourite ${pt.name}`
+                      }
+                      onPress={() => toggleFavorite(id)}
+                      hitSlop={8}
+                      style={styles.heartBtn}>
+                      <ThemedText type="default">{pt.favorited ? '♥' : '♡'}</ThemedText>
+                    </Pressable>
+                  </View>
                 ))}
               </View>
             </>
@@ -168,10 +177,10 @@ export default function LibraryScreen() {
                   .filter(Boolean)
                   .join(' · ');
                 return (
-                  <Pressable
+                  <CardLink
                     key={id}
                     style={styles.stashRow}
-                    onPress={() => router.push(`/material/${id}`)}>
+                    href={`/material/${id}`}>
                     <Thumb photo={m.photo} />
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">
@@ -181,7 +190,7 @@ export default function LibraryScreen() {
                         {meta}
                       </ThemedText>
                     </View>
-                  </Pressable>
+                  </CardLink>
                 );
               })}
             </View>
@@ -191,10 +200,10 @@ export default function LibraryScreen() {
                 const owned = t.quantity ?? 1;
                 const inUse = toolInUseCount(projects, id);
                 return (
-                  <Pressable
+                  <CardLink
                     key={id}
                     style={styles.stashRow}
-                    onPress={() => router.push(`/tool/${id}`)}>
+                    href={`/tool/${id}`}>
                     <Thumb>
                       <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
                     </Thumb>
@@ -212,7 +221,7 @@ export default function LibraryScreen() {
                         {inUse > 0 ? `${owned} · ${inUse} in use` : `${owned} in stash`}
                       </ThemedText>
                     </View>
-                  </Pressable>
+                  </CardLink>
                 );
               })}
             </View>
@@ -320,7 +329,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   libCard: {
-    width: '47%',
+    width: '100%',
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
     overflow: 'hidden',
@@ -337,9 +346,16 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     gap: 2,
   },
+  libCardWrap: {
+    position: 'relative',
+    width: '47%',
+  },
+  // Top-right of the picture. It used to hang off the info block by a negative offset, which only
+  // worked while it was a child of it; now that it sits outside the link it needs an anchor that
+  // doesn't depend on where the text happens to start.
   heartBtn: {
     position: 'absolute',
-    top: -34,
+    top: Spacing.two,
     right: Spacing.two,
   },
   emptyCard: {

@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function SectionStitchesScreen() {
@@ -19,6 +20,7 @@ export default function SectionStitchesScreen() {
   const savePattern = useKnitwitStore((state) => state.savePattern);
   const setPatternSectionNotes = useKnitwitStore((state) => state.setPatternSectionNotes);
   const section = pattern?.sections[sectionIndex];
+  usePageTitle(section ? `${section.name} · ${pattern?.name ?? ''}` : undefined);
 
   // The pattern or section can be missing (deep link, or deleted in another tab).
   if (!pattern || !section) return null;
@@ -27,7 +29,7 @@ export default function SectionStitchesScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{section.name}</ThemedText>
+          <ThemedText type="title" heading={1}>{section.name}</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             {pattern.name} · stitch-by-stitch
           </ThemedText>

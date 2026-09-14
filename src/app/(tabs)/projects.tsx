@@ -4,7 +4,9 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, ProjectStatusBadge, Thumb } from '@/components/knitwit-ui';
+import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
 import { hasLabel, labelKey, labelsInUse } from '@/lib/labels';
@@ -34,6 +36,7 @@ const CRAFT_FILTERS: { value: CraftFilter; label: string }[] = [
 ];
 
 export default function ProjectsScreen() {
+  usePageTitle('Projects');
   const router = useRouter();
   const projects = useKnitwitStore((state) => state.projects);
   const [filter, setFilter] = useState<StatusFilter>('all');
@@ -73,7 +76,7 @@ export default function ProjectsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
-            <ThemedText type="title">Projects</ThemedText>
+            <ThemedText type="title" heading={1}>Projects</ThemedText>
             <PillButton style={styles.newBtn} onPress={() => router.push('/project/new')}>
               <ThemedText type="smallBold" themeColor="white">
                 + New project
@@ -170,10 +173,11 @@ export default function ProjectsScreen() {
                 const pct = projectProgress(p).pct;
                 const cur = p.sections[currentSectionIndexOf(p)];
                 return (
-                  <Pressable
+                  <CardLink
                     key={key}
+                    href={`/project/${key}`}
                     style={styles.projRow}
-                    onPress={() => router.push(`/project/${key}`)}>
+                    accessibilityLabel={`${p.name}, ${Math.round(pct * 100)}% complete`}>
                     <Thumb photo={p.photo} color={p.color} />
                     <View style={styles.projInfo}>
                       <ThemedText type="smallBold">{p.name}</ThemedText>
@@ -204,7 +208,7 @@ export default function ProjectsScreen() {
                     <ThemedText type="smallBold" themeColor="sageDeep" style={styles.pct}>
                       {Math.round(pct * 100)}%
                     </ThemedText>
-                  </Pressable>
+                  </CardLink>
                 );
               })}
             </View>

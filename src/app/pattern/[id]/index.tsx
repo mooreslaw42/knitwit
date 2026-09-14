@@ -25,6 +25,7 @@ import { patternSectionMarkers } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type {
   Gauge,
@@ -64,6 +65,7 @@ export default function PatternDetailScreen() {
   const pattern = useKnitwitStore((state) => state.patterns[id]);
   const savePattern = useKnitwitStore((state) => state.savePattern);
   const setPatternNotes = useKnitwitStore((state) => state.setPatternNotes);
+  usePageTitle(pattern?.name);
   const deletePattern = useKnitwitStore((state) => state.deletePattern);
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
 

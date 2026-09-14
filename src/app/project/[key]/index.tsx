@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { NotesCard } from '@/components/notes-card';
+import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
@@ -16,6 +17,7 @@ import {
   sectionStatus,
 } from '@/lib/knitwit-helpers';
 import { formatGaugeIn } from '@/lib/gauge';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function ProjectDetailScreen() {
@@ -26,6 +28,7 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
+  usePageTitle(project?.name);
   const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
 
   if (!project) return null;
@@ -48,8 +51,12 @@ export default function ProjectDetailScreen() {
             </ThemedText>
           </View>
           <View style={styles.titleRow}>
-            <ThemedText type="title">{project.name}</ThemedText>
-            <Pressable hitSlop={8} onPress={() => router.push(`/project/${key}/edit`)}>
+            <ThemedText type="title" heading={1}>{project.name}</ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${project.name}`}
+              hitSlop={8}
+              onPress={() => router.push(`/project/${key}/edit`)}>
               <ThemedText type="default">✎</ThemedText>
             </Pressable>
           </View>
@@ -114,7 +121,7 @@ export default function ProjectDetailScreen() {
           />
 
           <View style={styles.sectionsHeader}>
-            <ThemedText type="subtitle">Sections</ThemedText>
+            <ThemedText type="subtitle" heading={2}>Sections</ThemedText>
             <PillButton
               style={styles.addBtn}
               onPress={() => router.push(`/project/${key}/section/new`)}>
@@ -129,10 +136,10 @@ export default function ProjectDetailScreen() {
               const isCurrent = i === curIdx && status !== 'complete';
               const secPct = s.totalRows ? s.row / s.totalRows : 0;
               return (
-                <Pressable
+                <CardLink
                   key={s.name + i}
                   style={styles.secCard}
-                  onPress={() => router.push(`/project/${key}/section/${i}`)}>
+                  href={`/project/${key}/section/${i}`}>
                   <View style={styles.secTop}>
                     <ThemedText type="smallBold">
                       {s.name}
@@ -144,7 +151,7 @@ export default function ProjectDetailScreen() {
                   <ThemedText type="small" themeColor="inkSoft">
                     Row {s.row} of {s.totalRows}
                   </ThemedText>
-                </Pressable>
+                </CardLink>
               );
             })}
           </View>

@@ -107,12 +107,19 @@ export function PillButton({
   loading?: boolean;
 }) {
   const isDisabled = disabled || loading;
+  // Nothing on the web build responded to the mouse until it was clicked, which reads as dead on
+  // a desktop. Tracked here rather than per screen so every button gets it from one change.
+  const [hovered, setHovered] = useState(false);
   return (
     <Pressable
+      accessibilityRole="button"
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       style={({ pressed }) => [
         styles.pill,
         variant === 'primary' ? styles.pillPrimary : styles.pillSecondary,
-        // No press feedback when there's nothing to press.
+        // No press or hover feedback when there's nothing to press.
+        hovered && !isDisabled && styles.hovered,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.pillDisabled,
         typeof style === 'function' ? undefined : style,
@@ -265,6 +272,7 @@ export function ConfirmButton({
 export function DeleteButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
       <ThemedText type="smallBold" themeColor="coralDeep">
@@ -312,6 +320,11 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  // Lighter than the press state, so the two are distinguishable: hover says "this does
+  // something", press says "you did it".
+  hovered: {
+    opacity: 0.88,
   },
   // Greyed rather than recoloured: the palette has no disabled tone, and fading keeps the button
   // recognisable as the same control that will come back.

@@ -1,6 +1,7 @@
-import { usePathname, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Link, usePathname } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
+import { Brand } from './brand';
 import { ThemedText } from './themed-text';
 
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -27,29 +28,29 @@ function activeHref(pathname: string): string | null {
 }
 
 export default function AppHeader() {
-  const router = useRouter();
   const pathname = usePathname();
   const active = activeHref(pathname);
 
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        <ThemedText type="smallBold" style={styles.brand}>
-          🧶 Knitwit
-        </ThemedText>
+        <Brand style={styles.brand} />
         {NAV.map((item) => {
           const isActive = item.href === active;
           return (
-            <Pressable
+            // A real anchor rather than a Pressable that calls navigate: this is the site's main
+            // navigation, and it should be openable in a new tab and copyable like any other link.
+            <Link
               key={item.href}
-              onPress={() => router.navigate(item.href)}
-              style={({ pressed }) => [pressed && styles.pressed]}>
-              <View style={[styles.link, isActive && styles.linkActive]}>
-                <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
-                  {item.label}
-                </ThemedText>
-              </View>
-            </Pressable>
+              href={item.href}
+              // Announces "you are here" to a screen reader, which the pink pill only says
+              // visually.
+              aria-current={isActive ? 'page' : undefined}
+              style={[styles.link, isActive && styles.linkActive]}>
+              <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
+                {item.label}
+              </ThemedText>
+            </Link>
           );
         })}
       </View>
@@ -75,9 +76,6 @@ const styles = StyleSheet.create({
   },
   brand: {
     marginRight: 'auto',
-  },
-  pressed: {
-    opacity: 0.7,
   },
   link: {
     paddingVertical: Spacing.one,

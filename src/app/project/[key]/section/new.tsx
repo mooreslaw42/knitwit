@@ -6,12 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton } from '@/components/knitwit-ui';
 import { EMPTY_KIT, SectionKitEditor } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function NewSectionScreen() {
+  usePageTitle('Add a section');
   const { key } = useLocalSearchParams<{ key: string }>();
   const router = useRouter();
   const addSection = useKnitwitStore((state) => state.addSection);
@@ -24,7 +26,7 @@ export default function NewSectionScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Add a section</ThemedText>
+          <ThemedText type="title" heading={1}>Add a section</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             Sections split a project into the parts you knit one at a time — a body, a sleeve, a
             collar — each with its own row count and timer.

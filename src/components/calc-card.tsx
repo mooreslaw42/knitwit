@@ -23,7 +23,7 @@ export function CalcCard({
 }) {
   return (
     <Card style={styles.card}>
-      <ThemedText type="subtitle">{title}</ThemedText>
+      <ThemedText type="subtitle" heading={2}>{title}</ThemedText>
       <ThemedText type="small" themeColor="inkSoft">
         {question}
       </ThemedText>

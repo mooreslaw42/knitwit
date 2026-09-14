@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { allProgress, standing } from '@/lib/awards';
@@ -19,6 +20,7 @@ const UNITS: { id: LengthUnit; label: string }[] = [
 ];
 
 export default function AccountScreen() {
+  usePageTitle('Account');
   const [name, setName] = useState('Pim');
   const [savedName, setSavedName] = useState('Pim');
   const router = useRouter();
@@ -31,7 +33,7 @@ export default function AccountScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ThemedText type="title">Account</ThemedText>
+        <ThemedText type="title" heading={1}>Account</ThemedText>
         <ThemedText type="default" themeColor="inkSoft">
           Currently saved as “{savedName}”. Sign-in isn&apos;t wired up yet — this just renames
           you locally.

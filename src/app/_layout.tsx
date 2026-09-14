@@ -64,24 +64,24 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="project/new" options={{ headerShown: false }} />
         <Stack.Screen name="pattern/new" options={{ headerShown: false }} />
-        <Stack.Screen name="pattern/[id]/index" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="pattern/[id]/index" options={{ headerShown: true, headerTitle: () => null }} />
         <Stack.Screen
           name="pattern/[id]/section/[index]"
-          options={{ headerShown: true, title: '' }}
+          options={{ headerShown: true, headerTitle: () => null }}
         />
-        <Stack.Screen name="project/[key]/index" options={{ headerShown: true, title: '' }} />
-        <Stack.Screen name="project/[key]/edit" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="project/[key]/index" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="project/[key]/edit" options={{ headerShown: true, headerTitle: () => null }} />
         <Stack.Screen
           name="project/[key]/section/new"
-          options={{ headerShown: true, title: '' }}
+          options={{ headerShown: true, headerTitle: () => null }}
         />
         <Stack.Screen
           name="project/[key]/section/[index]"
-          options={{ headerShown: true, title: '' }}
+          options={{ headerShown: true, headerTitle: () => null }}
         />
-        <Stack.Screen name="material/[id]" options={{ headerShown: true, title: '' }} />
-        <Stack.Screen name="tool/[id]" options={{ headerShown: true, title: '' }} />
-        <Stack.Screen name="technique/[id]" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="material/[id]" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="tool/[id]" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="technique/[id]" options={{ headerShown: true, headerTitle: () => null }} />
         </Stack>
       </View>
     </ThemeProvider>

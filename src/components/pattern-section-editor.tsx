@@ -405,6 +405,8 @@ export function PatternSectionsEditor({
           <View style={styles.entryHeader}>
             <ThemedText type="smallBold">Section {i + 1}</ThemedText>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove"
               hitSlop={8}
               onPress={() => commit(sections.filter((_, idx) => idx !== i))}>
               <ThemedText type="smallBold" themeColor="coralDeep">
@@ -605,6 +607,8 @@ export function PatternSectionsEditor({
                   style={[styles.input, styles.grow]}
                 />
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove"
                   hitSlop={8}
                   onPress={() =>
                     updateSection(i, { rowNotes: section.rowNotes.filter((_, idx) => idx !== ni) })
@@ -645,6 +649,8 @@ export function PatternSectionsEditor({
                   style={[styles.input, styles.rowNumInput]}
                 />
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove"
                   hitSlop={8}
                   onPress={() =>
                     updateSection(i, { markers: section.markers.filter((_, idx) => idx !== mi) })

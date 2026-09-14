@@ -17,6 +17,7 @@ import {
   STATUS_LABELS,
   STATUS_ORDER,
 } from '@/lib/technique-catalogue';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // One technique: what it is, and where the knitter is with it.
@@ -41,12 +42,13 @@ export default function TechniqueScreen() {
   }, [loadCatalogue]);
 
   const technique = resolveTechnique(id, mine, catalogue);
+  usePageTitle(technique.name);
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{technique.name}</ThemedText>
+          <ThemedText type="title" heading={1}>{technique.name}</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             {CRAFT_LABELS[technique.craft]} · {FAMILY_LABELS[technique.family]}
             {technique.isCustom ? ' · your own' : ''}

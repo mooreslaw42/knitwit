@@ -426,6 +426,8 @@ export function SectionStitchEditor({
                 </PillButton>
                 {asking && (
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove this stitch"
                     hitSlop={8}
                     onPress={() => askRef.current?.abort()}
                   >

@@ -5,6 +5,7 @@ import { Answer, CalcCard, Inputs, NeedsInput } from '@/components/calc-card';
 import { GaugeField } from '@/components/gauge-field';
 import { FormField, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import {
   parseToolSize,
@@ -55,6 +56,7 @@ function round(n: number, places = 2): string {
 }
 
 export default function CalculatorScreen() {
+  usePageTitle('Calculator');
   const [patternGauge, setPatternGauge] = useState<Gauge | null>(DEFAULT_PATTERN);
   const [myGauge, setMyGauge] = useState<Gauge | null>(DEFAULT_MINE);
   const [count, setCount] = useState('30');
@@ -105,7 +107,7 @@ export default function CalculatorScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">Calculator</ThemedText>
+        <ThemedText type="title" heading={1}>Calculator</ThemedText>
         <ThemedText type="small" themeColor="inkSoft">
           Each card answers one question. What you fill in sits on the white; what it works out
           sits in the tinted box. Nothing here is saved — it changes no pattern and no project.

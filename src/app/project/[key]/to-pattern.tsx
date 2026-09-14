@@ -17,6 +17,7 @@ import {
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import { describeConversion, projectToPattern } from '@/lib/project-to-pattern';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Pattern, PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
@@ -48,6 +49,7 @@ export default function ProjectToPatternScreen() {
   const techniques = useKnitwitStore((state) => state.techniques);
   const catalogue = useKnitwitStore((state) => state.catalogue);
   const savePatternFromProject = useKnitwitStore((state) => state.savePatternFromProject);
+  usePageTitle(project ? `Save ${project.name} as a pattern` : 'Save as pattern');
 
   const source = project?.patternId ? (patterns[project.patternId] ?? null) : null;
 
@@ -83,7 +85,7 @@ export default function ProjectToPatternScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Save as pattern</ThemedText>
+          <ThemedText type="title" heading={1}>Save as pattern</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             Everything {project.name} is made of becomes a pattern you can knit again — its
             sections, rows, yarn and needles. Your progress stays where it is; nothing about the

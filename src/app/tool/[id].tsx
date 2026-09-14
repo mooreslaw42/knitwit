@@ -13,6 +13,7 @@ import { TOOL_TYPE_LABELS,
   scaleForToolType,
 } from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Tool, ToolType } from '@/types/knitwit';
 
@@ -25,6 +26,7 @@ const TYPE_OPTIONS: { value: ToolType; label: string }[] = Object.entries(TOOL_T
 export default function ToolEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
+  usePageTitle(isNew ? 'New tool' : 'Edit tool');
   const router = useRouter();
 
   const existing = useKnitwitStore((state) => (isNew ? null : state.tools[id]));
@@ -57,7 +59,7 @@ export default function ToolEditScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{isNew ? 'New tool' : 'Edit tool'}</ThemedText>
+          <ThemedText type="title" heading={1}>{isNew ? 'New tool' : 'Edit tool'}</ThemedText>
 
           <SelectField
             label="Type"

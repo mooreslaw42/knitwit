@@ -13,6 +13,7 @@ import {
 } from '@/components/project-sections-editor';
 import { EMPTY_KIT, SectionKitEditor, type SectionKit } from '@/components/stash-picker';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
@@ -47,6 +48,7 @@ const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_O
 }));
 
 export default function NewProjectWizardScreen() {
+  usePageTitle('New project');
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
   const projects = useKnitwitStore((state) => state.projects);
@@ -244,7 +246,7 @@ export default function NewProjectWizardScreen() {
 
           {current.id === 'basics' && (
             <>
-              <ThemedText type="subtitle">What are you making?</ThemedText>
+              <ThemedText type="subtitle" heading={1}>What are you making?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
                 Give it a name so you can find it later.
               </ThemedText>

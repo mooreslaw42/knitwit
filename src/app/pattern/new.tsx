@@ -8,6 +8,7 @@ import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-u
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
+import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
 import { importPatternDocument, type ImportedPattern } from '@/lib/import-pattern-document';
@@ -101,6 +102,7 @@ function describeImport(imported: ImportedPattern): string {
 }
 
 export default function NewPatternWizardScreen() {
+  usePageTitle('New pattern');
   const router = useRouter();
   const savePattern = useKnitwitStore((state) => state.savePattern);
   const catalogue = useKnitwitStore((state) => state.catalogue);
@@ -269,7 +271,7 @@ export default function NewPatternWizardScreen() {
 
           {STEPS[step] === 'Import' && (
             <>
-              <ThemedText type="subtitle">Have a pattern already?</ThemedText>
+              <ThemedText type="subtitle" heading={1}>Have a pattern already?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
                 Upload it or paste it in to keep the original with your pattern. Otherwise just skip
                 — you can fill in the details yourself.

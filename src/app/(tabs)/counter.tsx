@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { formatClock } from '@/lib/knitwit-helpers';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function CounterScreen() {
@@ -20,6 +21,7 @@ export default function CounterScreen() {
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
   // Every project can be deleted, which leaves nothing to count.
   const section = project?.sections[activeSectionIndex];
+  usePageTitle(section ? `${section.name} · counting` : 'Counter');
 
   // The chart was copied onto the project section when it was created, so counting is unaffected
   // by later edits to the pattern it came from.

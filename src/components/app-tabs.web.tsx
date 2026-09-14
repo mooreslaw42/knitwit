@@ -1,6 +1,7 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
 import { Pressable, View, StyleSheet } from 'react-native';
 
+import { Brand } from './brand';
 import { ThemedText } from './themed-text';
 
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -47,9 +48,7 @@ export function CustomTabList(props: TabListProps) {
   return (
     <View {...props} style={styles.tabListContainer}>
       <View style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          🧶 Knitwit
-        </ThemedText>
+        <Brand style={styles.brandText} />
 
         {props.children}
       </View>

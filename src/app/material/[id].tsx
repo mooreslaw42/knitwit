@@ -12,6 +12,7 @@ import { WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
 import { MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
@@ -51,6 +52,7 @@ const WASHING_OPTIONS = Object.entries(WASHING_LABELS).map(([value, label]) => (
 export default function MaterialEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
+  usePageTitle(isNew ? 'New yarn' : 'Edit yarn');
   const router = useRouter();
 
   const existing = useKnitwitStore((state) => (isNew ? null : state.materials[id]));
@@ -65,7 +67,7 @@ export default function MaterialEditScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{isNew ? 'New material' : 'Edit material'}</ThemedText>
+          <ThemedText type="title" heading={1}>{isNew ? 'New material' : 'Edit material'}</ThemedText>
 
           <FormField label="Brand" value={form.brand} onChangeText={(v) => set('brand', v)} />
           <FormField

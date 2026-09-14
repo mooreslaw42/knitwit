@@ -20,6 +20,7 @@ import {
 } from '@/constants/catalogs';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
+import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
@@ -50,6 +51,7 @@ export default function ProjectEditScreen() {
   const updateProject = useKnitwitStore((state) => state.updateProject);
   const deleteProject = useKnitwitStore((state) => state.deleteProject);
   const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
+  usePageTitle(project ? `Edit ${project.name}` : 'Edit project');
 
   const [name, setName] = useState(project?.name ?? '');
   const [startedOn, setStartedOn] = useState<string | null>(project?.startedOn ?? null);
@@ -85,7 +87,7 @@ export default function ProjectEditScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Edit project</ThemedText>
+          <ThemedText type="title" heading={1}>Edit project</ThemedText>
 
           {/* Same idiom as a pattern's picture: tap the hero to pick one, with a separate remove
               beneath so clearing it can't be a mis-tap on "change". */}
