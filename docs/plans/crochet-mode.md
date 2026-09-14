@@ -15,12 +15,17 @@ US stitch names. UK crochet uses the same words one rung down (`CROCHET_UK_TO_US
 is told to convert as it reads and to refuse rather than guess when it can't tell which convention
 a pattern uses — reading UK as US yields a chart that is wrong rather than one that fails.
 
+The chart is built too (2026-09-14), as a real crochet diagram rather than a re-skinned grid.
+`crochet-chart.tsx` draws each stitch as a symbol at its own height in `react-native-svg` — a
+double crochet stands three times a single because it does in the fabric — and reverses
+wrong-side rows, because the work is turned. `StitchChart` dispatches on craft; the knitting grid
+is untouched.
+
 ## Still not built
 
-- **Crochet chart symbols.** The glyphs in `STITCHES` are placeholders and `StitchChart` still
-  draws a knitter's grid: bottom-up, right-to-left, one cell per stitch. That is defensible for
-  rows worked flat and plainly wrong for a motif worked in the round, which is most amigurumi.
-  This is the big one and it is its own decision.
+- **Rounds, drawn as rounds.** The diagram is linear: rows stacked bottom-up. A motif worked in
+  the round is drawn radially, from the centre out, and most amigurumi is worked that way. The
+  symbols and heights carry over unchanged; the layout does not. This is the remaining big piece.
 - **Craft-aware wording.** Needle, not hook. Rows, not rounds. Cast on, not foundation chain.
 - **Stitches worked into a space** rather than a stitch — granny clusters, picots, post stitches
   (fpdc/bpdc), anything into a ch-space. Both the parser and the model refuse these rather than

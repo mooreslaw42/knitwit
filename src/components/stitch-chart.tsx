@@ -1,10 +1,11 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { CrochetChart, CrochetRowStrip } from '@/components/crochet-chart';
 import { ThemedText } from '@/components/themed-text';
 import { STITCHES } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { resolveRowGroups, rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
-import type { PatternRow } from '@/types/knitwit';
+import type { PatternRow, TechniqueCraft } from '@/types/knitwit';
 
 // A knitting chart, drawn the way knitters read one: bottom row first, stitches right-to-left,
 // one cell per stitch worked, row numbers down the right edge. Wrong-side rows are shaded so the
@@ -44,12 +45,14 @@ export function StitchRowStrip({
   rows,
   castOn,
   rowIndex,
+  craft = 'knit',
   showStitchCount = false,
   sizeIndex = 0,
 }: {
   rows: PatternRow[];
   castOn: number;
   rowIndex: number;
+  craft?: TechniqueCraft;
   sizeIndex?: number;
   // The live running stitch count after this row — what you should have on the needle.
   showStitchCount?: boolean;
@@ -62,6 +65,8 @@ export function StitchRowStrip({
   const ws = row.side === 'WS';
   const after = rowStitchesAfter(row, before[rowIndex], sizeIndex);
 
+  const crochet = craft === 'crochet';
+
   return (
     <View style={styles.stripWrap}>
       <ThemedText type="small" themeColor="inkSoft">
@@ -69,6 +74,9 @@ export function StitchRowStrip({
         {row.marker ? ' · 📍' : ''}
         {showStitchCount ? ` · ${after} sts` : ''}
       </ThemedText>
+      {crochet ? (
+        <CrochetRowStrip row={row} before={before[rowIndex]} sizeIndex={sizeIndex} />
+      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.strip}>
           {clipped && (
@@ -83,6 +91,7 @@ export function StitchRowStrip({
           ))}
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -90,17 +99,25 @@ export function StitchRowStrip({
 export function StitchChart({
   rows,
   castOn,
+  craft = 'knit',
   selected,
   onSelectStitch,
   sizeIndex = 0,
 }: {
   rows: PatternRow[];
   castOn: number;
+  // Crochet gets its own diagram rather than this grid. The two aren't variants of one drawing:
+  // a knitting chart is one square per stitch, a crochet chart is a picture of the stitches at
+  // their real heights. See crochet-chart.tsx.
+  craft?: TechniqueCraft;
   sizeIndex?: number;
   selected?: ChartSelection | null;
   onSelectStitch?: (selection: ChartSelection) => void;
 }) {
   if (rows.length === 0) return null;
+  if (craft === 'crochet') {
+    return <CrochetChart rows={rows} castOn={castOn} sizeIndex={sizeIndex} />;
+  }
 
   const before = sectionRowCounts(rows, castOn, sizeIndex);
   const drawn = rows.slice(0, MAX_ROWS).map((row, index) => ({

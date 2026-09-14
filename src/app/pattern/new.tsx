@@ -531,6 +531,7 @@ export default function NewPatternWizardScreen() {
                 notes and stitch markers. A project inherits these sections.
               </ThemedText>
               <PatternSectionsEditor
+                craft={form.craft}
                 initial={form.sections}
                 materials={form.materials}
                 tools={form.tools}

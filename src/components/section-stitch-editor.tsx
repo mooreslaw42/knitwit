@@ -539,13 +539,18 @@ export function SectionStitchEditor({
       {rows.length > 0 && (
         <Card style={styles.chartCard}>
           <ThemedText type="smallBold">Chart</ThemedText>
-          <ThemedText type="small" themeColor="inkSoft">
-            Read bottom-up, stitches right-to-left. Shaded rows are worked from
-            the wrong side. Tap a stitch to edit it.
-          </ThemedText>
+          {/* The crochet diagram explains itself underneath — it reads differently enough that
+              the knitting caption would be actively misleading over it. */}
+          {craft !== "crochet" && (
+            <ThemedText type="small" themeColor="inkSoft">
+              Read bottom-up, stitches right-to-left. Shaded rows are worked from
+              the wrong side. Tap a stitch to edit it.
+            </ThemedText>
+          )}
           <StitchChart
             rows={patternRows}
             castOn={startCount}
+            craft={craft}
             sizeIndex={sizePreview}
             selected={selected}
             onSelectStitch={setSelected}

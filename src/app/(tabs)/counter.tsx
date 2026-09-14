@@ -247,6 +247,7 @@ export default function CounterScreen() {
             {chartRowIndex >= 0 && (
               <View style={styles.rowStrip}>
                 <StitchRowStrip
+                  craft={project.craft}
                   rows={chartRows}
                   castOn={section.castOn}
                   rowIndex={chartRowIndex}

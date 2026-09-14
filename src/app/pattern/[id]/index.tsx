@@ -273,6 +273,7 @@ export default function PatternDetailScreen() {
                 Stitch charts are edited from each section on the overview.
               </ThemedText>
               <PatternSectionsEditor
+                craft={draft.craft}
                 initial={draft.sections}
                 materials={draft.materials}
                 tools={draft.tools}
