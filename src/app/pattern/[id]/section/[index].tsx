@@ -45,6 +45,7 @@ export default function SectionStitchesScreen() {
               castOn: section.castOn,
               rows: section.rows,
             }}
+            craft={pattern.craft}
             sizes={pattern.sizes}
             patternGauge={pattern.gauge}
             swatchGauge={pattern.swatchGauge}

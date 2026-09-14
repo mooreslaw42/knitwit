@@ -48,6 +48,32 @@ Each entry lists what the stitch consumes off the left needle (*takes*) and its 
 | \`bo\` | bind off | 1 | −1 |
 | \`pm\` | place marker | 0 | 0 |
 
+## Crochet
+
+Used only when the request says the craft is crochet or both. \`takes\` is how many stitches of the row below the stitch is worked into; \`delta\` is the net change in the live count.
+
+| type | means | takes | delta |
+|---|---|---|---|
+| \`ch\` | chain | 0 | +1 |
+| \`slst\` | slip stitch | 1 | 0 |
+| \`sc\` | single crochet (US) | 1 | 0 |
+| \`hdc\` | half double crochet (US) | 1 | 0 |
+| \`dc\` | double crochet (US) | 1 | 0 |
+| \`tr\` | treble crochet (US) | 1 | 0 |
+| \`scinc\` | two single crochet in one stitch | 1 | +1 |
+| \`dcinc\` | two double crochet in one stitch | 1 | +1 |
+| \`sc2tog\` | single crochet two together | 2 | −1 |
+| \`dc2tog\` | double crochet two together | 2 | −1 |
+| \`shell\` | five double crochet in one stitch | 1 | +4 |
+
+**These are US names.** UK patterns use the same words one rung down — a UK "double crochet" is a US single crochet, a UK "treble" is a US double. If the pattern is in UK terms, convert as you read: dc→\`sc\`, htr→\`hdc\`, tr→\`dc\`, dtr→\`tr\`. If you cannot tell which convention a pattern uses, say so in the note and set \`confident: false\` — reading UK as US produces a chart that is wrong rather than one that fails, which is far worse.
+
+**"in each stitch" is a whole row; "in the next stitch" is one stitch.** "2 sc in each st around" doubles the round — span \`all\`, type \`scinc\`. "2 sc in next st" is a single increase — span \`exact\`, count 1. Confusing the two turns a round of 6 into 7 instead of 12.
+
+**A turning chain is a chain.** "Ch 1, turn" at the start of a row is \`ch\` with count 1. Some patterns do not count the turning chain as a stitch; if the stated count for the row implies it is not counted, say so in the note.
+
+**Anything worked into a space rather than a stitch** — "3 dc in the ch-2 space", a granny cluster, a picot, a bobble, a post stitch (fpdc/bpdc) — has no entry above. Refuse it rather than substituting: the same rule as a cable cross.
+
 Mappings for common wording:
 - "k2tog tbl", "skpo", "sl1 k1 psso" → \`ssk\` (all left-leaning single decreases).
 - "M1", "make one", unspecified lean → \`m1l\`. The knitter can flip it.
@@ -76,9 +102,21 @@ A stitch that genuinely has no entry — a cable cross, a 3-into-1 decrease, a b
 // The variable half — this sits after the cache breakpoint, so it can differ freely per request.
 export function buildUserMessage(req: ParsePatternRequest): string {
   const sizes = req.sizes.length > 0 ? req.sizes : ['One size'];
+  // Which vocabulary to read in. In the user turn rather than the system prompt so the cached
+  // prefix stays byte-identical: both stitch tables are always in the system prompt, and this
+  // line says which of them applies.
+  const craft = req.craft === 'crochet' || req.craft === 'both' ? req.craft : 'knit';
+  const craftLine =
+    craft === 'crochet'
+      ? 'Craft: CROCHET. Use the crochet stitch types only. Do not return knitting types.'
+      : craft === 'both'
+        ? 'Craft: BOTH. The piece uses knitting and crochet together; use whichever type each row calls for.'
+        : 'Craft: KNITTING. Use the knitting stitch types only. Do not return crochet types.';
+
   const preamble = [
+    craftLine,
     `Sizes (${sizes.length}), in order: ${sizes.join(', ')}. Every non-empty count array must have exactly ${sizes.length} ${sizes.length === 1 ? 'entry' : 'entries'}.`,
-    `Stitches on the needle when this section begins: ${req.stitchesBefore}.`,
+    `Stitches on the ${craft === 'crochet' ? 'hook' : 'needle'} when this section begins: ${req.stitchesBefore}.`,
     '',
   ];
 

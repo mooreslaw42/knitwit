@@ -11,7 +11,7 @@ import {
 import { RegaugePanel } from "@/components/regauge-panel";
 import { StitchChart, type ChartSelection } from "@/components/stitch-chart";
 import { ThemedText } from "@/components/themed-text";
-import { STITCHES, STITCH_ORDER } from "@/constants/catalogs";
+import { STITCHES, stitchOrderFor } from "@/constants/catalogs";
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
 import {
   formatSizeRun,
@@ -40,6 +40,7 @@ import type {
   StitchMultiple,
   StitchSide,
   StitchSpan,
+  TechniqueCraft,
 } from "@/types/knitwit";
 
 type EditGroup = {
@@ -62,10 +63,11 @@ type EditRow = {
 let uidN = 1;
 const uid = (p: string) => `${p}${Date.now().toString(36)}${uidN++}`;
 
-const STITCH_OPTIONS = STITCH_ORDER.map((k) => ({
-  value: k,
-  label: `${STITCHES[k].abbr} · ${STITCHES[k].label}`,
-}));
+const stitchOptionsFor = (craft: TechniqueCraft) =>
+  stitchOrderFor(craft).map((k) => ({
+    value: k,
+    label: `${STITCHES[k].abbr} · ${STITCHES[k].label}`,
+  }));
 
 const SPANS: { value: StitchSpan; label: string }[] = [
   { value: "exact", label: "Times" },
@@ -144,6 +146,7 @@ export type StitchDraft = {
 // an empty list, and never sees the chips.
 export function SectionStitchEditor({
   initial,
+  craft = 'knit',
   sizes = [],
   patternGauge = null,
   swatchGauge = null,
@@ -152,6 +155,9 @@ export function SectionStitchEditor({
   onSave,
 }: {
   initial: StitchDraft;
+  // Which vocabulary to read and offer. A crochet section gets crochet stitches in the dropdown
+  // and its text read as crochet; everything below this line is the same for both.
+  craft?: TechniqueCraft;
   sizes?: string[];
   patternGauge?: Gauge | null;
   swatchGauge?: Gauge | null;
@@ -159,6 +165,7 @@ export function SectionStitchEditor({
   saveLabel?: string;
   onSave: (draft: StitchDraft) => void;
 }) {
+  const stitchOptions = stitchOptionsFor(craft);
   const [description, setDescription] = useState(initial.description);
   const [castOn, setCastOn] = useState(formatSizeRun(initial.castOn));
   const [rows, setRows] = useState<EditRow[]>(() =>
@@ -188,7 +195,7 @@ export function SectionStitchEditor({
   useEffect(() => () => askRef.current?.abort(), []);
 
   const convert = () => {
-    const result = parseSectionText(description);
+    const result = parseSectionText(description, craft);
     const issues = [
       ...result.issues,
       ...reconcileRowCounts(result.rows, result.expectedCounts, startCount),
@@ -229,6 +236,7 @@ export function SectionStitchEditor({
         rows: previewRows,
         indexes,
         sizes,
+        craft,
         stitchesBefore: startCount,
         signal: controller.signal,
       });
@@ -584,6 +592,7 @@ export function SectionStitchEditor({
               </View>
               <GroupFields
                 group={selectedGroup}
+                options={stitchOptions}
                 onChange={(patch) =>
                   updateGroup(selected.rowIndex, selected.groupIndex, patch)
                 }
@@ -675,6 +684,7 @@ export function SectionStitchEditor({
                   <GroupFields
                     key={g.id}
                     group={g}
+                    options={stitchOptions}
                     onChange={(patch) => updateGroup(ri, gi, patch)}
                     onRemove={() =>
                       updateRow(ri, {
@@ -746,10 +756,12 @@ export function SectionStitchEditor({
 // tap-a-cell-in-the-chart editor, so both always offer exactly the same fields.
 function GroupFields({
   group,
+  options,
   onChange,
   onRemove,
 }: {
   group: EditGroup;
+  options: { value: string; label: string }[];
   onChange: (patch: Partial<EditGroup>) => void;
   onRemove?: () => void;
 }) {
@@ -757,7 +769,7 @@ function GroupFields({
     <View style={styles.groupCard}>
       <SelectField
         label="Stitch"
-        options={STITCH_OPTIONS}
+        options={options}
         value={group.type}
         onChange={(v) => onChange({ type: v })}
       />

@@ -14,6 +14,10 @@ import type { PatternRow, PatternStitchGroup, SizedNumber, StitchSide } from '@/
 // is still returned, with its original wording preserved in `instruction` and an issue raised, so
 // nothing the knitter wrote is ever lost. The refused cases are what the model handles later.
 
+// Which vocabulary to read the text with. 'both' tries crochet first and falls through to
+// knitting, which is what a pattern using the two together needs.
+export type ParseCraft = 'knit' | 'crochet' | 'both';
+
 export type ParseIssue = {
   rowIndex: number | null; // null = an issue with the text as a whole
   message: string;
@@ -89,6 +93,25 @@ const STAR_REPEAT = /\brep(?:eat)?\s+from\s+\*/i;
 // Fixed-multiplier repeats are count-independent, so expanding them is always safe.
 const BRACKET_REPEAT = /^\[([^\]]+)\]\s*(?:x\s*)?(\d+)\s*(?:times?)?$/i;
 
+// Crochet shorthand, read through the same token pipeline as knitting: a row is split on commas,
+// each token becomes a PatternStitchGroup, and the running count falls out of `takes`/`delta`
+// exactly as it does for knits and purls. Nothing below is new machinery — it is vocabulary.
+//
+// US names throughout. A UK pattern says "dc" for what this reads as "sc", so it has to be
+// converted before it gets here (CROCHET_UK_TO_US); reading a UK pattern as US produces a chart
+// that is wrong rather than one that fails, which is why the craft and the dialect both matter.
+const CROCHET_NAMED: { re: RegExp; type: string }[] = [
+  { re: /^(?:sc2tog|sc\s*2\s*tog)$/i, type: 'sc2tog' },
+  { re: /^(?:dc2tog|dc\s*2\s*tog)$/i, type: 'dc2tog' },
+  { re: /^(?:sl\s*st|slst|ss)$/i, type: 'slst' },
+  { re: /^(?:hdc|half\s+double\s+crochet)$/i, type: 'hdc' },
+  { re: /^(?:dc|double\s+crochet)$/i, type: 'dc' },
+  { re: /^(?:tr|treble(?:\s+crochet)?|triple\s+crochet)$/i, type: 'tr' },
+  { re: /^(?:sc|single\s+crochet)$/i, type: 'sc' },
+  { re: /^(?:ch|chain)$/i, type: 'ch' },
+  { re: /^(?:shell|fan)$/i, type: 'shell' },
+];
+
 // Longest/most specific first: `k2tog` must never fall through to the generic `k<number>` rule.
 const NAMED: { re: RegExp; type: string }[] = [
   { re: /^k2tog(?:tbl)?$/i, type: 'k2tog' },
@@ -102,9 +125,15 @@ const NAMED: { re: RegExp; type: string }[] = [
   { re: /^(?:pm|place\s+marker)$/i, type: 'pm' },
 ];
 
-function parseToken(raw: string): PatternStitchGroup | null {
+function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
   const t = raw.trim().replace(/[.;]+$/, '').trim();
   if (!t) return null;
+
+  if (craft !== 'knit') {
+    const crocheted = parseCrochetToken(t);
+    if (crocheted) return crocheted;
+  }
+  if (craft === 'crochet') return null;
 
   for (const { re, type } of NAMED) {
     if (re.test(t)) return group(type, 'exact', 1);
@@ -156,6 +185,59 @@ function parseToken(raw: string): PatternStitchGroup | null {
   return null;
 }
 
+// One crochet token. Same shape of answer as the knitting rules above, so callers can't tell
+// which vocabulary read it.
+function parseCrochetToken(t: string): PatternStitchGroup | null {
+  // "2 dc in next st" / "2 sc in each st" — an increase, and the commonest way crochet grows.
+  //
+  // "next" is one increase; "each" is one on every stitch of the row. Reading them the same way
+  // is the difference between a round of 6 becoming 7 and becoming 12, so the word decides the
+  // span rather than being skipped over.
+  const intoOne = t.match(
+    /^(\d+)\s*(sc|hdc|dc|tr)\b.*?\bin\s+(?:the\s+)?(next|each|every|all|same)\b/i,
+  );
+  if (intoOne) {
+    const n = parseInt(intoOne[1], 10);
+    const base = intoOne[2].toLowerCase();
+    const across = /^(?:each|every|all)$/i.test(intoOne[3]);
+    if (n === 2 && (base === 'sc' || base === 'dc')) {
+      const type = base === 'sc' ? 'scinc' : 'dcinc';
+      return across ? group(type, 'all', null) : group(type, 'exact', 1);
+    }
+    if (n === 5 && base === 'dc') {
+      return across ? group('shell', 'all', null) : group('shell', 'exact', 1);
+    }
+    // Any other number into one stitch has no catalogue entry with the right delta, and charting
+    // it as an ordinary stitch would quietly lose the increase. Refused, so the model gets it and
+    // the knitter's wording is kept — the same bargain the knitting rules make.
+    return null;
+  }
+
+  // "dc in each st across" / "sc in each stitch to end" — the whole row in one stitch type.
+  const across = t.match(
+    /^(?:\d+\s+)?(sc|hdc|dc|tr|sl\s*st|slst)\b.*?\b(?:in\s+)?(?:each|every|all)\b.*?(?:across|around|to\s+(?:the\s+)?end)?$/i,
+  );
+  if (across) {
+    const type = CROCHET_NAMED.find((n) => n.re.test(across[1].replace(/\s+/g, '')))?.type;
+    if (type) return group(type, 'all', null);
+  }
+
+  // "sc 6" / "6 sc" / "dc2" — a plain run, written either way round.
+  const run = t.match(/^(?:(\d+)\s*)?(sc2tog|dc2tog|sl\s*st|slst|ss|hdc|dc|tr|sc|ch|shell)\s*(\d*)$/i);
+  if (run) {
+    const named = CROCHET_NAMED.find((n) => n.re.test(run[2].replace(/\s+/g, '')));
+    if (named) {
+      const count = run[1] || run[3];
+      return group(named.type, 'exact', count ? parseInt(count, 10) : 1);
+    }
+  }
+
+  for (const { re, type } of CROCHET_NAMED) {
+    if (re.test(t)) return group(type, 'exact', 1);
+  }
+  return null;
+}
+
 // Split on commas/semicolons that aren't inside [] or *…*.
 function splitTokens(body: string): string[] {
   const out: string[] = [];
@@ -186,7 +268,7 @@ function sideFor(parenthetical: string | undefined, rowNumber: number): StitchSi
   return rowNumber % 2 === 1 ? 'RS' : 'WS';
 }
 
-export function parseSectionText(text: string): ParseResult {
+export function parseSectionText(text: string, craft: ParseCraft = 'knit'): ParseResult {
   const rows: PatternRow[] = [];
   const expectedCounts: (number | null)[] = [];
   const issues: ParseIssue[] = [];
@@ -327,11 +409,14 @@ export function parseSectionText(text: string): ParseResult {
           'Repeats like "rep from *" depend on the live stitch count — left unparsed so nothing is invented.';
       } else {
         for (const token of splitTokens(body)) {
-          const bracket = token.match(BRACKET_REPEAT);
+          // Trimmed and de-punctuated first. BRACKET_REPEAT is anchored at both ends, so a
+          // leading space or the full stop that ends a sentence — "…] x 3." — made it miss, in
+          // knitting just as much as in crochet.
+          const bracket = token.trim().replace(/[.;]+$/, '').match(BRACKET_REPEAT);
           if (bracket) {
             const inner = splitTokens(bracket[1]);
             const times = Math.max(1, Math.min(parseInt(bracket[2], 10) || 1, 200));
-            const parsedInner = inner.map(parseToken);
+            const parsedInner = inner.map((tok) => parseToken(tok, craft));
             if (parsedInner.some((g) => g === null)) {
               refused = `Couldn't read the repeat "${token}".`;
               break;
@@ -345,7 +430,7 @@ export function parseSectionText(text: string): ParseResult {
             continue;
           }
 
-          const parsed = parseToken(token);
+          const parsed = parseToken(token, craft);
           if (!parsed) {
             refused = `Couldn't read "${token}".`;
             break;

@@ -1,4 +1,4 @@
-import { formatToolSize, TOOL_SIZES, toolSizeOptions } from '@/constants/catalogs';
+import { formatToolSize, STITCH_ORDER, TOOL_SIZES, toolSizeOptions } from '@/constants/catalogs';
 
 describe('tool sizes', () => {
   it('runs in half-millimetre steps', () => {
@@ -45,5 +45,17 @@ describe('toolSizeOptions', () => {
     const odd = '7,5 mm';
     expect(toolSizeOptions(odd).filter((o) => o.value === odd)).toHaveLength(1);
     expect(toolSizeOptions(odd).filter((o) => o.value === odd)).toHaveLength(1);
+  });
+});
+
+// The Edge Function has its own copy of the stitch vocabulary, because it runs on Deno and can't
+// import from src/. A type the model can return but the app has no entry for draws a blank cell
+// and contributes nothing to the running count — silently wrong rather than loudly broken.
+describe('the app and the model agree on the stitches', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { STITCH_TYPES } = require('../../supabase/functions/parse-pattern/schema.ts');
+
+  it('offers the model exactly what the app can chart', () => {
+    expect([...STITCH_TYPES].sort()).toEqual([...STITCH_ORDER].sort());
   });
 });

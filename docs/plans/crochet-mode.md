@@ -1,6 +1,38 @@
-# Knitwit — Crochet mode (not built)
+# Knitwit — Crochet mode
 
-**Status: a reminder, not a plan.** `Pattern.craft` exists and records knit / crochet / both, but
+**Status: the reader is built (2026-09-14). The chart is not.**
+
+## Built
+
+The reading path is craft-aware end to end. `STITCHES` carries crochet entries alongside the
+knitting ones with a `craft` tag; `stitchOrderFor(craft)` decides what the editor offers;
+`parseSectionText(text, craft)` reads crochet shorthand; the model prompt carries both stitch
+tables and the user turn says which applies; and the craft flows from the pattern or project into
+all of it. The running-count maths was not touched — it reads `takes` and `delta` and never knew
+which craft it was doing, which is why this was vocabulary rather than a second engine.
+
+US stitch names. UK crochet uses the same words one rung down (`CROCHET_UK_TO_US`), and the model
+is told to convert as it reads and to refuse rather than guess when it can't tell which convention
+a pattern uses — reading UK as US yields a chart that is wrong rather than one that fails.
+
+## Still not built
+
+- **Crochet chart symbols.** The glyphs in `STITCHES` are placeholders and `StitchChart` still
+  draws a knitter's grid: bottom-up, right-to-left, one cell per stitch. That is defensible for
+  rows worked flat and plainly wrong for a motif worked in the round, which is most amigurumi.
+  This is the big one and it is its own decision.
+- **Craft-aware wording.** Needle, not hook. Rows, not rounds. Cast on, not foundation chain.
+- **Stitches worked into a space** rather than a stitch — granny clusters, picots, post stitches
+  (fpdc/bpdc), anything into a ch-space. Both the parser and the model refuse these rather than
+  substituting something with the wrong `takes`.
+- **Dutch, and other languages.** The parser's vocabulary is English regexes. A Dutch pattern —
+  `haakpatroon`, `vasten`, `stokjes`, `lossen`, or on the knitting side `breipatroon`, `recht`,
+  `averecht`, `omslag` — parses to nothing. The model may cope; the deterministic parser will not.
+  This is the same shape of gap as crochet was, and the same seam fixes it: a vocabulary table.
+
+## Original note, kept for the record
+
+**A reminder, not a plan.** `Pattern.craft` exists and records knit / crochet / both, but
 it is only a label today — it drives the awards and the library filter and nothing else. Everything
 underneath the label is knitting-shaped.
 

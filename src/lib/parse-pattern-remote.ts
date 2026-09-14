@@ -1,6 +1,12 @@
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import type { ParseIssue } from '@/lib/parse-pattern-text';
-import type { PatternRow, PatternStitchGroup, SizedNumber, StitchSide } from '@/types/knitwit';
+import type {
+  PatternRow,
+  PatternStitchGroup,
+  SizedNumber,
+  StitchSide,
+  TechniqueCraft,
+} from '@/types/knitwit';
 
 // The model half of the hybrid parser. `parse-pattern-text.ts` handles the regular shorthand and
 // refuses what it can't chart faithfully; this asks the model for exactly those refusals, and
@@ -194,6 +200,9 @@ export async function convertRowsRemotely(params: {
   rows: PatternRow[];
   indexes: number[];
   sizes: string[];
+  // Which craft's vocabulary the model should read the rows in. Without it a crochet section is
+  // read as knitting and comes back as nonsense that still validates.
+  craft?: TechniqueCraft;
   stitchesBefore: number;
   model?: string;
   signal?: AbortSignal;
@@ -202,6 +211,7 @@ export async function convertRowsRemotely(params: {
     task: 'rows' as const,
     sectionText: params.sectionText,
     sizes: params.sizes,
+    craft: params.craft ?? 'knit',
     stitchesBefore: params.stitchesBefore,
     model: params.model,
     // An empty list is section mode: the parser read nothing, so there are no refusals to name.

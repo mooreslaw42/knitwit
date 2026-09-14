@@ -9,7 +9,11 @@
 
 // Every stitch type the app can chart, from src/constants/catalogs.ts. Constraining the model to
 // this enum is what stops it inventing a stitch the chart has no symbol for.
+// Must stay in step with STITCHES in src/constants/catalogs.ts — a type the model can return but
+// the app has no entry for draws a blank cell and, worse, contributes nothing to the running
+// count. Both crafts are listed; which one applies is said in the user turn.
 export const STITCH_TYPES = [
+  // Knitting
   'knit',
   'purl',
   'ktbl',
@@ -21,6 +25,19 @@ export const STITCH_TYPES = [
   'kfb',
   'm1l',
   'm1r',
+  // Crochet
+  'ch',
+  'slst',
+  'sc',
+  'hdc',
+  'dc',
+  'tr',
+  'scinc',
+  'dcinc',
+  'sc2tog',
+  'dc2tog',
+  'shell',
+  // Either
   'co',
   'bo',
   'pm',
@@ -82,6 +99,9 @@ export type ParsePatternRequest = {
   rows: { index: number; label: string; side: 'RS' | 'WS'; instruction: string }[];
   // The pattern's size names. Per-size counts must come back with one entry per size.
   sizes: string[];
+  // Which stitch vocabulary to read the rows in. Both tables are in the system prompt; this picks
+  // one. Absent means knitting, which is what every request sent before crochet existed.
+  craft?: 'knit' | 'crochet' | 'both';
   // Stitches on the needle before the first listed row, so "knit to last 2 sts" is resolvable.
   stitchesBefore: number;
   // Per-call model override, so one path can be promoted without moving the others.

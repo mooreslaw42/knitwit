@@ -44,6 +44,7 @@ export default function ProjectSectionStitchesScreen() {
               castOn: section.castOn,
               rows: section.rows,
             }}
+            craft={project.craft}
             // No size chips: a project is knitted in one size, resolved when it was created.
             sizes={[]}
             patternGauge={project.gauge?.pattern ?? null}

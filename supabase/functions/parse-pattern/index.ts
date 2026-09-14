@@ -126,6 +126,8 @@ function validateRequest(body: unknown): ParsePatternRequest {
     };
   });
 
+  const craft =
+    b.craft === 'crochet' || b.craft === 'both' || b.craft === 'knit' ? b.craft : 'knit';
   const sizes = Array.isArray(b.sizes)
     ? b.sizes.filter((s): s is string => typeof s === 'string').slice(0, MAX_SIZES)
     : [];
@@ -140,6 +142,7 @@ function validateRequest(body: unknown): ParsePatternRequest {
     sectionText,
     rows,
     sizes,
+    craft,
     stitchesBefore,
     model: typeof b.model === 'string' && b.model ? b.model : undefined,
   };

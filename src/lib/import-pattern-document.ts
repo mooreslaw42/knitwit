@@ -164,13 +164,16 @@ function slotIds(v: unknown, slots: { id: string }[]): string[] {
 function normaliseSections(
   v: unknown,
   slots: { materials: PatternMaterial[]; tools: PatternTool[]; techniques: PatternTechnique[] },
+  // Read the sections in the craft the model said the pattern is. A crochet pattern parsed as
+  // knitting charts nothing at all, so this has to be resolved before the sections are.
+  craft: TechniqueCraft,
 ): PatternSection[] {
   return arr(v)
     .slice(0, 40)
     .map((raw, i) => {
       const s = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
       const description = typeof s.description === 'string' ? s.description.trim() : '';
-      const parsed = description ? parseSectionText(description) : null;
+      const parsed = description ? parseSectionText(description, craft) : null;
       const rows = parsed ? parsed.rows : [];
       const castOn = toSized(s.castOn, 0);
 
@@ -231,8 +234,9 @@ export function toImportedPattern(data: unknown): ImportedPattern {
   const tools = normaliseTools(draft.tools);
   const techniques = normaliseTechniques(draft.techniques);
   const sizes = normaliseSizes(draft.sizes);
+  const craft = oneOf<TechniqueCraft>(draft.craft, ['knit', 'crochet', 'both'], 'knit');
 
-  const sections = normaliseSections(draft.sections, { materials, tools, techniques });
+  const sections = normaliseSections(draft.sections, { materials, tools, techniques }, craft);
   const rowsCharted = sections.reduce(
     (n, s) => n + s.rows.filter((r) => r.stitches.length > 0).length,
     0,
@@ -248,7 +252,7 @@ export function toImportedPattern(data: unknown): ImportedPattern {
       category: oneOf<PatternCategory>(draft.category, [...CATEGORY_ORDER], 'sweaters'),
       // Knitting is the safe default: the app was knitting-only until now, and a pattern wrongly
       // marked crochet would be more confusing than one left at the common case.
-      craft: oneOf<TechniqueCraft>(draft.craft, ['knit', 'crochet', 'both'], 'knit'),
+      craft,
       level: oneOf<PatternLevel>(draft.level, LEVELS, 'intermediate'),
       needleSize: str(draft.needleSize, 60),
       // Legacy field, superseded by needleSize — imports never set it.
