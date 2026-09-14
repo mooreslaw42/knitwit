@@ -272,6 +272,22 @@ function keepKnown(ids: string[], stash: Record<string, unknown>): string[] {
 // yoke resolved to no yarn at all. Where the pattern is still around, its slots are re-resolved
 // through the project's own mappings; sections match by name, since they're stamped in order but
 // renamed afterwards.
+// The `notes` → `rowNotes` rename, repaired in place on one section — a project's or a pattern's.
+//
+// Rescue before coercing, not after. Blanking `notes` to a string first and then looking for the
+// array in it destroys every row-pinned note in the section — which is exactly what the first
+// version of this did.
+function repairSectionNotes(section: Record<string, unknown>): void {
+  if (typeof section.description !== 'string') section.description = '';
+  if (!('stitchMultiple' in section)) section.stitchMultiple = null;
+  if (!Array.isArray(section.rowNotes) && Array.isArray(section.notes)) {
+    section.rowNotes = section.notes;
+    section.notes = '';
+  }
+  if (!Array.isArray(section.rowNotes)) section.rowNotes = [];
+  if (typeof section.notes !== 'string') section.notes = '';
+}
+
 function repairSectionKits(state: {
   projects?: Record<string, Record<string, unknown>>;
   patterns?: Record<string, Record<string, unknown>>;
@@ -311,17 +327,7 @@ function repairSectionKits(state: {
     if (!Array.isArray(project.labels)) project.labels = [];
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
-      if (typeof section.description !== 'string') section.description = '';
-      if (!('stitchMultiple' in section)) section.stitchMultiple = null;
-      // Rescue before coercing, not after. Blanking `notes` to a string first and then looking
-      // for the array in it destroys every row-pinned note in the project — which is exactly what
-      // the first version of this did.
-      if (!Array.isArray(section.rowNotes) && Array.isArray(section.notes)) {
-        section.rowNotes = section.notes;
-        section.notes = '';
-      }
-      if (!Array.isArray(section.rowNotes)) section.rowNotes = [];
-      if (typeof section.notes !== 'string') section.notes = '';
+      repairSectionNotes(section);
     }
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
@@ -346,6 +352,29 @@ function repairSectionKits(state: {
       if (!Array.isArray(section.techniqueIds)) section.techniqueIds = [];
       delete section.materialId;
       delete section.toolId;
+    }
+  }
+
+  // Patterns gained the same fields at the same time and were being left out — which broke the
+  // one thing every pattern exists for. `createProject` reads `ps.rowNotes` and `ps.notes`
+  // straight off each pattern section, so a pattern stored before the rename crashed the wizard
+  // on "Save project" rather than starting the project.
+  //
+  // This repair used to live in `migrate`, under a comment claiming it ran unconditionally. It
+  // did not: `migrate` only runs when the stored version differs from the current one, so a store
+  // already at the current version never saw it and every pattern in it stayed broken. That these
+  // lists exist is an invariant every screen reads as one — `pattern.techniques.map(…)` with no
+  // guard — so it belongs here, where it runs on every hydration. Idempotent, and costs nothing.
+  for (const pattern of Object.values(state.patterns ?? {})) {
+    for (const key of ['sections', 'materials', 'tools', 'techniques', 'sizes'] as const) {
+      if (!Array.isArray(pattern[key])) pattern[key] = [];
+    }
+    if (typeof pattern.notes !== 'string') pattern.notes = '';
+    for (const section of pattern.sections as Record<string, unknown>[]) {
+      repairSectionNotes(section);
+      for (const key of ['materials', 'tools', 'techniques', 'markers', 'rows'] as const) {
+        if (!Array.isArray(section[key])) section[key] = [];
+      }
     }
   }
 }
@@ -1245,27 +1274,9 @@ export const useKnitwitStore = create<KnitwitState>()(
         } | undefined;
         if (state?.patterns) {
           for (const pattern of Object.values(state.patterns)) {
-            // Run unconditionally, not behind a version gate. That these lists exist is an
-            // invariant every screen reads as one — `pattern.techniques.map(…)` with no guard.
-            // The original back-fill sat behind `version < 5`, so a pattern that reached a later
-            // version still missing one was never repaired, and the detail screen crashed on it.
-            // Repairing the shape every time is idempotent and costs nothing.
-            for (const key of ['sections', 'materials', 'tools', 'techniques', 'sizes'] as const) {
-              if (!Array.isArray(pattern[key])) pattern[key] = [];
-            }
-            if (typeof pattern.notes !== 'string') pattern.notes = '';
-            for (const section of pattern.sections as Record<string, unknown>[]) {
-              // Row-pinned notes were called `notes` until the plain free-text field took the
-              // name. Moved before the array back-fill below, which would otherwise blank them.
-              if (!Array.isArray(section.rowNotes) && Array.isArray(section.notes)) {
-                section.rowNotes = section.notes;
-                section.notes = '';
-              }
-              if (typeof section.notes !== 'string') section.notes = '';
-              for (const key of ['materials', 'tools', 'techniques', 'rowNotes', 'markers', 'rows'] as const) {
-                if (!Array.isArray(section[key])) section[key] = [];
-              }
-            }
+            // The shape back-fill that used to sit here now lives in `merge` — see the note
+            // there. What remains is genuinely version-gated: one-off reinterpretations of data
+            // that was already well-formed, which must not re-run.
             // v19 → v20: patterns gain a craft. Everything that already exists is knitting —
             // that is all the app could express until now.
             if (version < 20 && typeof pattern.craft !== 'string') pattern.craft = 'knit';

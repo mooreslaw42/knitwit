@@ -1305,6 +1305,9 @@ describe('hydrating a store saved before notes split in two', () => {
   };
 
   const oldNotes = [{ id: 1, row: 12, text: 'Dropped a stitch' }];
+  // Read off the store rather than written down, so bumping the version can't quietly send these
+  // back through `migrate` and make them pass for the wrong reason again.
+  const CURRENT_VERSION = persist.getOptions().version;
 
   it('moves a project section’s row-pinned notes to rowNotes', async () => {
     const state = await hydrate({
@@ -1324,17 +1327,70 @@ describe('hydrating a store saved before notes split in two', () => {
     expect(state.projects.p.sections[0].notes).toBe('');
   });
 
+  // At the *current* version, which is the whole point. This repair used to live in `migrate`
+  // and this test passed only because it hydrated an older version — so the suite was green while
+  // every pattern in a real store stayed unrepaired.
   it('does the same for a pattern section', async () => {
     const state = await hydrate({
       state: {
         patterns: { pat: { sections: [{ name: 'Body', notes: oldNotes }] } },
         projects: {},
       },
-      // A different version so the pattern repair runs at all.
-      version: 23,
+      version: CURRENT_VERSION,
     });
     expect(state.patterns.pat.sections[0].rowNotes).toEqual(oldNotes);
     expect(state.patterns.pat.sections[0].notes).toBe('');
+  });
+
+  // The reported crash: "Save project" on a pattern-linked project threw
+  // "Cannot read properties of undefined (reading 'map')" at `ps.rowNotes.map`.
+  it('lets a project be started from a pattern stored before the rename', async () => {
+    await hydrate({
+      state: {
+        patterns: {
+          pat: {
+            name: 'Camisole',
+            sections: [{ name: 'Body', totalRows: 10, castOn: 0, notes: oldNotes }],
+          },
+        },
+        projects: {},
+      },
+      version: CURRENT_VERSION,
+    });
+
+    expect(() =>
+      useKnitwitStore.getState().createProject({
+        name: 'From pattern',
+        startedOn: '2026-09-14',
+        craft: 'knit',
+        patternId: 'pat',
+        totalRows: 60,
+      }),
+    ).not.toThrow();
+
+    const project = Object.values(useKnitwitStore.getState().projects).find(
+      (p) => p.name === 'From pattern',
+    )!;
+    expect(project.sections[0].rowNotes.map((n) => n.text)).toEqual(['Dropped a stitch']);
+    expect(project.sections[0].notes).toBe('');
+  });
+
+  // Every screen reads these as arrays with no guard. Same gate, same failure.
+  it('back-fills a pattern’s lists at the current version', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: { pat: { name: 'Bare', sections: [{ name: 'Body' }] } },
+        projects: {},
+      },
+      version: CURRENT_VERSION,
+    });
+    const pattern = state.patterns.pat;
+    expect(pattern.materials).toEqual([]);
+    expect(pattern.tools).toEqual([]);
+    expect(pattern.techniques).toEqual([]);
+    expect(pattern.sizes).toEqual([]);
+    expect(pattern.sections[0].rows).toEqual([]);
+    expect(pattern.sections[0].markers).toEqual([]);
   });
 
   it('gives a project and a pattern somewhere to write notes', async () => {
@@ -1343,7 +1399,7 @@ describe('hydrating a store saved before notes split in two', () => {
         patterns: { pat: { sections: [] } },
         projects: { p: { name: 'Old', patternId: null, sections: [] } },
       },
-      version: 23,
+      version: CURRENT_VERSION,
     });
     expect(state.projects.p.notes).toBe('');
     expect(state.patterns.pat.notes).toBe('');
