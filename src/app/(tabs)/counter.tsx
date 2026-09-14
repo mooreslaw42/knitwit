@@ -383,6 +383,21 @@ export default function CounterScreen() {
             </ThemedText>
           </View>
         )}
+
+        {/* Narrow enough that the chart column isn't there, but the section has one to show. On a
+            wide window this is the right-hand column and the button would be pointing at something
+            already on screen; on a phone it is the only way through to it. */}
+        {!twoUp && chartRows.length > 0 && !hideMain && (
+          <Pressable
+            style={styles.showPatternBtn}
+            onPress={() =>
+              router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}/stitches`)
+            }>
+            <ThemedText type="smallBold" themeColor="sageDeep">
+              Show pattern · {chartRows.length} {chartRows.length === 1 ? 'row' : 'rows'} →
+            </ThemedText>
+          </Pressable>
+        )}
     </>
   );
 
@@ -486,6 +501,15 @@ const styles = StyleSheet.create({
   },
   // Spread to the corners the header would be as wide as both columns, which is the opposite of
   // what the extra width is for. Clustered in the middle it stays one object, over one screen.
+  // Sits under the counter rather than beside it, so a thumb on the + button is nowhere near it.
+  showPatternBtn: {
+    marginTop: Spacing.four,
+    alignSelf: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
   topbarWide: {
     justifyContent: 'center',
     gap: Spacing.three,
