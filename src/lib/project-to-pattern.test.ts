@@ -81,12 +81,22 @@ const stash: Stash = {
   materials: { m1: material('Rico Design', 'Blossom Pink'), m2: material('Drops', 'Sage Green') },
   tools: { t1: tool('4.5mm'), t2: tool('3.0mm') },
   techniques: {
-    q1: { name: 'German short rows', craft: 'knit', notes: 'Turn without a wrap.', link: '' },
-    q2: { name: 'Tubular cast-on', craft: 'knit', notes: '', link: '' },
+    q1: { status: 'known', notes: 'Turn without a wrap.', addedOn: '2026-01-01' },
+    q2: { status: 'want', notes: '', addedOn: '2026-01-01' },
+  },
+  catalogue: {
+    q1: {
+      id: 'q1', name: 'German short rows', craft: 'knit', family: 'shaping',
+      summary: '', aliases: [], video: '', link: '',
+    },
+    q2: {
+      id: 'q2', name: 'Tubular cast-on', craft: 'knit', family: 'cast-on',
+      summary: '', aliases: [], video: '', link: '',
+    },
   },
 };
 
-const bare: Stash = { materials: {}, tools: {}, techniques: {} };
+const bare: Stash = { materials: {}, tools: {}, techniques: {}, catalogue: {} };
 
 describe('projectToPattern', () => {
   it('carries the project across as a pattern of its own', () => {
@@ -419,9 +429,15 @@ describe('techniques', () => {
     expect(p.techniques).toHaveLength(1);
   });
 
-  it('names an unknown technique rather than dropping the reference', () => {
-    const p = projectToPattern(project({ sections: [section({ techniqueIds: ['gone'] })] }), bare, null);
-    expect(p.techniques[0].name).toBe('Technique');
+  // An id with no catalogue entry cached — offline first run, or a row since removed. It reads
+  // back as its own slug, which at least says what it was, rather than as a generic "Technique".
+  it('names an unknown technique from its slug rather than dropping the reference', () => {
+    const p = projectToPattern(
+      project({ sections: [section({ techniqueIds: ['german-short-rows'] })] }),
+      bare,
+      null,
+    );
+    expect(p.techniques[0].name).toBe('german short rows');
     expect(p.sections[0].techniques).toEqual([p.techniques[0].id]);
   });
 

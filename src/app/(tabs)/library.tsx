@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton, Thumb } from '@/components/knitwit-ui';
+import { PillButton, Thumb } from '@/components/knitwit-ui';
+import { TechniqueLibrary } from '@/components/technique-library';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -34,15 +35,13 @@ const VIEWS: { id: LibraryView; label: string; singular: string }[] = [
 
 const NEW_ROUTE = {
   patterns: '/pattern/new',
-  techniques: '/technique/new',
   materials: '/material/new',
   tools: '/tool/new',
-} as const satisfies Record<LibraryView, string>;
+} as const satisfies Partial<Record<LibraryView, string>>;
 
 export default function LibraryScreen() {
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
-  const techniques = useKnitwitStore((state) => state.techniques);
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const projects = useKnitwitStore((state) => state.projects);
@@ -62,7 +61,6 @@ export default function LibraryScreen() {
   const usedCrafts = CRAFT_ORDER.filter((c) => entries.some(([, p]) => p.craft === c));
   // Categories follow the craft filter, so it never offers one with nothing behind it.
   const usedCategories = CATEGORY_ORDER.filter((c) => byCraft.some(([, p]) => p.category === c));
-  const techniqueEntries = Object.entries(techniques);
 
   return (
     <ThemedView style={styles.container}>
@@ -70,11 +68,15 @@ export default function LibraryScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
             <ThemedText type="title">Library</ThemedText>
-            <PillButton style={styles.newBtn} onPress={() => router.push(NEW_ROUTE[view])}>
-              <ThemedText type="smallBold" themeColor="white">
-                + New {VIEWS.find((v) => v.id === view)?.singular}
-              </ThemedText>
-            </PillButton>
+            {/* No "+ New technique": a technique is picked from the shared catalogue, not
+                written. The techniques view has its own Browse tab for that. */}
+            {view !== 'techniques' && (
+              <PillButton style={styles.newBtn} onPress={() => router.push(NEW_ROUTE[view] as Parameters<typeof router.push>[0])}>
+                <ThemedText type="smallBold" themeColor="white">
+                  + New {VIEWS.find((v) => v.id === view)?.singular}
+                </ThemedText>
+              </PillButton>
+            )}
           </View>
 
           <View style={styles.segment}>
@@ -151,31 +153,7 @@ export default function LibraryScreen() {
               </View>
             </>
           ) : view === 'techniques' ? (
-            techniqueEntries.length === 0 ? (
-              <Card style={styles.emptyCard}>
-                <ThemedText type="smallBold">No techniques yet</ThemedText>
-                <ThemedText type="small" themeColor="inkSoft">
-                  Tap “+ New technique” to jot down a cast-on, decrease or finishing trick.
-                </ThemedText>
-              </Card>
-            ) : (
-              <View style={styles.techList}>
-                {techniqueEntries.map(([id, t]) => (
-                  <Pressable
-                    key={id}
-                    style={styles.techRow}
-                    onPress={() => router.push(`/technique/${id}`)}>
-                    <View style={styles.techInfo}>
-                      <ThemedText type="smallBold">{t.name}</ThemedText>
-                      <ThemedText type="small" themeColor="inkSoft" numberOfLines={2}>
-                        {CRAFT_LABELS[t.craft]}
-                        {t.notes ? ` · ${t.notes}` : ''}
-                      </ThemedText>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            )
+            <TechniqueLibrary />
           ) : view === 'materials' ? (
             <View style={styles.techList}>
               {Object.entries(materials).map(([id, m]) => {

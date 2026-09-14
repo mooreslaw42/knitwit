@@ -18,6 +18,7 @@ import {
   toolLabel,
 } from '@/components/stash-picker';
 import { NotesCard } from '@/components/notes-card';
+import { resolveTechnique } from '@/lib/technique-catalogue';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -35,6 +36,7 @@ export default function SectionDetailScreen() {
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const techniques = useKnitwitStore((state) => state.techniques);
+  const catalogue = useKnitwitStore((state) => state.catalogue);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
   const updateSection = useKnitwitStore((state) => state.updateSection);
   const deleteSection = useKnitwitStore((state) => state.deleteSection);
@@ -65,7 +67,11 @@ export default function SectionDetailScreen() {
   const worksWith = [
     kitSummary(section.materialIds, materials, materialLabel),
     kitSummary(section.toolIds, tools, toolLabel),
-    kitSummary(section.techniqueIds, techniques, (t) => t.name),
+    kitSummary(section.techniqueIds, techniques, () => '').trim()
+      ? section.techniqueIds
+          .map((tid) => resolveTechnique(tid, techniques[tid], catalogue).name)
+          .join(', ')
+      : '',
   ]
     .filter(Boolean)
     .join(' · ');

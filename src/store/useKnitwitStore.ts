@@ -18,11 +18,14 @@ import {
 } from '@/lib/knitwit-helpers';
 import {
   emptyAchievements,
+  localDate,
   normaliseAchievements,
   recordActivity,
   stitchesForRow,
 } from '@/lib/achievements';
 import { stitchRatio } from '@/lib/gauge';
+import { fetchTechniqueCatalogue } from '@/lib/fetch-technique-catalogue';
+import { CATALOGUE_MAX_AGE_MS, matchTechnique } from '@/lib/technique-catalogue';
 import { categoryFromName } from '@/lib/project-to-pattern';
 import { regaugeSectionRows } from '@/lib/regauge';
 import type {
@@ -36,8 +39,10 @@ import type {
   Project,
   ProjectSection,
   ProjectStatus,
+  CatalogueTechnique,
   Technique,
   TechniqueCraft,
+  TechniqueStatus,
   Tool,
   UserSettings,
 } from '@/types/knitwit';
@@ -57,7 +62,14 @@ type KnitwitState = {
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
   patterns: Record<string, Pattern>;
+  // What the knitter has said about each technique, keyed by the catalogue's slug — or by a
+  // generated id for one they added themselves.
   techniques: Record<string, Technique>;
+  // The shared catalogue, cached so the Techniques tab works offline after the first load.
+  catalogue: Record<string, CatalogueTechnique>;
+  catalogueFetchedAt: number | null;
+  catalogueError: string | null;
+  loadCatalogue: (force?: boolean) => Promise<void>;
   projects: Record<string, Project>;
 
   activeProjectKey: string;
@@ -149,7 +161,11 @@ type KnitwitState = {
   savePattern: (id: string | null, data: Pattern) => string;
   savePatternFromProject: (projectKey: string, data: Pattern) => string;
   deletePattern: (id: string) => void;
-  saveTechnique: (id: string | null, data: Technique) => string;
+  // A technique is picked from the catalogue and given a status, not written from scratch.
+  setTechniqueStatus: (id: string, status: TechniqueStatus | null) => void;
+  setTechniqueNotes: (id: string, notes: string) => void;
+  // The escape hatch: something the catalogue doesn't have. Never matched from a pattern.
+  addCustomTechnique: (name: string, craft: TechniqueCraft) => string;
   deleteTechnique: (id: string) => void;
 
   setActiveSection: (projectKey: string, sectionIndex: number) => void;
@@ -329,6 +345,56 @@ function repairSectionKits(state: {
   }
 }
 
+// A technique used to be whatever the knitter typed: { name, craft, notes, link }. It is now a
+// reference to the shared catalogue plus what they know about it.
+//
+// The two can't be matched here, because the catalogue lives in Supabase and hydration is
+// synchronous and offline. So every old record becomes a custom one — theirs, intact, visible —
+// and reconcileTechniques moves the ones that have a catalogue entry across when it loads.
+//
+// Status is 'known': the old library was "techniques I've noted down", and someone who wrote a
+// technique down is far more likely to have done it than to be wishing for it.
+function repairTechniques(state: { techniques?: Record<string, Record<string, unknown>> }): void {
+  for (const [id, t] of Object.entries(state.techniques ?? {})) {
+    if (typeof t?.status === 'string') continue;
+    const name = typeof t?.name === 'string' ? t.name : '';
+    const craft = t?.craft === 'crochet' || t?.craft === 'both' ? t.craft : 'knit';
+    state.techniques![id] = {
+      status: 'known',
+      notes: typeof t?.notes === 'string' ? t.notes : '',
+      addedOn: localDate(),
+      ...(name ? { custom: { name, craft } } : {}),
+    };
+  }
+}
+
+// Moves a hand-written technique onto its catalogue entry once the catalogue is available.
+//
+// Everything the knitter said about it — status, notes, when they added it — comes across, and
+// the catalogue entry supplies the name, craft, summary and video it never had. Anything with no
+// match stays exactly as it is: a technique the catalogue doesn't know is still theirs.
+function reconcileTechniques(
+  mine: Record<string, Technique>,
+  catalogue: CatalogueTechnique[],
+): Record<string, Technique> {
+  const next: Record<string, Technique> = {};
+  let changed = false;
+
+  for (const [id, t] of Object.entries(mine)) {
+    const matched = t.custom ? matchTechnique(t.custom.name, catalogue) : null;
+    if (!matched || next[matched.id] || mine[matched.id]) {
+      // No match, or the knitter already has the catalogue entry — leave it where it is rather
+      // than merging two records and losing one set of notes.
+      next[id] = t;
+      continue;
+    }
+    const { custom: _custom, ...rest } = t;
+    next[matched.id] = rest;
+    changed = true;
+  }
+  return changed ? next : mine;
+}
+
 // Rewrites one section of one project, leaving everything else identical. Returns an empty patch
 // for a section that isn't there, so a stale route parameter is a no-op rather than a crash.
 function patchSection(
@@ -395,6 +461,9 @@ export const useKnitwitStore = create<KnitwitState>()(
       tools: SEED_TOOLS,
       patterns: SEED_PATTERNS,
       techniques: SEED_TECHNIQUES,
+      catalogue: {},
+      catalogueFetchedAt: null,
+      catalogueError: null,
       projects: SEED_PROJECTS,
 
       activeProjectKey: 'meadow',
@@ -836,13 +905,81 @@ export const useKnitwitStore = create<KnitwitState>()(
         set({ patterns: nextPatterns, projects: nextProjects });
       },
 
-      saveTechnique: (id, data) => {
-        const { techniques, techniqueSeq } = get();
-        const resolvedId = id ?? `te${techniqueSeq}`;
+      loadCatalogue: async (force = false) => {
+        const { catalogueFetchedAt, catalogue } = get();
+        const fresh =
+          catalogueFetchedAt !== null && Date.now() - catalogueFetchedAt < CATALOGUE_MAX_AGE_MS;
+        if (!force && fresh && Object.keys(catalogue).length > 0) return;
+
+        try {
+          const rows = await fetchTechniqueCatalogue();
+          // An empty response is a failure dressed as a success — a dropped connection, a policy
+          // change. Keeping the cache beats blanking the knitter's library over it.
+          if (rows.length === 0 && Object.keys(catalogue).length > 0) return;
+          set({
+            catalogue: Object.fromEntries(rows.map((t: CatalogueTechnique) => [t.id, t])),
+            catalogueFetchedAt: Date.now(),
+            catalogueError: null,
+            // Techniques written by hand before the catalogue existed are matched to it here
+            // rather than at hydration, because at hydration there is nothing to match against.
+            techniques: reconcileTechniques(get().techniques, rows),
+          });
+        } catch (error) {
+          // The cache carries on serving. The message is only shown when there is nothing cached.
+          set({ catalogueError: error instanceof Error ? error.message : 'Could not load techniques.' });
+        }
+      },
+
+      setTechniqueStatus: (id, status) => {
+        const { techniques, achievements } = get();
+        if (status === null) {
+          const next = { ...techniques };
+          delete next[id];
+          set({ techniques: next });
+          return;
+        }
+        const existing = techniques[id];
         set({
-          techniques: { ...techniques, [resolvedId]: data },
-          techniqueSeq: id ? techniqueSeq : techniqueSeq + 1,
-          achievements: id ? get().achievements : bumpTotal(get().achievements, 'techniquesAdded'),
+          techniques: {
+            ...techniques,
+            [id]: {
+              status,
+              notes: existing?.notes ?? '',
+              addedOn: existing?.addedOn ?? localDate(),
+              ...(existing?.custom ? { custom: existing.custom } : {}),
+            },
+          },
+          // Counted when a technique is first learnt rather than when a record is created —
+          // creating one isn't a thing you do any more. Only on the transition, so toggling
+          // between Learning and Mastered doesn't inflate it.
+          achievements:
+            status === 'known' && existing?.status !== 'known'
+              ? bumpTotal(achievements, 'techniquesAdded')
+              : achievements,
+        });
+      },
+
+      setTechniqueNotes: (id, notes) => {
+        const { techniques } = get();
+        const existing = techniques[id];
+        if (!existing) return;
+        set({ techniques: { ...techniques, [id]: { ...existing, notes } } });
+      },
+
+      addCustomTechnique: (name, craft) => {
+        const { techniques, techniqueSeq } = get();
+        const resolvedId = `own-${techniqueSeq}`;
+        set({
+          techniques: {
+            ...techniques,
+            [resolvedId]: {
+              status: 'want',
+              notes: '',
+              addedOn: localDate(),
+              custom: { name: name.trim() || 'Untitled technique', craft },
+            },
+          },
+          techniqueSeq: techniqueSeq + 1,
         });
         return resolvedId;
       },
@@ -1055,6 +1192,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         // Same reasoning — a field added to Achievements after this store shipped is filled in
         // here rather than by a migration nobody will re-run.
         state.achievements = normaliseAchievements(state.achievements);
+        repairTechniques(state as { techniques?: Record<string, Record<string, unknown>> });
         return { ...current, ...state };
       },
 
@@ -1299,6 +1437,11 @@ export const useKnitwitStore = create<KnitwitState>()(
         tools: state.tools,
         patterns: state.patterns,
         techniques: state.techniques,
+        // Cached, not owned. This is the whole reason the Techniques tab works on a train: the
+        // catalogue lives in Supabase, and without persisting it every cold start with no
+        // connection would show a knitter's techniques as bare slugs.
+        catalogue: state.catalogue,
+        catalogueFetchedAt: state.catalogueFetchedAt,
         projects: state.projects,
         activeProjectKey: state.activeProjectKey,
         activeSectionIndex: state.activeSectionIndex,

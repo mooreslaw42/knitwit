@@ -1,5 +1,7 @@
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { resolveTechnique } from '@/lib/technique-catalogue';
 import type {
+  CatalogueTechnique,
   Material,
   Pattern,
   PatternCategory,
@@ -19,6 +21,9 @@ export type Stash = {
   materials: Record<string, Material>;
   tools: Record<string, Tool>;
   techniques: Record<string, Technique>;
+  // The shared catalogue, so a technique id can be turned back into a name. A project points at
+  // catalogue slugs; the pattern it becomes names them inline for anyone who reads it.
+  catalogue: Record<string, CatalogueTechnique>;
 };
 
 let uid = 0;
@@ -123,7 +128,8 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
   // inline, so each one used is copied out as a slot of the pattern's own.
   const ownTechniques: PatternTechnique[] = techniqueIds.map((id) => {
     const t = stash.techniques[id];
-    return { id: techniqueSlots.get(id)!, name: t?.name ?? 'Technique', note: t?.notes ?? '' };
+    const resolved = resolveTechnique(id, t, stash.catalogue);
+    return { id: techniqueSlots.get(id)!, name: resolved.name, note: t?.notes ?? '' };
   });
 
   // Matched by name because that's the only thing the two share: a project's sections are stamped

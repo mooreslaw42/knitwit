@@ -101,11 +101,48 @@ export type Material = {
 // finishing trick — with an optional link to a tutorial. Entirely user-authored.
 export type TechniqueCraft = CraftType | 'both';
 
-export type Technique = {
+// One entry in the shared catalogue (public.technique_catalogue). The same for every knitter, so
+// two people's "German short rows" are the same thing and a pattern can point at one.
+//
+// `id` is a slug and a foreign key: it appears in saved patterns, in project sections, and in
+// achievement tallies. Names and summaries are free to change; ids are not.
+export type CatalogueTechnique = {
+  id: string;
   name: string;
   craft: TechniqueCraft;
-  notes: string;
+  family: TechniqueFamily;
+  summary: string;
+  // What patterns actually call it, so imported text can be matched back to this entry.
+  aliases: string[];
+  video: string;
   link: string;
+};
+
+export type TechniqueFamily =
+  | 'cast-on'
+  | 'bind-off'
+  | 'increase'
+  | 'decrease'
+  | 'joining'
+  | 'colourwork'
+  | 'shaping'
+  | 'texture'
+  | 'finishing'
+  | 'other';
+
+// Where a knitter is with a technique. Absent from their map means they have never said.
+export type TechniqueStatus = 'want' | 'learning' | 'known';
+
+// What one knitter records about one technique. Everything factual about the technique itself
+// lives in the catalogue; this is only theirs.
+export type Technique = {
+  status: TechniqueStatus;
+  notes: string;
+  addedOn: string; // ISO YYYY-MM-DD
+  // Set on a technique the knitter added because the catalogue didn't have it. It carries its own
+  // name and craft, is never matched from a pattern, and sorts below catalogue entries. The
+  // escape hatch, not a second catalogue.
+  custom?: { name: string; craft: TechniqueCraft };
 };
 
 export type ToolType =

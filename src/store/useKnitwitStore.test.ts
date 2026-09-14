@@ -675,7 +675,12 @@ describe('savePatternFromProject', () => {
     const project = store().projects.clover;
     return projectToPattern(
       project,
-      { materials: store().materials, tools: store().tools, techniques: store().techniques },
+      {
+        materials: store().materials,
+        tools: store().tools,
+        techniques: store().techniques,
+        catalogue: store().catalogue,
+      },
       null,
     );
   };
@@ -1274,7 +1279,12 @@ describe('notes travelling between a pattern and a project', () => {
     const project = store().projects.clover;
     const draft = projectToPattern(
       project,
-      { materials: store().materials, tools: store().tools, techniques: store().techniques },
+      {
+        materials: store().materials,
+        tools: store().tools,
+        techniques: store().techniques,
+        catalogue: store().catalogue,
+      },
       null,
     );
     expect(draft.notes).toBe('Blocked to 90cm.');

@@ -1,92 +1,134 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { ExternalLink } from '@/components/external-link';
+import { Card, ConfirmButton } from '@/components/knitwit-ui';
+import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CRAFT_LABELS } from '@/constants/catalogs';
+import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  FAMILY_LABELS,
+  resolveTechnique,
+  STATUS_LABELS,
+  STATUS_ORDER,
+} from '@/lib/technique-catalogue';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { Technique, TechniqueCraft } from '@/types/knitwit';
 
-const BLANK: Technique = { name: '', craft: 'both', notes: '', link: '' };
-
-const CRAFT_OPTIONS: { value: TechniqueCraft; label: string }[] = [
-  { value: 'both', label: 'Knitting & crochet' },
-  { value: 'knit', label: 'Knitting' },
-  { value: 'crochet', label: 'Crochet' },
-];
-
-export default function TechniqueEditScreen() {
+// One technique: what it is, and where the knitter is with it.
+//
+// The catalogue's half is read-only — it is shared, and one knitter editing the description of
+// Kitchener stitch for everyone would be wrong. Their status and their notes are theirs, and save
+// as they're set rather than behind a button.
+export default function TechniqueScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const isNew = id === 'new';
   const router = useRouter();
 
-  const existing = useKnitwitStore((state) => (isNew ? null : state.techniques[id]));
-  const saveTechnique = useKnitwitStore((state) => state.saveTechnique);
+  const mine = useKnitwitStore((state) => state.techniques[id]);
+  const catalogue = useKnitwitStore((state) => state.catalogue);
+  const loadCatalogue = useKnitwitStore((state) => state.loadCatalogue);
+  const setTechniqueStatus = useKnitwitStore((state) => state.setTechniqueStatus);
+  const setTechniqueNotes = useKnitwitStore((state) => state.setTechniqueNotes);
   const deleteTechnique = useKnitwitStore((state) => state.deleteTechnique);
 
-  const [form, setForm] = useState<Technique>(existing ?? BLANK);
-  const set = <K extends keyof Technique>(key: K, value: Technique[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  // Reachable by deep link, so the catalogue may not be here yet.
+  useEffect(() => {
+    void loadCatalogue();
+  }, [loadCatalogue]);
+
+  const technique = resolveTechnique(id, mine, catalogue);
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{isNew ? 'New technique' : 'Edit technique'}</ThemedText>
+          <ThemedText type="title">{technique.name}</ThemedText>
+          <ThemedText type="small" themeColor="inkSoft">
+            {CRAFT_LABELS[technique.craft]} · {FAMILY_LABELS[technique.family]}
+            {technique.isCustom ? ' · your own' : ''}
+          </ThemedText>
 
-          <FormField
-            label="Name"
-            value={form.name}
-            onChangeText={(v) => set('name', v)}
-            placeholder="e.g. Long-tail cast-on"
-          />
-          <SelectField
-            label="Craft"
-            options={CRAFT_OPTIONS}
-            value={form.craft}
-            onChange={(v) => set('craft', v)}
-          />
-          <FormField
-            label="Notes"
-            value={form.notes}
-            onChangeText={(v) => set('notes', v)}
-            placeholder="How it works, when to use it, things to remember…"
-            multiline
-            style={styles.notes}
-          />
-          <FormField
-            label="Tutorial link (optional)"
-            value={form.link}
-            onChangeText={(v) => set('link', v)}
-            placeholder="https://…"
-          />
+          {technique.summary ? (
+            <Card style={styles.card}>
+              <ThemedText type="default">{technique.summary}</ThemedText>
+            </Card>
+          ) : null}
 
-          <PillButton
-            style={styles.saveBtn}
-            onPress={() => {
-              saveTechnique(isNew ? null : id, {
-                ...form,
-                name: form.name.trim() || 'Untitled technique',
-              });
-              goBackOr(router, '/library');
-            }}>
-            <ThemedText type="smallBold" themeColor="white">
-              Save
+          <Card style={styles.card}>
+            <ThemedText type="small" themeColor="inkSoft">
+              Where you are with it
             </ThemedText>
-          </PillButton>
+            <View style={styles.statusRow}>
+              {STATUS_ORDER.map((s) => {
+                const on = mine?.status === s;
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() => setTechniqueStatus(id, on ? null : s)}
+                    style={[styles.status, on && styles.statusOn]}>
+                    <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                      {STATUS_LABELS[s]}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {!mine ? (
+              <ThemedText type="small" themeColor="inkSoft">
+                Pick one to add this to your techniques.
+              </ThemedText>
+            ) : null}
+          </Card>
 
-          {!isNew && (
-            <DeleteButton
-              onPress={() => {
+          {technique.video || technique.link ? (
+            <Card style={styles.card}>
+              <ThemedText type="small" themeColor="inkSoft">
+                How to do it
+              </ThemedText>
+              {technique.video ? (
+                <ExternalLink href={technique.video as Parameters<typeof ExternalLink>[0]['href']}>
+                  <ThemedText type="smallBold" themeColor="sageDeep">
+                    Watch a demonstration →
+                  </ThemedText>
+                </ExternalLink>
+              ) : null}
+              {technique.link ? (
+                <ExternalLink href={technique.link as Parameters<typeof ExternalLink>[0]['href']}>
+                  <ThemedText type="smallBold" themeColor="sageDeep">
+                    Read the instructions →
+                  </ThemedText>
+                </ExternalLink>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {/* Only once it's theirs — notes on something you haven't marked have nowhere to live. */}
+          {mine ? (
+            <NotesCard
+              value={mine.notes}
+              onChange={(notes) => setTechniqueNotes(id, notes)}
+              label="Your notes"
+              hint="What worked, what to watch for. Saved as you type."
+            />
+          ) : null}
+
+          {/* A catalogue entry is never deleted, only unmarked — the status buttons above do that.
+              One the knitter wrote themselves is theirs to remove. */}
+          {mine?.custom ? (
+            <ConfirmButton
+              label="Delete this technique"
+              question="Delete this technique? It's one of your own, so it goes for good — and any section that says it uses it will stop saying so."
+              confirmLabel="Yes, delete it"
+              onConfirm={() => {
                 deleteTechnique(id);
                 goBackOr(router, '/library');
               }}
             />
-          )}
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -94,25 +136,20 @@ export default function TechniqueEditScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
+  container: { flex: 1, alignItems: 'center' },
+  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
   scrollContent: {
     padding: Spacing.four,
     paddingBottom: Spacing.six * 2,
     gap: Spacing.three,
   },
-  notes: {
-    minHeight: 96,
-    textAlignVertical: 'top',
+  card: { gap: Spacing.two },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  status: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
-  saveBtn: {
-    marginTop: Spacing.two,
-  },
+  statusOn: { backgroundColor: Colors.blushDeep },
 });

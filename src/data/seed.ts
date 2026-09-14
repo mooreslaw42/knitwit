@@ -62,25 +62,12 @@ export const SEED_TOOLS: Record<string, Tool> = {
   t3: { type: 'circular', thickness: '4mm', length: '60cm', quantity: 1 },
 };
 
+// Keyed by catalogue slug: what the app ships knowing a new knitter probably has. The name,
+// craft and summary come from the catalogue, so only the knitter's own side is here.
 export const SEED_TECHNIQUES: Record<string, Technique> = {
-  te1: {
-    name: 'Long-tail cast-on',
-    craft: 'knit',
-    notes: 'Stretchy, tidy edge — leave a tail about 3× the cast-on width.',
-    link: '',
-  },
-  te2: {
-    name: 'Kitchener stitch',
-    craft: 'knit',
-    notes: 'Grafts two sets of live stitches invisibly. Handy for sock toes.',
-    link: '',
-  },
-  te3: {
-    name: 'Magic ring',
-    craft: 'crochet',
-    notes: 'Adjustable starting loop for working in the round — cinch it closed at the end.',
-    link: '',
-  },
+  'long-tail-cast-on': { status: 'known', notes: '', addedOn: '2026-01-01' },
+  'kitchener-stitch': { status: 'learning', notes: '', addedOn: '2026-01-01' },
+  'magic-ring': { status: 'want', notes: '', addedOn: '2026-01-01' },
 };
 
 export const SEED_PATTERNS: Record<string, Pattern> = {

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, Radii, Spacing } from '@/constants/theme';
+import { resolveTechnique } from '@/lib/technique-catalogue';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Material, ProjectSection, Technique, Tool } from '@/types/knitwit';
 
@@ -104,6 +105,7 @@ export function SectionKitEditor({
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const techniques = useKnitwitStore((state) => state.techniques);
+  const catalogue = useKnitwitStore((state) => state.catalogue);
 
   const limit = (entries: [string, unknown][], allowed: string[] | undefined) =>
     allowed ? entries.filter(([id]) => allowed.includes(id)) : entries;
@@ -148,7 +150,7 @@ export function SectionKitEditor({
         label="Techniques"
         options={limit(Object.entries(techniques), only?.techniqueIds).map(([id, t]) => ({
           id,
-          label: (t as Technique).name,
+          label: resolveTechnique(id, t as Technique, catalogue).name,
         }))}
         selected={value.techniqueIds}
         onToggle={(id) => toggle('techniqueIds', id)}
