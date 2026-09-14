@@ -216,6 +216,10 @@ export type DocumentRequest = {
   task: 'document';
   // The whole pattern as text — pasted, or extracted from a PDF's text layer.
   text: string;
+  // The shared technique catalogue, so the model can name techniques by slug instead of inventing
+  // them. Sent by the client, which caches it anyway, rather than read here: it keeps this
+  // function stateless and saves a query per import. Absent means match nothing.
+  techniques?: { id: string; name: string }[];
   model?: string;
 };
 
@@ -302,10 +306,13 @@ export const DOCUMENT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
+          // The catalogue slug where the technique is one Knitwit already knows, so two patterns
+          // naming the same thing land on the same entry. Empty when it isn't in the list.
+          id: { type: 'string' },
           name: { type: 'string' },
           note: { type: 'string' },
         },
-        required: ['name', 'note'],
+        required: ['id', 'name', 'note'],
         additionalProperties: false,
       },
     },

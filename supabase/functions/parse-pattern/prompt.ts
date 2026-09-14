@@ -161,6 +161,11 @@ For gauge, report the window the pattern measured over, not a converted one. "22
 
 **Techniques** — named things the knitter is expected to know: German short rows, tubular cast-on, Kitchener stitch, magic loop. Not basic knit and purl.
 
+Knitwit keeps a shared catalogue of these, and matching to it is what lets a knitter see that they already know something a pattern calls for. Each technique has an \`id\` alongside its name:
+
+- If the technique is one of the catalogue slugs listed in the user message, return that slug as \`id\` and the catalogue's own name as \`name\`.
+- If it is not in the list, return an empty \`id\` and the pattern's own wording as \`name\`. Do **not** invent a slug and do not force a near-miss: a wrong match tells a knitter they can already do something they have never done. An empty id is handled properly downstream.
+
 **Sections** — the pieces the garment is worked in: Back, Front, Left Sleeve, Collar, Waistband. Each one carries its own instructions.
 
 # Rules

@@ -103,6 +103,8 @@ function describeImport(imported: ImportedPattern): string {
 export default function NewPatternWizardScreen() {
   const router = useRouter();
   const savePattern = useKnitwitStore((state) => state.savePattern);
+  const catalogue = useKnitwitStore((state) => state.catalogue);
+  const loadCatalogue = useKnitwitStore((state) => state.loadCatalogue);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<Pattern>(blankPattern);
@@ -168,7 +170,12 @@ export default function NewPatternWizardScreen() {
     setImportError(null);
     setElapsed(0);
     try {
-      setImported(await importPatternDocument(text, { signal: controller.signal }));
+      setImported(
+        await importPatternDocument(text, {
+          signal: controller.signal,
+          catalogue: Object.values(catalogue),
+        }),
+      );
     } catch (error) {
       // Stopping on purpose isn't a failure — leave the screen as it was rather than
       // reporting something went wrong.
@@ -185,6 +192,11 @@ export default function NewPatternWizardScreen() {
   useEffect(() => {
     return () => readRef.current?.abort();
   }, []);
+
+  // Wanted before the read finishes, so the techniques it names can be matched to real entries.
+  useEffect(() => {
+    void loadCatalogue();
+  }, [loadCatalogue]);
 
   // A read of a long pattern runs well past a minute, so a spinner alone gives no way to tell
   // "working" from "stuck". The count is what makes that judgement possible.

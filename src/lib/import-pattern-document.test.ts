@@ -199,3 +199,62 @@ describe('toImportedPattern', () => {
     expect(() => toImportedPattern({ model: 'x' })).toThrow();
   });
 });
+
+describe('techniques from an import', () => {
+  const catalogue = [
+    {
+      id: 'german-short-rows', name: 'German short rows', craft: 'knit' as const,
+      family: 'shaping' as const, summary: '', aliases: ['GSR'], video: '', link: '',
+    },
+    {
+      id: 'magic-ring', name: 'Magic ring', craft: 'crochet' as const,
+      family: 'cast-on' as const, summary: '', aliases: ['magic circle'], video: '', link: '',
+    },
+  ];
+
+  const importWith = (techniques: unknown[]) =>
+    toImportedPattern({ draft: { name: 'X', sections: [], techniques } }, catalogue).pattern.techniques;
+
+  it('uses the catalogue slug the model returned', () => {
+    expect(importWith([{ id: 'german-short-rows', name: 'German short rows', note: '' }])).toEqual([
+      { id: 'german-short-rows', name: 'German short rows', note: '' },
+    ]);
+  });
+
+  // The backstop for a model that answers with a name, or with the pattern's own wording.
+  it('matches by name and alias when no slug came back', () => {
+    expect(importWith([{ id: '', name: 'magic circle', note: 'pull tight' }])).toEqual([
+      { id: 'magic-ring', name: 'Magic ring', note: 'pull tight' },
+    ]);
+  });
+
+  // The catalogue is a gap, not the pattern. Its wording is kept and it gets its own id.
+  it('keeps a technique the catalogue does not have', () => {
+    const out = importWith([{ id: '', name: 'Bavarian travelling stitches', note: '' }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe('Bavarian travelling stitches');
+    expect(out[0].id).not.toBe('');
+  });
+
+  it('does not list the same catalogue technique twice', () => {
+    const out = importWith([
+      { id: 'german-short-rows', name: 'German short rows', note: '' },
+      { id: '', name: 'GSR', note: '' },
+    ]);
+    expect(out).toHaveLength(1);
+  });
+
+  // A slug the model made up must not become a dangling reference to nothing.
+  it('refuses a slug that is not in the catalogue', () => {
+    const out = importWith([{ id: 'not-a-real-slug', name: 'Something else', note: '' }]);
+    expect(out[0].id).not.toBe('not-a-real-slug');
+    expect(out[0].name).toBe('Something else');
+  });
+
+  it('is unchanged when no catalogue is supplied', () => {
+    const out = toImportedPattern({
+      draft: { name: 'X', sections: [], techniques: [{ id: '', name: 'Magic ring', note: '' }] },
+    }).pattern.techniques;
+    expect(out[0].name).toBe('Magic ring');
+  });
+});

@@ -72,6 +72,7 @@ function selectProvider(): ModelProvider {
 
 // A whole pattern is long, but a 1M-context model can take it; the cap is here so one paste can't
 // run up an unbounded bill on an endpoint with no rate limit in front of it.
+const MAX_TECHNIQUES = 300;
 const MAX_DOCUMENT_CHARS = 120_000;
 
 function validateDocumentRequest(b: Record<string, unknown>): DocumentRequest {
@@ -82,9 +83,25 @@ function validateDocumentRequest(b: Record<string, unknown>): DocumentRequest {
       `That pattern is too long to read in one go (over ${Math.round(MAX_DOCUMENT_CHARS / 1000)}k characters).`,
     );
   }
+  // The catalogue the client already has cached. Capped and shape-checked like everything else
+  // crossing this boundary — the anon key is public, so this endpoint trusts nothing.
+  const techniques = Array.isArray(b.techniques)
+    ? b.techniques
+        .filter(
+          (t): t is { id: string; name: string } =>
+            typeof t === 'object' &&
+            t !== null &&
+            typeof (t as { id?: unknown }).id === 'string' &&
+            typeof (t as { name?: unknown }).name === 'string',
+        )
+        .slice(0, MAX_TECHNIQUES)
+        .map((t) => ({ id: t.id.slice(0, 80), name: t.name.slice(0, 120) }))
+    : undefined;
+
   return {
     task: 'document',
     text,
+    techniques,
     model: typeof b.model === 'string' && b.model ? b.model : undefined,
   };
 }

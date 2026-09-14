@@ -1,6 +1,6 @@
 # Knitwit — A central technique catalogue
 
-**Status: T1–T4 built 2026-09-14. T5 (picking) and T6 (import) outstanding.**
+**Status: T1–T4 and T6 built 2026-09-14. T5 (picking from a section) outstanding.**
 
 Decided by survey: the catalogue is a **Supabase table** (`public.technique_catalogue`), cached in
 the persisted store so the tab works offline after first load; a knitter **can** still add one of
@@ -73,8 +73,11 @@ the row without opening it.
 **T4 — The technique screen.** Catalogue content read-only — name, craft, family, summary, video,
 reference. The knitter's own notes and status editable, saved as you type, like the notes work.
 
-**T5 — Picking, not typing.** The section kit picker already offers the knitter's techniques as
-chips; it gains a "find another" path into the catalogue that sets status `want` on the way in.
+**T5 — Picking, not typing. Not built.** The section kit picker offers the knitter's own
+techniques as chips, which is unchanged and still works. What it doesn't yet have is a "find
+another" path into the catalogue from inside a section, so adding one mid-project still means a
+trip to the Library. Everything it needs is in place — `loadCatalogue`, `setTechniqueStatus` and
+the same chip control the browse list uses.
 
 **T6 — Import.** The model is given the catalogue's slugs and names in the system prompt — it is
 cached, so the list costs nothing per call — and returns slugs. `matchTechnique` catches what it

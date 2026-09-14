@@ -2,7 +2,9 @@ import { CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
 import { MaxNameLength } from '@/constants/theme';
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import { parseSectionText } from '@/lib/parse-pattern-text';
+import { matchTechnique } from '@/lib/technique-catalogue';
 import type {
+  CatalogueTechnique,
   Gauge,
   LengthUnit,
   Pattern,
@@ -138,14 +140,35 @@ function normaliseTools(v: unknown): PatternTool[] {
     });
 }
 
-function normaliseTechniques(v: unknown): PatternTechnique[] {
-  return arr(v)
-    .slice(0, 20)
-    .map((raw) => {
-      const t = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-      return { id: nextId('tq'), name: str(t.name, MaxNameLength), note: str(t.note, 300) };
-    })
-    .filter((t) => t.name);
+// A technique the model named, matched to the shared catalogue where it can be.
+//
+// The id becomes the catalogue slug when there's a match, so two patterns that both call for
+// German short rows point at the same entry — and a knitter who has already marked it sees that
+// they have. Where there's no match the wording is kept and a fresh id issued, because a pattern
+// naming something the catalogue doesn't have is a gap in the catalogue, not in the pattern.
+function normaliseTechniques(v: unknown, catalogue: CatalogueTechnique[]): PatternTechnique[] {
+  const out: PatternTechnique[] = [];
+  for (const raw of arr(v).slice(0, 20)) {
+    const t = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    const name = str(t.name, MaxNameLength);
+    if (!name) continue;
+    const note = str(t.note, 300);
+
+    // The model is asked for a slug; `matchTechnique` is the backstop for when it gives a name
+    // instead, or a name the slug list didn't cover.
+    const slug = str(t.id, 80);
+    const matched =
+      (slug && catalogue.find((c) => c.id === slug)) || matchTechnique(name, catalogue) || null;
+
+    // One entry per technique: a pattern that names the same thing twice shouldn't get two.
+    if (matched && out.some((o) => o.id === matched.id)) continue;
+    out.push({
+      id: matched ? matched.id : nextId('tq'),
+      name: matched ? matched.name : name,
+      note,
+    });
+  }
+  return out;
 }
 
 // The model refers to slots by position; the app refers to them by id. Translate, dropping any
@@ -215,7 +238,10 @@ function sizeMismatches(sections: PatternSection[], sizeCount: number): string[]
   return out;
 }
 
-export function toImportedPattern(data: unknown): ImportedPattern {
+export function toImportedPattern(
+  data: unknown,
+  catalogue: CatalogueTechnique[] = [],
+): ImportedPattern {
   if (typeof data !== 'object' || data === null) {
     throw new Error('The server sent back something unexpected.');
   }
@@ -232,7 +258,7 @@ export function toImportedPattern(data: unknown): ImportedPattern {
   // the sections can point at them.
   const materials = normaliseMaterials(draft.materials);
   const tools = normaliseTools(draft.tools);
-  const techniques = normaliseTechniques(draft.techniques);
+  const techniques = normaliseTechniques(draft.techniques, catalogue);
   const sizes = normaliseSizes(draft.sizes);
   const craft = oneOf<TechniqueCraft>(draft.craft, ['knit', 'crochet', 'both'], 'knit');
 
@@ -282,11 +308,23 @@ const DOCUMENT_TIMEOUT_MS = 180_000;
 
 export async function importPatternDocument(
   text: string,
-  options: { model?: string; signal?: AbortSignal } = {},
+  options: {
+    model?: string;
+    signal?: AbortSignal;
+    // The shared catalogue, so techniques the pattern names land on real entries rather than
+    // being invented fresh. Empty is fine — every technique is then kept as the model named it.
+    catalogue?: CatalogueTechnique[];
+  } = {},
 ): Promise<ImportedPattern> {
   const data = await invokeEdgeFunction(
     'parse-pattern',
-    { task: 'document', text, model: options.model },
+    {
+      task: 'document',
+      text,
+      // Slug and name only — the summaries and aliases are for matching here, not for the model.
+      techniques: (options.catalogue ?? []).map((t) => ({ id: t.id, name: t.name })),
+      model: options.model,
+    },
     {
       timeoutMs: DOCUMENT_TIMEOUT_MS,
       signal: options.signal,
@@ -295,5 +333,5 @@ export async function importPatternDocument(
         'a time by pasting it into a section instead.',
     },
   );
-  return toImportedPattern(data);
+  return toImportedPattern(data, options.catalogue ?? []);
 }
