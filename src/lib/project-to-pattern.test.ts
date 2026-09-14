@@ -66,6 +66,7 @@ const project = (over: Partial<Project> = {}): Project => ({
   sourceName: '',
   sourceText: '',
   notes: '',
+  labels: [],
   photo: null,
   color: '#E8B4C0',
   colorDeep: '#A78189',

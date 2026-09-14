@@ -28,6 +28,8 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { localDate } from '@/lib/achievements';
 import { goBackOr } from '@/lib/navigation';
 import { categoryFromName } from '@/lib/project-to-pattern';
+import { LabelField } from '@/components/label-field';
+import { labelsInUse } from '@/lib/labels';
 import { formatGaugeIn, isUsableGauge, stitchRatio } from '@/lib/gauge';
 import type { Gauge, PatternCategory, TechniqueCraft } from '@/types/knitwit';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -47,6 +49,7 @@ const CATEGORY_OPTIONS: { value: PatternCategory; label: string }[] = CATEGORY_O
 export default function NewProjectWizardScreen() {
   const router = useRouter();
   const patterns = useKnitwitStore((state) => state.patterns);
+  const projects = useKnitwitStore((state) => state.projects);
   const materials = useKnitwitStore((state) => state.materials);
   const tools = useKnitwitStore((state) => state.tools);
   const createProject = useKnitwitStore((state) => state.createProject);
@@ -60,6 +63,7 @@ export default function NewProjectWizardScreen() {
   // just made where they can see and correct it rather than behind their back.
   const [category, setCategory] = useState<PatternCategory>('sweaters');
   const [categoryTouched, setCategoryTouched] = useState(false);
+  const [labels, setLabels] = useState<string[]>([]);
   const [patternId, setPatternId] = useState<string | null>(null);
   // Picking a pattern moves the craft to match it — a project usually is whatever its pattern is,
   // and the selector stays there for the cases where it isn't.
@@ -191,6 +195,7 @@ export default function NewProjectWizardScreen() {
       patternId,
       totalRows: Math.max(1, parseInt(totalRows, 10) || 60),
       category,
+      labels,
       sizeIndex,
       swatchGauge,
       slotMaterials,
@@ -279,6 +284,12 @@ export default function NewProjectWizardScreen() {
                   setCategory(v);
                   setCategoryTouched(true);
                 }}
+              />
+              <LabelField
+                value={labels}
+                suggestions={labelsInUse(Object.values(projects))}
+                onChange={setLabels}
+                hint="Optional. Group this with others — a gift list, a year, a yarn you're using up."
               />
             </>
           )}

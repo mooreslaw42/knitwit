@@ -100,6 +100,8 @@ type KnitwitState = {
     totalRows: number;
     // Chosen in the wizard. Omitted, it's read off the name — the same guess, made a moment later.
     category?: PatternCategory;
+    // Free-text groupings, chosen in the wizard or added later.
+    labels?: string[];
     // Which of the pattern's sizes this project is being knitted in.
     sizeIndex?: number;
     // The knitter's swatch gauge. When it differs from the pattern's, the sections below are
@@ -122,6 +124,7 @@ type KnitwitState = {
       craft: TechniqueCraft;
       patternId: string | null;
       photo?: string | null;
+      labels?: string[];
     } & Partial<ProjectMeta>,
   ) => void;
   deleteProject: (key: string) => void;
@@ -304,6 +307,7 @@ function repairSectionKits(state: {
     // Fields a project section gained once it could hold everything a pattern section holds.
     // Shape-driven like the rest: absent means "predates this", not "version N".
     if (typeof project.notes !== 'string') project.notes = (source?.notes as string | undefined) ?? '';
+    if (!Array.isArray(project.labels)) project.labels = [];
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
       if (typeof section.description !== 'string') section.description = '';
@@ -495,6 +499,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         slotTools = {},
         sections: planned = [],
         category,
+        labels = [],
       }) => {
         const { projects, patterns, projectSeq, noteSeq } = get();
         const key = `proj${projectSeq}`;
@@ -592,6 +597,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               // The pattern's notes come across as the project's own starting point. Editing them
               // on the project never touches the pattern — a project is a copy, not a view.
               notes: pattern?.notes ?? '',
+              labels,
               patternId,
               sizeIndex,
               status: 'active',
@@ -609,7 +615,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         return key;
       },
 
-      updateProject: (key, { name, startedOn, craft, patternId, photo, ...meta }) => {
+      updateProject: (key, { name, startedOn, craft, patternId, photo, labels, ...meta }) => {
         const { projects, patterns } = get();
         const project = projects[key];
         if (!project) return;
@@ -627,6 +633,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               patternId,
               // Undefined means the caller isn't touching the photo; null means remove it.
               photo: photo === undefined ? project.photo : photo,
+              labels: labels ?? project.labels,
               // Re-derive rather than keep the old colour: the project is colour-coded by the
               // pattern it is knitting, so relinking has to move the colour with it.
               ...deriveProjectColors(accent),

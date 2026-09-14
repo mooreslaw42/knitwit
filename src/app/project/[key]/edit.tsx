@@ -6,6 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AutoGrowInput } from '@/components/auto-grow-input';
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { DateField } from '@/components/date-field';
+import { LabelField } from '@/components/label-field';
+import { labelsInUse } from '@/lib/labels';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -44,6 +46,7 @@ export default function ProjectEditScreen() {
 
   const project = useKnitwitStore((state) => state.projects[key]);
   const patterns = useKnitwitStore((state) => state.patterns);
+  const projects = useKnitwitStore((state) => state.projects);
   const updateProject = useKnitwitStore((state) => state.updateProject);
   const deleteProject = useKnitwitStore((state) => state.deleteProject);
   const setProjectStatus = useKnitwitStore((state) => state.setProjectStatus);
@@ -54,6 +57,7 @@ export default function ProjectEditScreen() {
   const [patternId, setPatternId] = useState(project?.patternId ?? '');
   const [photo, setPhoto] = useState<string | null>(project?.photo ?? null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [labels, setLabels] = useState<string[]>(project?.labels ?? []);
   const [category, setCategory] = useState<PatternCategory>(project?.category ?? 'sweaters');
   const [level, setLevel] = useState<PatternLevel>(project?.level ?? 'intermediate');
   const [needleSize, setNeedleSize] = useState(project?.needleSize ?? '');
@@ -123,6 +127,13 @@ export default function ProjectEditScreen() {
             onChange={setPatternId}
           />
 
+          <LabelField
+            value={labels}
+            suggestions={labelsInUse(Object.values(projects))}
+            onChange={setLabels}
+            hint="Your own groupings — a gift list, a year, a yarn you're using up. Searchable and filterable on the Projects tab."
+          />
+
           {/* The rest of what a pattern records about itself. A project holds all of it now, so an
               improvised make is describable without first being turned into a pattern — and when
               it is turned into one, these are real answers rather than guesses. */}
@@ -176,6 +187,7 @@ export default function ProjectEditScreen() {
                 craft,
                 patternId: patternId || null,
                 photo,
+                labels,
                 category,
                 level,
                 needleSize,

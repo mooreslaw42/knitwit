@@ -7,6 +7,7 @@ import { Card, PillButton, ProgressBar, ProjectStatusBadge, Thumb } from '@/comp
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
+import { hasLabel, labelKey, labelsInUse } from '@/lib/labels';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
@@ -37,6 +38,9 @@ export default function ProjectsScreen() {
   const projects = useKnitwitStore((state) => state.projects);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [craftFilter, setCraftFilter] = useState<CraftFilter>('all');
+  // Null is "any label", which is not the same as a project having none — a knitter looking at
+  // everything shouldn't have to know their own groupings exist.
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   // Derive the visible list in a memo off the raw store slice rather than inside the selector,
@@ -48,10 +52,19 @@ export default function ProjectsScreen() {
       // showing up under "In progress" or "Completed" depending on how far it had got.
       if (filter !== 'all' && projectState(p) !== filter) return false;
       if (!matchesCraft(p.craft, craftFilter)) return false;
-      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (labelFilter && !hasLabel(p.labels, labelFilter)) return false;
+      // Search covers labels as well as the name, so typing "christmas" finds the group whether
+      // or not you've noticed the filter row.
+      if (q && !p.name.toLowerCase().includes(q) && !p.labels.some((l) => labelKey(l).includes(q))) {
+        return false;
+      }
       return true;
     });
-  }, [projects, filter, craftFilter, query]);
+  }, [projects, filter, craftFilter, labelFilter, query]);
+
+  // Only the labels actually in use, so the row is empty until a knitter has invented a group and
+  // never offers one they've since removed from everything.
+  const labels = useMemo(() => labelsInUse(Object.values(projects)), [projects]);
 
   const total = Object.keys(projects).length;
 
@@ -106,6 +119,37 @@ export default function ProjectsScreen() {
             ))}
           </View>
 
+          {/* A third filter row, and only when there is something to filter by. Its own accent
+              again, so which of the three is set is readable without reading them. */}
+          {labels.length > 0 && (
+            <View style={styles.filters}>
+              <Pressable
+                onPress={() => setLabelFilter(null)}
+                style={[styles.chip, labelFilter === null && styles.chipLabelActive]}>
+                <ThemedText type="smallBold" themeColor={labelFilter === null ? 'white' : 'inkSoft'}>
+                  Any label
+                </ThemedText>
+              </Pressable>
+              {labels.map((l) => {
+                const on = labelFilter !== null && labelKey(l) === labelKey(labelFilter);
+                return (
+                  <Pressable
+                    key={l}
+                    onPress={() => setLabelFilter(on ? null : l)}
+                    style={[styles.chip, on && styles.chipLabelActive]}>
+                    <ThemedText
+                      type="smallBold"
+                      numberOfLines={1}
+                      style={styles.chipText}
+                      themeColor={on ? 'white' : 'inkSoft'}>
+                      {l}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           {total === 0 ? (
             <Card style={styles.emptyCard}>
               <ThemedText type="smallBold">No projects yet</ThemedText>
@@ -138,6 +182,17 @@ export default function ProjectsScreen() {
                           needles both just read "row 12 of 40". */}
                       <View style={styles.projMeta}>
                         <ProjectStatusBadge status={projectState(p)} />
+                        {p.labels.slice(0, 2).map((l) => (
+                          <View key={l} style={styles.labelPill}>
+                            <ThemedText
+                              type="small"
+                              themeColor="ink"
+                              numberOfLines={1}
+                              style={styles.chipText}>
+                              {l}
+                            </ThemedText>
+                          </View>
+                        ))}
                         <ThemedText type="small" themeColor="inkSoft" numberOfLines={1} style={styles.projWhere}>
                           {CRAFT_LABELS[p.craft]} · {cur.name} · row {cur.row} of {cur.totalRows}
                         </ThemedText>
@@ -211,6 +266,19 @@ const styles = StyleSheet.create({
   // glance rather than by counting rows.
   chipCraftActive: {
     backgroundColor: Colors.lavenderDeep,
+  },
+  chipLabelActive: {
+    backgroundColor: Colors.coralDeep,
+  },
+  // A group name can be a sentence, so it has to be allowed to truncate rather than push the
+  // row's progress bar off the card.
+  chipText: { maxWidth: 200 },
+  labelPill: {
+    backgroundColor: Colors.coral,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 4,
+    flexShrink: 1,
   },
   emptyCard: {
     gap: Spacing.one,

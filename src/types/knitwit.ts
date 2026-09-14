@@ -384,6 +384,13 @@ export type Project = {
   // saved as a pattern of its own. Yours to change either way — editing it here never touches the
   // pattern in the library.
   notes: string;
+  // Free-text groupings the knitter invents — "Christmas presents 2027", "for Mum", "stash-bust".
+  // A list rather than one, because a project is often in more than one at once and a knitter who
+  // only ever uses a single label never notices the difference.
+  //
+  // Deliberately not a catalogue. Unlike techniques, the whole value here is that nobody else
+  // decides what the groups are, and there is nothing to share between knitters.
+  labels: string[];
   patternId: string | null;
   // Which of the pattern's sizes this project is being knitted in. Every per-size number is
   // resolved against this when the project is created, so the project itself holds plain numbers.

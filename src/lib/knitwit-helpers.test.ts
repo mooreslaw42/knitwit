@@ -53,6 +53,7 @@ function project(sections: ProjectSection[]): Project {
     sourceName: '',
     sourceText: '',
     notes: '',
+    labels: [],
     photo: null,
     color: '#F4C6D3',
     colorDeep: '#E58AA0',
