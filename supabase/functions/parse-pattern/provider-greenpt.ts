@@ -23,6 +23,51 @@ const DEFAULT_MODEL = 'glm-5.3-flash';
 // isolate so only the first call after a cold start pays for the discovery.
 let schemaMode: 'json_schema' | 'json_object' | 'unknown' = 'unknown';
 
+// Transient failures, retried rather than surfaced.
+//
+// A 503 here is the upstream model provider blinking, not a problem with the request — GreenPT's
+// own body says "Please try again". Without this, one hiccup ends the whole import: a document
+// pass is a single call with up to 32k output tokens, so the knitter waits, loses it, and has to
+// re-upload and pay for the tokens again. The Anthropic provider has retried 429s and 5xx all
+// along, because its SDK does it by default; this brings the fetch path in line.
+//
+// 408/409/429 are in the list too — request timeout, lock conflict, rate limit — all of which
+// mean "same request, later", unlike the rest of the 4xx range which means "not this request".
+const RETRY_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
+
+// Three in total, not more. Supabase Edge Functions have a wall-clock budget and a document call
+// is already slow, so the backoff stays short: a provider that is actually down should fail the
+// import quickly rather than hold the request open until the platform kills it.
+const MAX_ATTEMPTS = 3;
+const BASE_DELAY_MS = 500;
+const MAX_DELAY_MS = 4_000;
+
+export function isRetryableStatus(status: number): boolean {
+  return RETRY_STATUSES.has(status);
+}
+
+// How long to wait before attempt N+1 (`attempt` is 1-based).
+//
+// `Retry-After` wins when the server states one, since it knows better than our curve — both
+// forms are allowed by the spec, a count of seconds or an HTTP date. Otherwise exponential with
+// full jitter: two Edge Function isolates that fail at the same moment shouldn't retry in step.
+export function retryDelayMs(
+  attempt: number,
+  retryAfter: string | null,
+  random: () => number = Math.random,
+): number {
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, MAX_DELAY_MS);
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at)) return Math.min(Math.max(at - Date.now(), 0), MAX_DELAY_MS);
+  }
+  const ceiling = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
+  return Math.round(ceiling * random());
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 type ChatResponse = {
   model?: string;
   choices?: { message?: { content?: string } }[];
@@ -85,6 +130,41 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
     });
   }
 
+  // `post`, plus the transient-failure retries. A network-level throw is treated the same as a
+  // retryable status: from here they are the same event, a request that didn't land.
+  async function postWithRetry(
+    req: ModelRequest,
+    mode: 'json_schema' | 'json_object',
+  ): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let response: Response;
+      try {
+        response = await post(req, mode);
+      } catch (error) {
+        lastError = error;
+        if (attempt === MAX_ATTEMPTS) throw error;
+        await sleep(retryDelayMs(attempt, null));
+        continue;
+      }
+
+      if (response.ok || !isRetryableStatus(response.status)) return response;
+      if (attempt === MAX_ATTEMPTS) return response;
+
+      const delay = retryDelayMs(attempt, response.headers.get('retry-after'));
+      console.warn(
+        `GreenPT returned ${response.status}; retrying in ${delay}ms (attempt ${attempt} of ${MAX_ATTEMPTS}).`,
+      );
+      // The body is never read on this path, so cancel it rather than leaking the stream.
+      await response.body?.cancel().catch(() => {});
+      await sleep(delay);
+    }
+
+    // Unreachable — the loop either returns or throws — but it keeps the signature honest.
+    throw lastError ?? new Error('GreenPT could not be reached.');
+  }
+
   return {
     name: 'greenpt',
     defaultModel: DEFAULT_MODEL,
@@ -92,17 +172,26 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
     async complete(req: ModelRequest): Promise<ModelResult> {
       let mode: 'json_schema' | 'json_object' =
         schemaMode === 'unknown' ? 'json_schema' : schemaMode;
-      let response = await post(req, mode);
+      let response = await postWithRetry(req, mode);
 
       // A 4xx on the first attempt is most likely the unsupported `response_format` — retry once
-      // in plain JSON mode before giving up, and remember the answer.
-      if (!response.ok && mode === 'json_schema' && response.status >= 400 && response.status < 500) {
+      // in plain JSON mode before giving up, and remember the answer. The retryable 4xx codes are
+      // excluded: a rate limit that outlasted its retries says nothing about schema support, and
+      // treating it as a rejection would spend one more call to learn the wrong lesson and
+      // strand the isolate in json_object mode for good.
+      if (
+        !response.ok &&
+        mode === 'json_schema' &&
+        response.status >= 400 &&
+        response.status < 500 &&
+        !isRetryableStatus(response.status)
+      ) {
         console.warn(
           `GreenPT rejected json_schema (${response.status}); falling back to json_object mode.`,
         );
         schemaMode = 'json_object';
         mode = 'json_object';
-        response = await post(req, mode);
+        response = await postWithRetry(req, mode);
       }
 
       if (!response.ok) {
