@@ -5,7 +5,7 @@ import {
   SYSTEM_PROMPT,
 } from './prompt.ts';
 import { anthropicProvider } from './provider-anthropic.ts';
-import { greenptProvider } from './provider-greenpt.ts';
+import { greenptProvider, VISION_MODEL } from './provider-greenpt.ts';
 import type { ModelProvider } from './provider.ts';
 import {
   DOCUMENT_SCHEMA,
@@ -14,6 +14,9 @@ import {
   SPANS,
   STITCH_TYPES,
   type DocumentRequest,
+  MATERIAL_SCHEMA,
+  MATERIAL_SYSTEM_PROMPT,
+  type MaterialRequest,
   type ModelGroup,
   type ModelRow,
   type ParsePatternRequest,
@@ -38,6 +41,11 @@ const MAX_ROWS = 40;
 const MAX_SIZES = 12;
 const MAX_INSTRUCTION_CHARS = 1_000;
 const MAX_OUTPUT_TOKENS = 8_000;
+// A data URL of a photo the client already downscales to roughly this. The client's own ceiling is
+// 1.5MB; this leaves room for the data: prefix rather than rejecting a picture it just accepted.
+const MAX_IMAGE_CHARS = 1_800_000;
+// The answer is a dozen short strings. Room to think, not room to ramble.
+const MAX_MATERIAL_OUTPUT_TOKENS = 2_000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -265,6 +273,51 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
   return json({ model: result.model, rows, usage: result.usage });
 }
 
+function validateMaterialRequest(body: Record<string, unknown>): MaterialRequest {
+  const image = body.image;
+  if (typeof image !== 'string' || !image.startsWith('data:image/')) {
+    throw new BadRequest('Send the photo as an image data URL.');
+  }
+  if (image.length > MAX_IMAGE_CHARS) throw new BadRequest('That photo is too large.');
+  return {
+    task: 'material',
+    image,
+    model: typeof body.model === 'string' ? body.model : undefined,
+  };
+}
+
+async function handleMaterial(req: MaterialRequest, provider: ModelProvider): Promise<Response> {
+  const result = await provider.complete({
+    system: MATERIAL_SYSTEM_PROMPT,
+    user: 'Read this ball band and report what it says.',
+    image: req.image,
+    schema: MATERIAL_SCHEMA as unknown as Record<string, unknown>,
+    // Pinned, not defaulted: the text models this function usually reaches for cannot see.
+    model: req.model ?? VISION_MODEL,
+    maxTokens: MAX_MATERIAL_OUTPUT_TOKENS,
+  });
+
+  const read = JSON.parse(result.text);
+  if (typeof read !== 'object' || read === null || Array.isArray(read)) {
+    throw new Error('Model returned something that is not a yarn.');
+  }
+
+  // The photo itself is never logged — only that one was read, and what it cost.
+  console.log(
+    JSON.stringify({
+      event: 'parse-pattern',
+      task: 'material',
+      provider: provider.name,
+      model: result.model,
+      image_chars: req.image.length,
+      confident: (read as { confident?: unknown }).confident === true,
+      usage: result.usage,
+    }),
+  );
+
+  return json({ model: result.model, material: read, usage: result.usage });
+}
+
 async function handleDocument(req: DocumentRequest, provider: ModelProvider): Promise<Response> {
   const result = await provider.complete({
     system: DOCUMENT_SYSTEM_PROMPT,
@@ -313,6 +366,25 @@ Deno.serve(async (request: Request): Promise<Response> => {
   } catch (error) {
     console.error('provider unavailable', error);
     return json({ error: 'Pattern reading is not configured on this server.' }, 503);
+  }
+
+  if (task === 'material') {
+    let req: MaterialRequest;
+    try {
+      req = validateMaterialRequest(body as Record<string, unknown>);
+    } catch (error) {
+      return json(
+        { error: error instanceof BadRequest ? error.message : 'Malformed request.' },
+        400,
+      );
+    }
+    try {
+      return await handleMaterial(req, provider);
+    } catch (error) {
+      console.error('parse-pattern material failed', error);
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      return json({ error: `Couldn't read that label: ${message}` }, statusOf(error));
+    }
   }
 
   if (task === 'document') {

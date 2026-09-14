@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
@@ -9,14 +9,30 @@ import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
+import { pickImage, pickImageMessage, takePhoto } from '@/lib/pick-image';
+import { readYarnLabel } from '@/lib/read-yarn-label';
 import { WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
+import { Colors, MaxContentWidth, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
-const STEPS = ['Identity', 'Yarn', 'Care', 'Craft'] as const;
+const STEPS = ['Photo', 'Identity', 'Yarn', 'Care', 'Craft'] as const;
+
+// What each field is called when the screen reports back what the band gave up.
+const FIELD_LABELS: Partial<Record<keyof Material, string>> = {
+  brand: 'brand',
+  colorName: 'colour',
+  colorLot: 'dye lot',
+  composition: 'composition',
+  weight: 'weight',
+  washing: 'care',
+  grams: 'grams',
+  meters: 'meters',
+  thickness: 'needle size',
+  gauge: 'tension',
+};
 
 const BLANK: Material = {
   brand: '',
@@ -58,6 +74,42 @@ export default function NewMaterialWizardScreen() {
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<Material>(BLANK);
+  const [reading, setReading] = useState(false);
+  // What the last scan produced, so step 1 can say what it found rather than leaving the knitter
+  // to spot the difference across four steps of form.
+  const [scan, setScan] = useState<{ found: string[]; confident: boolean } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  // Photograph the band, read it, and drop whatever it says into the form. Everything stays
+  // editable: this is a head start, not an answer.
+  const scanLabel = async (source: 'camera' | 'library') => {
+    setScanError(null);
+    const picked = source === 'camera' ? await takePhoto() : await pickImage();
+    if (picked.status !== 'picked') {
+      setScanError(pickImageMessage(picked.status));
+      return;
+    }
+
+    // The band is kept as the yarn's picture either way, so a scan that fails outright still
+    // leaves the knitter better off than they started.
+    setForm((f) => ({ ...f, photo: picked.dataUrl }));
+    setReading(true);
+    try {
+      const result = await readYarnLabel(picked.dataUrl);
+      setForm((f) => ({ ...f, ...result.values }));
+      setScan({
+        found: result.filled.map((k) => FIELD_LABELS[k] ?? k),
+        confident: result.confident,
+      });
+      setStep(1);
+    } catch (error) {
+      setScanError(
+        error instanceof Error ? error.message : "Couldn't read that label. Try again, or type it in.",
+      );
+    } finally {
+      setReading(false);
+    }
+  };
   const set = <K extends keyof Material>(key: K, value: Material[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -112,10 +164,73 @@ export default function NewMaterialWizardScreen() {
         <View style={styles.body}>
           {step === 0 && (
             <>
-              <ThemedText type="subtitle">Which yarn is it?</ThemedText>
+              <ThemedText type="subtitle">Start with the band?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
-                The dye lot matters if you ever need to match another skein.
+                Photograph the ball band and Knitwit fills in what it says — brand, colour, dye lot,
+                length, fibre, tension and care. You check it on the next steps. Or skip and type it
+                in yourself.
               </ThemedText>
+
+              {form.photo ? (
+                <Image source={{ uri: form.photo }} style={styles.preview} />
+              ) : null}
+
+              {reading ? (
+                <View style={styles.readingRow}>
+                  <ActivityIndicator color={Colors.blushDeep} />
+                  <ThemedText type="small" themeColor="inkSoft">
+                    Reading the band…
+                  </ThemedText>
+                </View>
+              ) : (
+                <>
+                  <PillButton style={styles.scanBtn} onPress={() => void scanLabel('camera')}>
+                    <ThemedText type="smallBold" themeColor="white">
+                      Take a photo
+                    </ThemedText>
+                  </PillButton>
+                  <Pressable
+                    onPress={() => void scanLabel('library')}
+                    hitSlop={6}
+                    style={styles.scanAlt}>
+                    <ThemedText type="smallBold" themeColor="sageDeep">
+                      Choose a photo instead
+                    </ThemedText>
+                  </Pressable>
+                </>
+              )}
+
+              {scanError ? (
+                <ThemedText type="small" themeColor="coralDeep">
+                  {scanError}
+                </ThemedText>
+              ) : null}
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <ThemedText type="subtitle">Which yarn is it?</ThemedText>
+              {/* Says what came off the band and how much to trust it. A prefilled form that never
+                  explains itself leaves the knitter unsure which values are theirs. */}
+              {scan ? (
+                <View style={[styles.scanNote, !scan.confident && styles.scanNoteUnsure]}>
+                  <ThemedText type="smallBold" themeColor={scan.confident ? 'sageDeep' : 'coralDeep'}>
+                    {scan.found.length > 0
+                      ? `Read from the band: ${scan.found.join(', ')}.`
+                      : 'Nothing could be read from that photo.'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {scan.confident
+                      ? 'Check it as you go — everything here is editable.'
+                      : 'The photo was hard to read, so check every field carefully.'}
+                  </ThemedText>
+                </View>
+              ) : (
+                <ThemedText type="small" themeColor="inkSoft">
+                  The dye lot matters if you ever need to match another skein.
+                </ThemedText>
+              )}
               <FormField
                 label="Brand"
                 value={form.brand}
@@ -146,7 +261,7 @@ export default function NewMaterialWizardScreen() {
             </>
           )}
 
-          {step === 1 && (
+          {step === 2 && (
             <>
               <ThemedText type="subtitle">What is it made of?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
@@ -181,7 +296,7 @@ export default function NewMaterialWizardScreen() {
             </>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <>
               <ThemedText type="subtitle">How is it cared for?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
@@ -209,7 +324,7 @@ export default function NewMaterialWizardScreen() {
             </>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <>
               <ThemedText type="subtitle">How do you work it?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
@@ -237,7 +352,7 @@ export default function NewMaterialWizardScreen() {
 
           <PillButton style={styles.nextBtn} onPress={handleNext}>
             <ThemedText type="smallBold" themeColor="white">
-              {isLast ? 'Save material' : 'Next'}
+              {isLast ? 'Save material' : step === 0 ? 'Skip — type it in' : 'Next'}
             </ThemedText>
           </PillButton>
         </View>
@@ -247,6 +362,40 @@ export default function NewMaterialWizardScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Wide and short: a ball band is a strip, and this is a receipt of what was scanned rather than
+  // the yarn's portrait.
+  preview: {
+    width: '100%',
+    height: 140,
+    borderRadius: Radii.medium,
+    backgroundColor: Colors.creamDeep,
+  },
+  readingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.three,
+  },
+  scanBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
+  scanAlt: {
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.one,
+  },
+  scanNote: {
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    padding: Spacing.three,
+    gap: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.sageDeep,
+  },
+  scanNoteUnsure: {
+    borderLeftColor: Colors.coralDeep,
+  },
   container: {
     flex: 1,
     alignItems: 'center',

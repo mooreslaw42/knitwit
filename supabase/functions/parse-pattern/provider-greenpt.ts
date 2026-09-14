@@ -26,6 +26,12 @@ const BASE_URL = 'https://api.greenpt.ai/v1';
 const DEFAULT_MODEL = 'glm-5.2';
 const FALLBACK_MODEL = 'glm-5.3-flash';
 
+// Reading a photograph is a different job from reading text, and the glm pair above cannot see at
+// all. Of GreenPT's multimodal models this is the cheapest (€0.20/€0.40 per million against
+// gpt-oss-120b's €0.20/€0.70 and deepseek-v4.1-flash's €0.22/€1.10), and the work is narrow:
+// copy the numbers off a yarn band into a fixed schema. Promote only if the misread rate says to.
+export const VISION_MODEL = 'mistral-small-3.2-24b-instruct-2506';
+
 // Whether this endpoint honours `response_format: {type:'json_schema'}` is not documented, so we
 // find out at runtime rather than assume: ask for the schema, and if the API rejects the
 // parameter, fall back to plain JSON mode with the schema stated in the prompt. Remembered per
@@ -137,7 +143,17 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
         stream: false,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: req.user },
+          {
+            role: 'user',
+            // A plain string when there is nothing to look at, so every existing text call goes
+            // out byte-identical and whatever prompt caching GreenPT does is undisturbed.
+            content: req.image
+              ? [
+                  { type: 'text', text: req.user },
+                  { type: 'image_url', image_url: { url: req.image } },
+                ]
+              : req.user,
+          },
         ],
         ...(mode === 'json_schema'
           ? {
@@ -211,6 +227,7 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
         !response.ok &&
         isRetryableStatus(response.status) &&
         req.model === DEFAULT_MODEL &&
+        !req.image &&
         Date.now() < deadline
       ) {
         console.warn(

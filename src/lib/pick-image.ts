@@ -15,12 +15,23 @@ export type PickImageResult =
 export async function pickImage(): Promise<PickImageResult> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) return { status: 'denied' };
+  return toResult(
+    await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5, base64: true }),
+  );
+}
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.5,
-    base64: true,
-  });
+// The camera, for photographing something in front of you rather than finding it in a roll —
+// a ball band, most of all. On web there is no camera to ask for, and expo-image-picker falls
+// back to the file chooser, which is the right behaviour there rather than an error.
+export async function takePhoto(): Promise<PickImageResult> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) return { status: 'denied' };
+  return toResult(
+    await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.5, base64: true }),
+  );
+}
+
+function toResult(result: ImagePicker.ImagePickerResult): PickImageResult {
   if (result.canceled) return { status: 'cancelled' };
 
   const asset = result.assets[0];
@@ -32,7 +43,7 @@ export async function pickImage(): Promise<PickImageResult> {
 }
 
 export function pickImageMessage(status: Exclude<PickImageResult['status'], 'picked'>): string | null {
-  if (status === 'denied') return 'Knitwit needs permission to your photos to add a picture.';
+  if (status === 'denied') return 'Knitwit needs permission to your camera or photos to add a picture.';
   if (status === 'too-large') return 'That image is too large — try a smaller one.';
   return null; // cancelled: the user changed their mind, say nothing
 }

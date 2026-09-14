@@ -19,6 +19,9 @@ export type ModelRequest = {
   system: string;
   // Varies per call.
   user: string;
+  // An optional image for the model to look at, as a data URL. Only some models can see; the
+  // caller picks one that can (see VISION_MODEL) rather than the provider guessing.
+  image?: string;
   // JSON schema the response must satisfy. Always an object — the Anthropic SDK's
   // `output_config.format.schema` won't accept a bare `unknown`.
   schema: Record<string, unknown>;

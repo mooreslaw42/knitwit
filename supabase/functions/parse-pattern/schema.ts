@@ -433,3 +433,128 @@ export const ROWS_SCHEMA = {
   required: ['rows'],
   additionalProperties: false,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Reading a yarn's ball band from a photograph.
+//
+// Nearly everything Knitwit stores about a yarn is printed on the band: the brand, the colour and
+// its dye lot, the ball's weight and length, the fibre composition, the recommended needle, the
+// tension square, and the care symbols. Those last ones are pictograms rather than words, which is
+// why this is a vision call and not OCR.
+//
+// Every field is optional in spirit and required in the schema, with '' meaning "not on the band".
+// A model that must emit the key is far less likely to quietly drop one than a model choosing
+// which keys to include, and the client treats '' and absent the same way.
+
+export const YARN_WEIGHT_CODES = ['0', '1', '2', '3', '4', '5', '6', '7'] as const;
+export const WASHING_CODES = [
+  'hand-wash',
+  'machine-cold',
+  'machine-wool',
+  'dry-clean',
+  'lay-flat',
+  'no-wash',
+] as const;
+
+export type MaterialRequest = {
+  task: 'material';
+  // The photograph, as a data URL.
+  image: string;
+  model?: string;
+};
+
+export const MATERIAL_SCHEMA = {
+  type: 'object',
+  properties: {
+    brand: { type: 'string', description: 'Manufacturer or brand. Empty string if not visible.' },
+    colorName: { type: 'string', description: 'Colour name or number as printed.' },
+    colorLot: {
+      type: 'string',
+      description:
+        'The dye lot only — the batch number printed beside "Dye lot", "Lot", "Partie", "Farbpartie" ' +
+        'or "Bain". It is a bare number and it is NOT the colour name or colour code. Empty string ' +
+        'if the band does not print one.',
+    },
+    weight: {
+      type: 'string',
+      enum: [...YARN_WEIGHT_CODES, ''],
+      description:
+        'Craft Yarn Council weight. If no number is printed, derive it from the stitches per 10 cm: ' +
+        '33-40 = 0 lace, 27-32 = 1 super fine, 23-26 = 2 fine, 21-24 = 3 light, 16-20 = 4 medium, ' +
+        '12-15 = 5 bulky, 7-11 = 6 super bulky, under 7 = 7 jumbo.',
+    },
+    grams: { type: 'string', description: 'Ball weight in grams, digits only, e.g. "50".' },
+    meters: {
+      type: 'string',
+      description: 'Ball length in metres, digits only. Convert from yards if only yards are given.',
+    },
+    composition: {
+      type: 'string',
+      description: 'Fibre content as printed, e.g. "75% wool, 25% nylon".',
+    },
+    thickness: {
+      type: 'string',
+      description:
+        'Recommended needle or hook size in mm. Digits only, with the unit stripped: "3 mm" is "3", ' +
+        '"3.5-4 mm" is "3.5". Never include "mm".',
+    },
+    washing: {
+      type: 'string',
+      enum: [...WASHING_CODES, ''],
+      description: 'Read from the care symbols as well as any words.',
+    },
+    gaugeStitches: {
+      type: 'string',
+      description: 'Stitches in the stated tension square, digits only.',
+    },
+    gaugeRows: { type: 'string', description: 'Rows in the stated tension square, digits only.' },
+    gaugeSize: {
+      type: 'string',
+      description:
+        'The side of the tension square in cm. A single number with no unit and no second ' +
+        'dimension: "10 x 10 cm" is "10", "4 inches" is "10". Never include "cm" or "x".',
+    },
+    confident: {
+      type: 'boolean',
+      description: 'False if the photo is too blurry, cropped or dark to read reliably.',
+    },
+  },
+  required: [
+    'brand',
+    'colorName',
+    'colorLot',
+    'weight',
+    'grams',
+    'meters',
+    'composition',
+    'thickness',
+    'washing',
+    'gaugeStitches',
+    'gaugeRows',
+    'gaugeSize',
+    'confident',
+  ],
+  additionalProperties: false,
+} as const;
+
+export const MATERIAL_SYSTEM_PROMPT = [
+  'You read the ball band of a skein of yarn from a photograph and report what is printed on it.',
+  '',
+  'Rules:',
+  '- Report only what you can actually see. An empty string means the band does not say.',
+  '- Never guess a brand or a colour name from the look of the yarn; they must be printed.',
+  '- Care symbols are pictograms: a basin means hand or machine wash, a crossed-out basin means do',
+  '  not wash, a circle means dry clean, a square with a horizontal line means dry flat.',
+  '- Every numeric field is digits only. Strip units and words: "50 g" is "50", "3 mm" is "3",',
+  '  "10 x 10 cm" is "10". A field containing a unit is wrong.',
+  '- Convert yards to metres, rounding to whole metres.',
+  '- The dye lot is not the colour, and a band usually prints both. The colour is the one with a',
+  '  name next to it; the dye lot is the longer bare number beside Lot, Partie or Bain. Given',
+  '  "Colour: 26 Light Pearl Grey" and "Dye lot: 184722", colorName is "Light Pearl Grey",',
+  '  colorLot is "184722", and 26 belongs to neither — it is the colour code. If only one number',
+  '  is printed, leave the other field empty rather than repeating it.',
+  '- The weight code is almost never printed; derive it from the tension. 24 sts to 10 cm is a 2 or',
+  '  a 3, not a 4 — a 4 is 16-20 sts. Read the table in the field description and use it.',
+  '- If the tension is given per 4 inches, convert it to a 10 cm square.',
+  '- Set confident to false if the band is blurred, angled away, or mostly out of frame.',
+].join('\n');
