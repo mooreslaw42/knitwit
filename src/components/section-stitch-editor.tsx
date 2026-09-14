@@ -10,6 +10,7 @@ import {
 } from "@/components/knitwit-ui";
 import { RegaugePanel } from "@/components/regauge-panel";
 import { StitchChart, type ChartSelection } from "@/components/stitch-chart";
+import { stitchGroupLabel } from "@/lib/stitch-group-label";
 import { ThemedText } from "@/components/themed-text";
 import { STITCHES, stitchOrderFor } from "@/constants/catalogs";
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
@@ -117,13 +118,9 @@ function toRow(r: EditRow, i: number): PatternRow {
   };
 }
 
-// A short readable summary of a group, e.g. "k2", "M1L", "k to last 1", "p across".
+// The editor holds counts as draft strings; the shared labeller wants a number.
 function groupLabel(g: EditGroup): string {
-  const def = STITCHES[g.type];
-  const abbr = def ? def.abbr : g.type;
-  if (g.span === "all") return `${abbr} across`;
-  if (g.span === "to-last") return `${abbr} to last ${g.count || "?"}`;
-  return `${abbr}${def && def.takes > 0 && g.count ? g.count : ""}`;
+  return stitchGroupLabel({ type: g.type, span: g.span, count: g.count ? Number(g.count) : null });
 }
 
 // What the editor reads and writes. Deliberately the three fields and nothing else: the caller

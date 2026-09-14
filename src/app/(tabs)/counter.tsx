@@ -1,16 +1,17 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton } from '@/components/knitwit-ui';
-import { StitchRowStrip } from '@/components/stitch-chart';
+import { StitchChart, StitchRowStrip } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { formatClock } from '@/lib/knitwit-helpers';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { usePageTitle } from '@/lib/use-page-title';
+import { useWideLayout } from '@/lib/use-wide-layout';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 export default function CounterScreen() {
@@ -56,6 +57,45 @@ export default function CounterScreen() {
   const liveSeconds = useLiveSeconds(activeProjectKey, activeSectionIndex);
 
   const [noteText, setNoteText] = useState('');
+  // Hooks run before the empty-state return below, so these cannot move down with the layout.
+  const wide = useWideLayout();
+  const rowsScroll = useRef<ScrollView>(null);
+  const rowTops = useRef<Record<number, number>>({});
+  const placed = useRef(false);
+  const workedRows = section?.row ?? 0;
+
+  // Follow the count up the list. Without this the list always opens at row 1, so by row 30 the
+  // row you are actually working is off the bottom and you re-scroll after every press — which
+  // would undo the reason for putting the two side by side.
+  //
+  // Held a third of the way down rather than at the very top, so the rows still to come are
+  // visible too — that is what you look ahead to.
+  const showCurrentRow = (animated: boolean) => {
+    const top = rowTops.current[workedRows];
+    if (top == null) return false;
+    rowsScroll.current?.scrollTo({ y: Math.max(0, top - 140), animated });
+    return true;
+  };
+
+  useEffect(() => {
+    showCurrentRow(true);
+  });
+
+  // Arriving mid-section, the rows have not been laid out when the effect above first runs, so
+  // there is nothing to scroll to yet and the list would sit at row 1 until the next press. The
+  // first layout that reaches the current row does the jump instead, without animating — it
+  // should already be there, not slide there.
+  const noteRowTop = (index: number, y: number) => {
+    rowTops.current[index] = y;
+    if (!placed.current && index === workedRows) placed.current = showCurrentRow(false);
+  };
+
+  // A different section is a different list; its rows have their own heights and its own place
+  // to jump to.
+  useEffect(() => {
+    rowTops.current = {};
+    placed.current = false;
+  }, [activeProjectKey, activeSectionIndex]);
 
   if (!project || !section) {
     return (
@@ -111,9 +151,13 @@ export default function CounterScreen() {
     }
   }
 
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+  // Two columns only where there is genuinely a second thing to look at: a wide web window and a
+  // section that has actually been charted. An empty column beside the counter is worse than no
+  // column, and on a phone the counter is held one-handed and stays exactly as it was.
+  const twoUp = wide && chartRows.length > 0;
+
+  const main = (
+    <>
         <View style={styles.topbar}>
           {/* Counter is a tab, so there is no reliable stack to go back through — arriving here
               from the tab bar and from "Continue counting" leave different histories. It goes to
@@ -332,6 +376,41 @@ export default function CounterScreen() {
             </ThemedText>
           </View>
         )}
+    </>
+  );
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView
+        style={[styles.safeArea, twoUp && styles.safeAreaWide]}
+        edges={['top', 'left', 'right']}>
+        {twoUp ? (
+          <View style={styles.columns}>
+            <View style={styles.colCounter}>{main}</View>
+            {/* Scrolls on its own, so reading ahead never moves the + button out from under the
+                cursor — the whole point of putting them side by side. */}
+            <View style={styles.colRows}>
+              <ThemedText type="smallBold" themeColor="inkSoft" style={styles.rowsHeading}>
+                {section.name} · {chartRows.length}{' '}
+                {chartRows.length === 1 ? 'row' : 'rows'} · read bottom-up
+              </ThemedText>
+              <ScrollView
+                ref={rowsScroll}
+                style={styles.rowsScroll}
+                contentContainerStyle={styles.rowsScrollContent}>
+                <StitchChart
+                  rows={chartRows}
+                  castOn={section.castOn}
+                  craft={project.craft}
+                  worked={section.row}
+                  onRowLayout={noteRowTop}
+                />
+              </ScrollView>
+            </View>
+          </View>
+        ) : (
+          main
+        )}
       </SafeAreaView>
     </ThemedView>
   );
@@ -390,6 +469,47 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
+    alignItems: 'center',
+  },
+  // Wider only when there are two columns to fill. The counter alone stays at reading width.
+  safeAreaWide: {
+    maxWidth: 1080,
+    alignItems: 'stretch',
+  },
+  columns: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.five,
+    width: '100%',
+  },
+  // Fixed, not a share of the window. The counter is a fixed-size object — one big number and two
+  // buttons — so giving it a percentage just moves it around as the window changes; and letting it
+  // grow would make it a bigger counter, which is a different change from the one asked for.
+  colCounter: {
+    width: 400,
+    flexGrow: 0,
+    flexShrink: 0,
+    alignItems: 'center',
+  },
+  // Takes the rest, but capped: rows are text, and a line of "k across" stretched over 800px puts
+  // the stitch count so far from the row it belongs to that you lose which is which.
+  colRows: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 620,
+  },
+  rowsHeading: {
+    marginBottom: Spacing.two,
+    // Sits over a centred chart, so it is centred too.
+    textAlign: 'center',
+  },
+  rowsScroll: {
+    flex: 1,
+  },
+  rowsScrollContent: {
+    paddingBottom: Spacing.six,
+    // A chart is as wide as the stitches in it — six for a strap, forty for a body. Centring keeps
+    // a narrow one from stranding itself against the left edge of a column sized for a wide one.
     alignItems: 'center',
   },
   topbar: {

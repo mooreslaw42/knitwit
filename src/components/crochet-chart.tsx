@@ -225,10 +225,14 @@ export function CrochetChart({
   rows,
   castOn,
   sizeIndex = 0,
+  worked,
 }: {
   rows: PatternRow[];
   castOn: number;
   sizeIndex?: number;
+  // As in the knitting chart: how many rows are finished, so they can fade back. Undefined means
+  // the diagram is not being read beside a counter and every row is drawn alike.
+  worked?: number;
 }) {
   if (rows.length === 0) return null;
 
@@ -264,8 +268,9 @@ export function CrochetChart({
             // reversed is what makes the diagram match the fabric rather than the instructions.
             const reversed = d.row.side === 'WS';
             const count = d.stitches.length;
+            const done = worked != null && d.index < worked;
             return (
-              <G key={d.row.id}>
+              <G key={d.row.id} opacity={done ? 0.3 : 1}>
                 <SvgText
                   x={chartWidth - 6}
                   y={baselines[i] - 3}

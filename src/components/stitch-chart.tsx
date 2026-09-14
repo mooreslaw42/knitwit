@@ -103,6 +103,8 @@ export function StitchChart({
   selected,
   onSelectStitch,
   sizeIndex = 0,
+  worked,
+  onRowLayout,
 }: {
   rows: PatternRow[];
   castOn: number;
@@ -113,10 +115,16 @@ export function StitchChart({
   sizeIndex?: number;
   selected?: ChartSelection | null;
   onSelectStitch?: (selection: ChartSelection) => void;
+  // How many rows are finished, when the chart is being read next to a counter. Those rows fade
+  // back and the one being worked is outlined. Undefined means "not counting" — the editor and
+  // the pattern screens draw the chart plain, where no row is further along than any other.
+  worked?: number;
+  // Where each row line sits, so a caller owning the scroller can keep the current row in view.
+  onRowLayout?: (index: number, y: number) => void;
 }) {
   if (rows.length === 0) return null;
   if (craft === 'crochet') {
-    return <CrochetChart rows={rows} castOn={castOn} sizeIndex={sizeIndex} />;
+    return <CrochetChart rows={rows} castOn={castOn} sizeIndex={sizeIndex} worked={worked} />;
   }
 
   const before = sectionRowCounts(rows, castOn, sizeIndex);
@@ -150,8 +158,15 @@ export function StitchChart({
           {/* Rows, bottom-up: the last worked row is drawn at the top. */}
           {[...drawn].reverse().map((d) => {
             const ws = d.row.side === 'WS';
+            const done = worked != null && d.index < worked;
+            const current = worked != null && d.index === worked;
             return (
-              <View key={d.row.id} style={styles.line}>
+              <View
+                key={d.row.id}
+                onLayout={
+                  onRowLayout ? (e) => onRowLayout(d.index, e.nativeEvent.layout.y) : undefined
+                }
+                style={[styles.line, done && styles.lineDone, current && styles.lineCurrent]}>
                 <View style={[styles.grid, { width: gridWidth }]}>
                   {d.clipped && (
                     <View style={[styles.cell, ws && styles.cellWs, styles.clipCell]}>
@@ -186,7 +201,7 @@ export function StitchChart({
                   })}
                 </View>
                 <View style={styles.rowNum}>
-                  <ThemedText style={styles.rowNumText}>
+                  <ThemedText style={[styles.rowNumText, current && styles.rowNumCurrent]}>
                     {d.index + 1}
                     {d.row.marker ? ' 📍' : ''}
                   </ThemedText>
@@ -224,12 +239,29 @@ export function StitchChart({
 }
 
 const styles = StyleSheet.create({
+  // Worked rows recede rather than vanish: the chart is still the map of the whole piece, and the
+  // boundary between faded and solid is what shows at a glance how far up it you are.
+  lineDone: { opacity: 0.3 },
+  // The cells carry their own backgrounds, so tinting the line behind them shows only in the
+  // margins. The edge marker is what actually reads.
+  lineCurrent: {
+    borderLeftColor: Colors.blushDeep,
+  },
+  // The edge marker alone is easy to miss on a wide chart; the row number is the other end of the
+  // same line, so marking both means one of them is always near where you are looking.
+  rowNumCurrent: {
+    color: Colors.blushDeep,
+    fontFamily: Fonts.bodySemibold,
+  },
   wrap: {
     gap: Spacing.two,
   },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Reserved on every row so marking the current one does not shift the grid sideways.
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
   },
   // row-reverse puts stitch 1 on the right, the way a chart is read; centring makes narrower
   // rows taper symmetrically inside the widest row.
