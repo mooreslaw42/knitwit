@@ -45,6 +45,9 @@ export type ActivityDay = {
   rows: number;
   stitches: number;
   seconds: number;
+  // Rows counted in each part of the day, for the time-of-day awards. Absent on a day recorded
+  // before the app tracked it, which reads as "we don't know" rather than "none".
+  bands?: Partial<Record<'night' | 'dawn' | 'day' | 'evening', number>>;
 };
 
 // What the awards are computed from. Nothing else in the app is dated, so this is the only record

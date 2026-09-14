@@ -67,10 +67,45 @@ function addDays(date: string, delta: number): string {
 }
 
 // Record a day's knitting, merging into today's entry if there is one.
+// Which part of the day it is, in the knitter's own clock.
+//
+// The bands are chosen for the awards rather than for tidiness: the small hours and before-eight
+// are the two anyone would claim credit for, and the rest of the day is split once so "knitted at
+// every hour of the clock" is a reachable thing rather than a 24-way grind.
+export type TimeBand = 'night' | 'dawn' | 'day' | 'evening';
+
+export function bandForHour(hour: number): TimeBand {
+  if (hour < 5) return 'night';
+  if (hour < 8) return 'dawn';
+  if (hour < 18) return 'day';
+  return 'evening';
+}
+
+export const bandNow = (at = new Date()): TimeBand => bandForHour(at.getHours());
+
+// Days on which the knitter did anything in this band. Days rather than rows, because "an early
+// bird five times" means five mornings, not five rows before breakfast on one of them.
+export function daysInBand(a: Achievements, band: TimeBand): number {
+  return a.days.filter((d) => (d.bands?.[band] ?? 0) > 0).length;
+}
+
+export function rowsInBand(a: Achievements, band: TimeBand): number {
+  return a.days.reduce((n, d) => n + (d.bands?.[band] ?? 0), 0);
+}
+
+// How many of the four parts of the day the knitter has ever worked in.
+export function bandsWorked(a: Achievements): number {
+  const bands: TimeBand[] = ['night', 'dawn', 'day', 'evening'];
+  return bands.filter((b) => daysInBand(a, b) > 0).length;
+}
+
 export function recordActivity(
   a: Achievements,
   add: { rows?: number; stitches?: number; seconds?: number },
   today = localDate(),
+  // When in the day this happened. Passed rather than read from the clock so a test that fixes
+  // the date isn't also silently recording whatever hour it happens to run at.
+  band?: TimeBand,
 ): Achievements {
   const rows = Math.max(0, Math.round(add.rows ?? 0));
   const stitches = Math.max(0, Math.round(add.stitches ?? 0));
@@ -83,6 +118,11 @@ export function recordActivity(
   entry.rows += rows;
   entry.stitches += stitches;
   entry.seconds += seconds;
+  // Rows only. Time banked by a timer left running says nothing about when anyone was knitting,
+  // and would hand out a Night owl to a knitter who forgot to stop it before bed.
+  if (band && rows > 0) {
+    entry.bands = { ...entry.bands, [band]: (entry.bands?.[band] ?? 0) + rows };
+  }
   if (i >= 0) days[i] = entry;
   else days.push(entry);
 

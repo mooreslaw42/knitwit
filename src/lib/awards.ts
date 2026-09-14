@@ -1,5 +1,5 @@
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/constants/catalogs';
-import { currentStreak, longestStreak } from '@/lib/achievements';
+import { bandsWorked, currentStreak, daysInBand, longestStreak } from '@/lib/achievements';
 import type { Achievements, PatternCategory } from '@/types/knitwit';
 
 // The award catalogue, and the level derived from it.
@@ -16,7 +16,8 @@ export type AwardGroup =
   | 'range'
   | 'devotion'
   | 'making'
-  | 'frogging';
+  | 'frogging'
+  | 'clock';
 
 export type Award = {
   id: string;
@@ -38,6 +39,10 @@ const withCommas = (n: number) => Math.floor(n).toLocaleString('en-GB');
 
 const finishedCategories = (a: Achievements) =>
   CATEGORY_ORDER.filter((c) => (a.finishedByCategory[c] ?? 0) > 0).length;
+
+// The most parts of one day the knitter has ever spread a single day's knitting across.
+const mostBandsInOneDay = (a: Achievements) =>
+  a.days.reduce((best, d) => Math.max(best, Object.values(d.bands ?? {}).filter((n) => n > 0).length), 0);
 
 // The most times any one pattern has been finished.
 const mostRepeated = (a: Achievements) =>
@@ -176,6 +181,42 @@ export const AWARDS: Award[] = [
   // Frogging — because pulling it back is part of it.
   { id: 'frog-1', name: 'Rip it, rip it', description: 'Frog a project. It happens.', group: 'frogging', goal: 1, points: 5, measure: (a) => a.totals.projectsFrogged },
   { id: 'frog-5', name: 'No regrets', description: 'Frog five projects.', group: 'frogging', goal: 5, points: 25, measure: (a) => a.totals.projectsFrogged },
+
+  // When you knit, rather than how much. Counted in days, not rows: "an early bird five times"
+  // means five mornings, not five rows before breakfast on one of them.
+  //
+  // Only rows count towards these, never banked time — a timer left running overnight would
+  // otherwise hand out Night owl to someone who was asleep.
+  { id: 'dawn-1', name: 'Early bird', description: 'Knit before 8am.', group: 'clock', goal: 1, points: 5, measure: (a) => daysInBand(a, 'dawn') },
+  { id: 'dawn-5', name: 'Up with the lark', description: 'Knit before 8am on five days.', group: 'clock', goal: 5, points: 10, measure: (a) => daysInBand(a, 'dawn') },
+  { id: 'dawn-25', name: 'Dawn patrol', description: 'Knit before 8am on twenty-five days.', group: 'clock', goal: 25, points: 25, measure: (a) => daysInBand(a, 'dawn') },
+
+  { id: 'night-1', name: 'Night owl', description: 'Knit between midnight and 5am.', group: 'clock', goal: 1, points: 5, measure: (a) => daysInBand(a, 'night') },
+  { id: 'night-5', name: 'Burning the midnight oil', description: 'Knit in the small hours on five days.', group: 'clock', goal: 5, points: 10, measure: (a) => daysInBand(a, 'night') },
+  { id: 'night-25', name: 'Nocturnal', description: 'Knit in the small hours on twenty-five days.', group: 'clock', goal: 25, points: 25, measure: (a) => daysInBand(a, 'night') },
+
+  { id: 'evening-25', name: 'Wind-down', description: 'Knit in the evening on twenty-five days.', group: 'clock', goal: 25, points: 10, measure: (a) => daysInBand(a, 'evening') },
+  { id: 'clock-all', name: 'Round the clock', description: 'Knit in the small hours, before 8am, in the day and in the evening.', group: 'clock', goal: 4, points: 25, measure: bandsWorked },
+
+  // One sitting that runs from one part of the day into the next — the sleeve that was going to
+  // be "just one more row".
+  { id: 'clock-3-in-a-day', name: 'Lost track of time', description: 'Knit in three different parts of one day.', group: 'clock', goal: 3, points: 25, measure: mostBandsInOneDay },
+];
+
+// The order the groups read in. Lives next to the labels rather than in the screen, because the
+// two are the same kind of fact and keeping them apart is how a whole group of awards came to be
+// invisible: the screen had its own list and adding 'clock' to the type didn't add it there.
+// A test asserts this covers every group.
+export const GROUP_ORDER: AwardGroup[] = [
+  'streak',
+  'finishing',
+  'volume',
+  'time',
+  'clock',
+  'range',
+  'devotion',
+  'making',
+  'frogging',
 ];
 
 export const GROUP_LABELS: Record<AwardGroup, string> = {
@@ -187,6 +228,7 @@ export const GROUP_LABELS: Record<AwardGroup, string> = {
   devotion: 'Favourites',
   making: 'Your library',
   frogging: 'Frogging',
+  clock: 'Hours kept',
 };
 
 export type AwardProgress = {

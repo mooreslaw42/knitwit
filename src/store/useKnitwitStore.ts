@@ -17,6 +17,7 @@ import {
   sizeValue,
 } from '@/lib/knitwit-helpers';
 import {
+  bandNow,
   emptyAchievements,
   localDate,
   normaliseAchievements,
@@ -1054,7 +1055,12 @@ export const useKnitwitStore = create<KnitwitState>()(
         // add either. Each newly reached row is worth the stitches it actually contains.
         let earned = achievements;
         for (let row = section.row + 1; row <= nextRow; row++) {
-          earned = recordActivity(earned, { rows: 1, stitches: stitchesForRow(section, row) });
+          earned = recordActivity(
+            earned,
+            { rows: 1, stitches: stitchesForRow(section, row) },
+            localDate(),
+            bandNow(),
+          );
         }
 
         set({

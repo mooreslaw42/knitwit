@@ -7,20 +7,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday, longestStreak } from '@/lib/achievements';
-import { allProgress, GROUP_LABELS, standing, type AwardGroup } from '@/lib/awards';
+import { allProgress, GROUP_LABELS, GROUP_ORDER, standing } from '@/lib/awards';
 import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-
-const GROUP_ORDER: AwardGroup[] = [
-  'streak',
-  'finishing',
-  'volume',
-  'time',
-  'range',
-  'devotion',
-  'making',
-  'frogging',
-];
 
 function hours(seconds: number): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min`;

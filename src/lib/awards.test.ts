@@ -7,8 +7,15 @@ import {
   normaliseAchievements,
   recordActivity,
   stitchesForRow,
+  bandForHour,
+  bandsWorked,
+  daysInBand,
+  rowsInBand,
 } from '@/lib/achievements';
-import { awardProgress, AWARDS, levelFor, nextAward, pointsForLevel, standing } from '@/lib/awards';
+import { awardProgress, AWARDS, levelFor, nextAward, pointsForLevel, standing,
+  GROUP_LABELS,
+  GROUP_ORDER,
+} from '@/lib/awards';
 import type { Achievements } from '@/types/knitwit';
 
 const on = (a: Achievements, date: string, rows = 1) => recordActivity(a, { rows }, date);
@@ -264,5 +271,136 @@ describe('normaliseAchievements', () => {
   it('produces a record every award can be measured against', () => {
     const a = normaliseAchievements({});
     expect(() => AWARDS.forEach((award) => award.measure(a))).not.toThrow();
+  });
+});
+
+describe('time of day', () => {
+  const at = (a: Achievements, date: string, band: Parameters<typeof recordActivity>[3]) =>
+    recordActivity(a, { rows: 1, stitches: 20 }, date, band);
+
+  describe('bandForHour', () => {
+    it('splits the day where the awards need it split', () => {
+      expect(bandForHour(0)).toBe('night');
+      expect(bandForHour(4)).toBe('night');
+      expect(bandForHour(5)).toBe('dawn');
+      expect(bandForHour(7)).toBe('dawn');
+      expect(bandForHour(8)).toBe('day');
+      expect(bandForHour(17)).toBe('day');
+      expect(bandForHour(18)).toBe('evening');
+      expect(bandForHour(23)).toBe('evening');
+    });
+  });
+
+  describe('recording', () => {
+    it('tallies rows against the part of the day they were worked', () => {
+      const a = at(emptyAchievements(), '2026-09-14', 'dawn');
+      expect(a.days[0].bands).toEqual({ dawn: 1 });
+    });
+
+    it('keeps two parts of the same day apart', () => {
+      let a = at(emptyAchievements(), '2026-09-14', 'dawn');
+      a = at(a, '2026-09-14', 'evening');
+      expect(a.days).toHaveLength(1);
+      expect(a.days[0].bands).toEqual({ dawn: 1, evening: 1 });
+    });
+
+    // Time banked by a timer says nothing about when anyone was knitting. A timer left running
+    // overnight must not hand out Night owl.
+    it('records nothing for banked time with no rows', () => {
+      const a = recordActivity(emptyAchievements(), { seconds: 3600 }, '2026-09-14', 'night');
+      expect(a.days[0].bands).toBeUndefined();
+      expect(daysInBand(a, 'night')).toBe(0);
+    });
+
+    it('records nothing when no band was given', () => {
+      const a = recordActivity(emptyAchievements(), { rows: 4 }, '2026-09-14');
+      expect(a.days[0].bands).toBeUndefined();
+    });
+  });
+
+  describe('counting', () => {
+    // Days, not rows: "an early bird five times" means five mornings.
+    it('counts days in a band, however many rows each', () => {
+      let a = at(emptyAchievements(), '2026-09-12', 'dawn');
+      a = at(a, '2026-09-12', 'dawn');
+      a = at(a, '2026-09-13', 'dawn');
+      expect(daysInBand(a, 'dawn')).toBe(2);
+      expect(rowsInBand(a, 'dawn')).toBe(3);
+    });
+
+    it('counts the parts of the day ever worked in', () => {
+      let a = at(emptyAchievements(), '2026-09-12', 'night');
+      expect(bandsWorked(a)).toBe(1);
+      a = at(a, '2026-09-13', 'day');
+      a = at(a, '2026-09-14', 'evening');
+      expect(bandsWorked(a)).toBe(3);
+    });
+
+    it('has nothing to say about a day recorded before bands existed', () => {
+      const a = recordActivity(emptyAchievements(), { rows: 10 }, '2026-01-01');
+      expect(daysInBand(a, 'day')).toBe(0);
+      expect(bandsWorked(a)).toBe(0);
+    });
+  });
+
+  describe('the awards', () => {
+    const find = (id: string) => AWARDS.find((x) => x.id === id)!;
+
+    it('earns Early bird on the first morning', () => {
+      const a = at(emptyAchievements(), '2026-09-14', 'dawn');
+      expect(awardProgress(find('dawn-1'), a).earned).toBe(true);
+      expect(awardProgress(find('night-1'), a).earned).toBe(false);
+    });
+
+    it('earns Night owl in the small hours', () => {
+      const a = at(emptyAchievements(), '2026-09-14', 'night');
+      expect(awardProgress(find('night-1'), a).earned).toBe(true);
+    });
+
+    it('needs all four parts for Round the clock', () => {
+      let a = emptyAchievements();
+      for (const b of ['night', 'dawn', 'day'] as const) a = at(a, '2026-09-1' + b.length, b);
+      expect(awardProgress(find('clock-all'), a).earned).toBe(false);
+      a = at(a, '2026-09-20', 'evening');
+      expect(awardProgress(find('clock-all'), a).earned).toBe(true);
+    });
+
+    // Three parts of *one* day, not three parts across three days.
+    it('wants Lost track of time within a single day', () => {
+      let spread = emptyAchievements();
+      spread = at(spread, '2026-09-12', 'night');
+      spread = at(spread, '2026-09-13', 'dawn');
+      spread = at(spread, '2026-09-14', 'day');
+      expect(awardProgress(find('clock-3-in-a-day'), spread).earned).toBe(false);
+
+      let oneDay = emptyAchievements();
+      for (const b of ['night', 'dawn', 'day'] as const) oneDay = at(oneDay, '2026-09-14', b);
+      expect(awardProgress(find('clock-3-in-a-day'), oneDay).earned).toBe(true);
+    });
+
+    it('leaves every clock award unearned on a bare record', () => {
+      const a = emptyAchievements();
+      for (const award of AWARDS.filter((x) => x.group === 'clock')) {
+        expect(awardProgress(award, a).earned).toBe(false);
+      }
+    });
+  });
+});
+
+// A group missing from GROUP_ORDER doesn't fail — it just never renders, and every award in it
+// becomes unreachable and invisible. That is what happened when the clock group was added.
+describe('award groups', () => {
+  it('shows every group there is', () => {
+    expect([...GROUP_ORDER].sort()).toEqual(Object.keys(GROUP_LABELS).sort());
+  });
+
+  it('lists each group exactly once', () => {
+    expect(new Set(GROUP_ORDER).size).toBe(GROUP_ORDER.length);
+  });
+
+  it('has every award in a group that will be shown', () => {
+    for (const award of AWARDS) {
+      expect(GROUP_ORDER).toContain(award.group);
+    }
   });
 });
