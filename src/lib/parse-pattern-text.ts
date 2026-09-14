@@ -140,7 +140,17 @@ function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
   }
 
   // "knit to last 2 sts" / "p to last st" / "knit to last 2 (2) 3 sts"
-  const toLast = t.match(/^(k|knit|p|purl)\b.*?\bto\s+last\s+([\d()\s,]*?)\s*(?:sts?|stitches?)?$/i);
+  //
+  // And the same instruction with the count on the other side of the noun: "k to 1 st remaining",
+  // "knit until 2 sts rem". Both spellings are ordinary in published patterns and mean exactly the
+  // same thing, but only the first was read — which quietly cost a real import every shaping row
+  // in a section, eleven of them, each one an increase. The second form has to name a number and
+  // the stitches and the word "remaining", so it cannot swallow "knit to end" on its way past.
+  const toLast =
+    t.match(/^(k|knit|p|purl)\b.*?\b(?:to|until)\s+last\s+([\d()\s,]*?)\s*(?:sts?|stitches?)?$/i) ??
+    t.match(
+      /^(k|knit|p|purl)\b.*?\b(?:to|until)\s+([\d()\s,]+?)\s*(?:sts?|stitches?)\s*(?:remaining|remains|remain|rem)\.?$/i,
+    );
   if (toLast) {
     const type = /^(k|knit)$/i.test(toLast[1]) ? 'knit' : 'purl';
     return group(type, 'to-last', parseSizeRun(toLast[2]) ?? 1);

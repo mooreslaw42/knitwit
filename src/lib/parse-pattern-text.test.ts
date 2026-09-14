@@ -75,6 +75,39 @@ describe('parseSectionText', () => {
     expect(result.issues[0].message).toMatch(/rep from \*/);
   });
 
+  // A real import lost every shaping row of a section — eleven increases — because the pattern
+  // said "to 1 st remaining" where the parser only knew "to last 1 st". They are the same
+  // instruction, and a row the parser cannot read is refused whole, so the loss was total.
+  it('reads a to-last span with the count on either side of the noun', () => {
+    const both = [
+      'Row 1 (RS): K to last 1 st, M1R, k1.',
+      'Row 1 (RS): K to 1 st remaining, M1R, k1.',
+      'Row 1 (RS): K until 1 st remains, M1R, k1.',
+      'Row 1 (RS): K to 1 st rem, M1R, k1.',
+    ];
+    for (const text of both) {
+      expect(shape(text)[0].stitches).toEqual(['knit:to-last:1', 'm1r:exact:1', 'knit:exact:1']);
+    }
+  });
+
+  it('keeps the plural and the per-size run in the remaining form', () => {
+    expect(shape('Row 1: Knit to 2 sts remaining, k2tog.')[0].stitches).toEqual([
+      'knit:to-last:2',
+      'k2tog:exact:1',
+    ]);
+    // Per-size runs survive here exactly as they do in the "to last" form — one count per size,
+    // not the first one flattened over all of them.
+    expect(shape('Row 1: Knit to 2 (2) 3 sts remaining, k1.')[0].stitches[0]).toBe(
+      'knit:to-last:2,2,3',
+    );
+  });
+
+  // The looser second form must not start eating spans that mean something else.
+  it('still reads a whole-row instruction as a whole row', () => {
+    expect(shape('Row 1: knit to end')[0].stitches).toEqual(['knit:all:-']);
+    expect(shape('Row 2: purl all sts')[0].stitches).toEqual(['purl:all:-']);
+  });
+
   it('refuses a row with an unreadable token instead of dropping it silently', () => {
     const result = parseSectionText('Row 1: k2, frobnicate 3, k2');
     expect(result.rows[0].stitches).toEqual([]);
