@@ -48,9 +48,11 @@ export function CustomTabList(props: TabListProps) {
   return (
     <View {...props} style={styles.tabListContainer}>
       <View style={styles.innerContainer}>
-        <Brand style={styles.brandText} />
-
-        {props.children}
+        <Brand />
+        {/* The tabs sit in their own group pushed to the right, rather than trailing the logo.
+            Same reasoning as the header on the pushed screens, and the two have to agree —
+            navigating between them shouldn't move the menu. */}
+        <View style={styles.nav}>{props.children}</View>
       </View>
     </View>
   );
@@ -78,8 +80,11 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     maxWidth: MaxContentWidth,
   },
-  brandText: {
-    marginRight: 'auto',
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginLeft: 'auto',
   },
   pressed: {
     opacity: 0.7,

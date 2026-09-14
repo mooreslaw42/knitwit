@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 
@@ -11,12 +11,16 @@ import { ThemedText } from '@/components/themed-text';
 //
 // A real <Link>, so on web it is an anchor: ⌘-click opens a new tab, the status bar previews the
 // URL, and it can be copied like any other link.
-export function Brand({ style }: { style?: React.ComponentProps<typeof ThemedText>['style'] }) {
+// `style` lands on the Link, not on the text inside it. The Link is the flex child of the header
+// row, so layout styles — margins, alignment — only do anything there. Putting them on the inner
+// text looks identical in the source and silently does nothing.
+export function Brand({ style }: { style?: StyleProp<TextStyle> }) {
   return (
-    <Link href="/" accessibilityLabel="Knitwit — go to the home page" style={styles.link}>
-      <ThemedText type="smallBold" style={style}>
-        🧶 Knitwit
-      </ThemedText>
+    <Link
+      href="/"
+      accessibilityLabel="Knitwit — go to the home page"
+      style={[styles.link, style]}>
+      <ThemedText type="smallBold">🧶 Knitwit</ThemedText>
     </Link>
   );
 }

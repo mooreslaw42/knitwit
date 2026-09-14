@@ -34,8 +34,12 @@ export default function AppHeader() {
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        <Brand style={styles.brand} />
-        {NAV.map((item) => {
+        <Brand />
+        {/* The links sit in their own group pushed to the right, rather than trailing the logo.
+            It leaves the middle of the bar clear, and the nav lands where a browser's own
+            controls are — which is where the eye goes looking for it. */}
+        <View style={styles.nav}>
+          {NAV.map((item) => {
           const isActive = item.href === active;
           return (
             // A real anchor rather than a Pressable that calls navigate: this is the site's main
@@ -50,9 +54,10 @@ export default function AppHeader() {
               <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
                 {item.label}
               </ThemedText>
-            </Link>
-          );
-        })}
+              </Link>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -74,8 +79,11 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     maxWidth: MaxContentWidth,
   },
-  brand: {
-    marginRight: 'auto',
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginLeft: 'auto',
   },
   link: {
     paddingVertical: Spacing.one,
