@@ -1,4 +1,12 @@
-import { formatToolSize, STITCH_ORDER, TOOL_SIZES, toolSizeOptions } from '@/constants/catalogs';
+import {
+  describeToolSize,
+  formatToolSize,
+  scaleForToolType,
+  STITCH_ORDER,
+  TOOL_SIZES,
+  toolSizeLabel,
+  toolSizeOptions,
+} from '@/constants/catalogs';
 
 describe('tool sizes', () => {
   it('runs in half-millimetre steps', () => {
@@ -57,5 +65,57 @@ describe('the app and the model agree on the stitches', () => {
 
   it('offers the model exactly what the app can chart', () => {
     expect([...STITCH_TYPES].sort()).toEqual([...STITCH_ORDER].sort());
+  });
+});
+
+describe('US size names', () => {
+  it('names a needle on the US scale', () => {
+    expect(toolSizeLabel(4.5, 'knit')).toBe('4.5 mm · US 7');
+    expect(toolSizeLabel(2.25, 'knit')).toBe('2.25 mm · US 1');
+    expect(toolSizeLabel(10, 'knit')).toBe('10 mm · US 15');
+  });
+
+  // Hooks are lettered, and a 4.5mm hook is plain "7" with no letter at all.
+  it('names a hook on the hook scale', () => {
+    expect(toolSizeLabel(5, 'crochet')).toBe('5 mm · H/8');
+    expect(toolSizeLabel(4, 'crochet')).toBe('4 mm · G/6');
+    expect(toolSizeLabel(4.5, 'crochet')).toBe('4.5 mm · 7');
+  });
+
+  // The two scales genuinely disagree — 5mm is US 8 as a needle and H/8 as a hook — so a pattern
+  // that is both gets the millimetres and no guess.
+  it('names nothing when the craft could be either', () => {
+    expect(toolSizeLabel(5, 'both')).toBe('5 mm');
+  });
+
+  // The US scale is ordinal, not a conversion, so a size with no US name must not get one.
+  it('leaves a size with no US name unnamed rather than interpolating', () => {
+    expect(toolSizeLabel(7, 'knit')).toBe('7 mm');
+    expect(toolSizeLabel(3.4, 'knit')).toBe('3.4 mm');
+    expect(toolSizeLabel(2, 'crochet')).toBe('2 mm');
+  });
+
+  it('reads a stored size back out', () => {
+    expect(describeToolSize('4.5mm', 'knit')).toBe('4.5 mm · US 7');
+    expect(describeToolSize('4,5 mm', 'knit')).toBe('4.5 mm · US 7');
+  });
+
+  // An imported value already says more than we could. Left exactly as it is.
+  it('does not touch a size it cannot parse', () => {
+    expect(describeToolSize('3 mm [US 2.5] circular needles', 'knit')).toBe(
+      '3 mm [US 2.5] circular needles',
+    );
+    expect(describeToolSize('', 'knit')).toBe('');
+  });
+
+  it('picks the scale from a tool type', () => {
+    expect(scaleForToolType('crochet-hook')).toBe('crochet');
+    expect(scaleForToolType('circular')).toBe('knit');
+    expect(scaleForToolType('dpn')).toBe('knit');
+  });
+
+  it('puts the US name in the picker', () => {
+    const label = toolSizeOptions('', 'knit').find((o) => o.value === '4.5mm')?.label;
+    expect(label).toBe('4.5 mm · US 7');
   });
 });

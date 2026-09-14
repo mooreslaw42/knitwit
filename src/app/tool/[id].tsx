@@ -10,6 +10,7 @@ import { goBackOr } from '@/lib/navigation';
 import { inUseLabel } from '@/lib/knitwit-helpers';
 import { TOOL_TYPE_LABELS,
   toolSizeOptions,
+  scaleForToolType,
 } from '@/constants/catalogs';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -66,7 +67,7 @@ export default function ToolEditScreen() {
           />
           <SelectField
             label="Thickness"
-            options={toolSizeOptions(form.thickness)}
+            options={toolSizeOptions(form.thickness, scaleForToolType(form.type))}
             value={form.thickness}
             onChange={(v) => set('thickness', v)}
           />

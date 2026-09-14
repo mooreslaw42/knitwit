@@ -117,7 +117,7 @@ export default function MaterialEditScreen() {
           />
           <SelectField
             label={form.craftType === 'crochet' ? 'Hook size' : 'Needle size'}
-            options={toolSizeOptions(form.thickness)}
+            options={toolSizeOptions(form.thickness, form.craftType)}
             value={form.thickness}
             onChange={(v) => set('thickness', v)}
           />

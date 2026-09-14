@@ -15,6 +15,8 @@ import {
   TOOL_ICONS,
   TOOL_TYPE_LABELS,
   yarnWeightLabel,
+  describeToolSize,
+  scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { toolInUseCount } from '@/lib/knitwit-helpers';
@@ -198,7 +200,8 @@ export default function LibraryScreen() {
                     </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">
-                        {t.thickness} {TOOL_TYPE_LABELS[t.type]}
+                        {describeToolSize(t.thickness, scaleForToolType(t.type))} ·{' '}
+                        {TOOL_TYPE_LABELS[t.type]}
                       </ThemedText>
                       <ThemedText type="small" themeColor="inkSoft">
                         {t.length}

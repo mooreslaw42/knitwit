@@ -104,15 +104,79 @@ const QUARTER_SIZES = [2.25, 2.75, 3.25, 3.75];
 
 export const TOOL_SIZES: number[] = [...HALF_STEPS, ...QUARTER_SIZES, 25].sort((a, b) => a - b);
 
+// Stored form. Millimetres, because that is what a needle or hook actually is everywhere in the
+// world — the US number below is a name for it, not a measurement of it.
 export const formatToolSize = (mm: number) => `${mm}mm`;
+
+// Anchored at both ends on purpose. Matching a size *inside* a longer phrase would reformat
+// "3 mm [US 2.5] circular needles" down to "3 mm · US 2.5" and throw the rest away — the value
+// is only ours to rewrite when the whole of it is a size.
+export const parseToolSize = (value: string): number | null => {
+  const m = value.match(/^\s*(\d+(?:[.,]\d+)?)\s*mm\s*$/i);
+  if (!m) return null;
+  const mm = parseFloat(m[1].replace(',', '.'));
+  return Number.isFinite(mm) ? mm : null;
+};
+
+// Millimetres to the US name, per the Craft Yarn Council's tables.
+//
+// This is a lookup, not a conversion: there is no such thing as a needle measured in inches, and
+// 4.5mm as 0.177" is a number nobody has ever seen printed on anything. The US scale is an
+// ordinal naming system, which is why a gap here has to stay a gap — a size with no US name gets
+// none rather than an interpolated one.
+const US_NEEDLE_SIZES: Record<number, string> = {
+  2: '0', 2.25: '1', 2.5: '1.5', 2.75: '2', 3: '2.5', 3.25: '3', 3.5: '4', 3.75: '5',
+  4: '6', 4.5: '7', 5: '8', 5.5: '9', 6: '10', 6.5: '10.5', 8: '11', 9: '13', 10: '15',
+  12: '17', 15: '19', 16: '19', 19: '35', 25: '50',
+};
+
+// Hooks are lettered as well as numbered, and the lettering is a convention rather than a
+// standard — manufacturers differ at the edges. Common US practice, and worth showing, but it is
+// the reason these are offered as a name alongside the millimetres rather than instead of them.
+const US_HOOK_SIZES: Record<number, string> = {
+  2.25: 'B/1', 2.75: 'C/2', 3.25: 'D/3', 3.5: 'E/4', 3.75: 'F/5', 4: 'G/6', 4.5: '7',
+  5: 'H/8', 5.5: 'I/9', 6: 'J/10', 6.5: 'K/10.5', 8: 'L/11', 9: 'M/13', 10: 'N/15',
+  15: 'P/Q', 16: 'Q', 19: 'S',
+};
+
+// Which scale to name a size on. A tool knows from its type; a pattern or a yarn knows from its
+// craft. 'both' names nothing, because the two scales disagree and picking one would be a guess.
+export type SizeScale = 'knit' | 'crochet' | 'both';
+
+export function usSizeName(mm: number, scale: SizeScale): string {
+  if (scale === 'crochet') return US_HOOK_SIZES[mm] ?? '';
+  if (scale === 'knit') return US_NEEDLE_SIZES[mm] ? `US ${US_NEEDLE_SIZES[mm]}` : '';
+  return '';
+}
+
+// "4.5 mm · US 7", or just "4.5 mm" where there is no US name for it. The millimetres always come
+// first: they are the size, and the US number is what it is called.
+export function toolSizeLabel(mm: number, scale: SizeScale): string {
+  const us = usSizeName(mm, scale);
+  return us ? `${mm} mm · ${us}` : `${mm} mm`;
+}
+
+// The same for a stored string like "4.5mm". Anything unparseable — an imported "3 mm [US 2.5]
+// circular needles" — is handed back untouched, since it is already telling the knitter more
+// than we could.
+export function describeToolSize(value: string, scale: SizeScale): string {
+  const mm = parseToolSize(value);
+  return mm === null ? value : toolSizeLabel(mm, scale);
+}
+
+export const scaleForToolType = (type: ToolType): SizeScale =>
+  type === 'crochet-hook' ? 'crochet' : 'knit';
 
 // The options for a size picker, with whatever is already stored kept selectable even when it
 // isn't on the scale. A pattern imported as "3 mm [US 2.5] circular needles" is a real value, and
 // a picker that silently dropped it would rewrite the knitter's data the next time they saved.
-export function toolSizeOptions(current: string): { value: string; label: string }[] {
+export function toolSizeOptions(
+  current: string,
+  scale: SizeScale = 'both',
+): { value: string; label: string }[] {
   const options = [
     { value: '', label: '— not set —' },
-    ...TOOL_SIZES.map((mm) => ({ value: formatToolSize(mm), label: `${mm} mm` })),
+    ...TOOL_SIZES.map((mm) => ({ value: formatToolSize(mm), label: toolSizeLabel(mm, scale) })),
   ];
   if (current && !options.some((o) => o.value === current)) {
     options.splice(1, 0, { value: current, label: current });

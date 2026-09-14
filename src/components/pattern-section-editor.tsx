@@ -7,6 +7,7 @@ import { StitchChart } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TOOL_TYPE_LABELS,
   toolSizeOptions,
+  scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
@@ -172,7 +173,7 @@ export function PatternKitEditor({
             />
             <SelectField
               label="Size"
-              options={toolSizeOptions(t.thickness)}
+              options={toolSizeOptions(t.thickness, scaleForToolType(t.type))}
               value={t.thickness}
               onChange={(v) => updateTool(i, { thickness: v })}
             />

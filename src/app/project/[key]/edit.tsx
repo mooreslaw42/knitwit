@@ -140,7 +140,7 @@ export default function ProjectEditScreen() {
           />
           <SelectField
             label="Needle / hook size"
-            options={toolSizeOptions(needleSize)}
+            options={toolSizeOptions(needleSize, craft)}
             value={needleSize}
             onChange={setNeedleSize}
           />

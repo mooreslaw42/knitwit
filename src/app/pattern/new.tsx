@@ -498,7 +498,7 @@ export default function NewPatternWizardScreen() {
               </ThemedText>
               <SelectField
                 label="Needle / hook size"
-                options={toolSizeOptions(form.needleSize)}
+                options={toolSizeOptions(form.needleSize, form.craft)}
                 value={form.needleSize}
                 onChange={(v) => set('needleSize', v)}
               />

@@ -17,6 +17,8 @@ import {
   SIZE_OPTIONS,
   TOOL_TYPE_LABELS,
   toolSizeOptions,
+  describeToolSize,
+  scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { patternSectionMarkers } from '@/lib/knitwit-helpers';
@@ -221,7 +223,7 @@ export default function PatternDetailScreen() {
               </View>
               <SelectField
                 label="Needle / hook size"
-                options={toolSizeOptions(draft.needleSize)}
+                options={toolSizeOptions(draft.needleSize, draft.craft)}
                 value={draft.needleSize}
                 onChange={(v) => set('needleSize', v)}
               />
@@ -321,7 +323,9 @@ export default function PatternDetailScreen() {
                 label="Tools"
                 value={(pattern.tools ?? [])
                   .map((t) =>
-                    [t.thickness, TOOL_TYPE_LABELS[t.type], t.note].filter(Boolean).join(' · '),
+                    [describeToolSize(t.thickness, scaleForToolType(t.type)), TOOL_TYPE_LABELS[t.type], t.note]
+                      .filter(Boolean)
+                      .join(' · '),
                   )
                   .join('\n')}
               />

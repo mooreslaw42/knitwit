@@ -2,14 +2,15 @@ import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { describeToolSize, scaleForToolType, TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, Radii, Spacing } from '@/constants/theme';
 import { resolveTechnique } from '@/lib/technique-catalogue';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Material, ProjectSection, Technique, Tool } from '@/types/knitwit';
 
 export const materialLabel = (m: Material) => `${m.brand} — ${m.colorName}`;
-export const toolLabel = (t: Tool) => `${t.thickness} ${TOOL_TYPE_LABELS[t.type]}`;
+export const toolLabel = (t: Tool) =>
+  `${describeToolSize(t.thickness, scaleForToolType(t.type))} · ${TOOL_TYPE_LABELS[t.type]}`;
 
 export type SectionKit = Pick<ProjectSection, 'materialIds' | 'toolIds' | 'techniqueIds'>;
 

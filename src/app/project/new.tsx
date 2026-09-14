@@ -20,6 +20,8 @@ import {
   CRAFT_LABELS,
   CRAFT_ORDER,
   TOOL_TYPE_LABELS,
+  describeToolSize,
+  scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 
@@ -169,7 +171,7 @@ export default function NewProjectWizardScreen() {
     { value: '', label: '— choose from your stash —' },
     ...Object.entries(tools).map(([id, t]) => ({
       value: id,
-      label: `${t.thickness} ${TOOL_TYPE_LABELS[t.type]} · ${t.length}`,
+      label: `${describeToolSize(t.thickness, scaleForToolType(t.type))} · ${TOOL_TYPE_LABELS[t.type]} · ${t.length}`,
     })),
   ];
 
@@ -339,7 +341,8 @@ export default function NewProjectWizardScreen() {
                   <View style={styles.slotLabel}>
                     <View style={[styles.slotDot, { backgroundColor: Colors.creamDeep }]} />
                     <ThemedText type="smallBold">
-                      {slot.thickness} {TOOL_TYPE_LABELS[slot.type]}
+                      {describeToolSize(slot.thickness, scaleForToolType(slot.type))} ·{' '}
+                      {TOOL_TYPE_LABELS[slot.type]}
                       {slot.note ? ` · ${slot.note}` : ''}
                     </ThemedText>
                   </View>
