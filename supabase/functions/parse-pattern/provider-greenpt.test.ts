@@ -115,14 +115,58 @@ describe('a GreenPT call that hits a transient failure', () => {
 
   // The reported failure: "Couldn't read that pattern: GreenPT returned 503: 503 The model
   // provider encountered an error." One blip used to end a whole document import.
-  it('gives up after three attempts and still reports the provider’s own status', async () => {
+  it('gives up and reports the provider’s own status once nothing works', async () => {
     const fetchMock = jest.fn().mockImplementation(() => Promise.resolve(fail(503)));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     await expect(settle(greenptProvider('key').complete(request))).rejects.toThrow(
       /GreenPT returned 503/,
     );
+    // Three on the default, then three more on the fallback.
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  // Measured on the day: glm-5.3-flash was 503ing while glm-5.2 answered fine. Retrying the dead
+  // one forever is not a fix; this is.
+  it('moves to the fallback model when the default is the thing that is down', async () => {
+    const bodies: string[] = [];
+    const fetchMock = jest.fn().mockImplementation((_url: string, init: { body: string }) => {
+      bodies.push(init.body);
+      const model = JSON.parse(init.body).model as string;
+      return Promise.resolve(model === 'glm-5.3-flash' ? fail(503) : ok());
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await settle(greenptProvider('key').complete(request));
+
+    expect(result.text).toBe('{"a":1}');
+    expect(bodies.map((b) => JSON.parse(b).model)).toEqual([
+      'glm-5.3-flash',
+      'glm-5.3-flash',
+      'glm-5.3-flash',
+      'glm-5.2',
+    ]);
+  });
+
+  it('leaves a pinned model pinned, rather than answering as a model nobody asked for', async () => {
+    const fetchMock = jest.fn().mockImplementation(() => Promise.resolve(fail(503)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      settle(greenptProvider('key').complete({ ...request, model: 'glm-5.2' })),
+    ).rejects.toThrow(/GreenPT returned 503/);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not reach for the fallback when the request itself is the problem', async () => {
+    const fetchMock = jest.fn().mockImplementation(() => Promise.resolve(fail(400)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(settle(greenptProvider('key').complete(request))).rejects.toThrow(
+      /GreenPT returned 400/,
+    );
+    // The json_object probe, and nothing beyond it.
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
   it('retries a dropped connection the same way', async () => {

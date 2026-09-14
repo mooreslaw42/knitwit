@@ -17,6 +17,20 @@ const BASE_URL = 'https://api.greenpt.ai/v1';
 // for review, not as a silently bad chart. Override per call to compare.
 const DEFAULT_MODEL = 'glm-5.3-flash';
 
+// Where to go when the default model itself is down.
+//
+// Measured 2026-09-14: glm-5.3-flash returned 503 "The model provider encountered an error" on
+// 9 of 11 calls while glm-5.2 answered 4 of 4, so this is one model being unwell rather than
+// GreenPT being down — and no amount of retrying the same name fixes that.
+//
+// glm-5.2 is ten times the price (€1.10/€4.40 per million against €0.11/€0.44), which is exactly
+// why it isn't the default. It is still far cheaper than an import that doesn't work. The
+// fallback is deliberately narrow: only when the *default* was in play, and only after the
+// retries are spent, so a caller who pinned a model still gets the model they asked for and a
+// healthy day never touches it. Every response carries the model that answered, and the usage
+// log records it, so the cost of a bad week is visible rather than inferred.
+const FALLBACK_MODEL = 'glm-5.2';
+
 // Whether this endpoint honours `response_format: {type:'json_schema'}` is not documented, so we
 // find out at runtime rather than assume: ask for the schema, and if the API rejects the
 // parameter, fall back to plain JSON mode with the schema stated in the prompt. Remembered per
@@ -173,6 +187,18 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
       let mode: 'json_schema' | 'json_object' =
         schemaMode === 'unknown' ? 'json_schema' : schemaMode;
       let response = await postWithRetry(req, mode);
+
+      // The default model is down rather than busy — retries are spent and it is still failing
+      // transiently. Try the fallback once before giving up. Only for the default: a pinned model
+      // is a deliberate choice, and quietly answering with a different one would make a
+      // comparison run lie about what it measured.
+      if (!response.ok && isRetryableStatus(response.status) && req.model === DEFAULT_MODEL) {
+        console.warn(
+          `GreenPT: ${DEFAULT_MODEL} still failing with ${response.status} after ${MAX_ATTEMPTS} attempts; falling back to ${FALLBACK_MODEL}, which costs more.`,
+        );
+        await response.body?.cancel().catch(() => {});
+        response = await postWithRetry({ ...req, model: FALLBACK_MODEL }, mode);
+      }
 
       // A 4xx on the first attempt is most likely the unsupported `response_format` — retry once
       // in plain JSON mode before giving up, and remember the answer. The retryable 4xx codes are
