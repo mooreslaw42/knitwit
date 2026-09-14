@@ -156,9 +156,12 @@ export default function CounterScreen() {
   // column, and on a phone the counter is held one-handed and stays exactly as it was.
   const twoUp = wide && chartRows.length > 0;
 
-  const main = (
+  // The back link, timer, note button and the project/section name belong to the whole screen,
+  // not to the counter — so on a wide window they sit above both columns as one centred header
+  // rather than being boxed into the left one.
+  const header = (
     <>
-        <View style={styles.topbar}>
+        <View style={[styles.topbar, twoUp && styles.topbarWide]}>
           {/* Counter is a tab, so there is no reliable stack to go back through — arriving here
               from the tab bar and from "Continue counting" leave different histories. It goes to
               the section this counter is counting, which is the one answer that is always right.
@@ -202,7 +205,11 @@ export default function CounterScreen() {
             {section.name}
           </ThemedText>
         </Pressable>
+    </>
+  );
 
+  const body = (
+    <>
         {noteFormOpen && (
           <AlertCard borderColor={Colors.coralDeep} icon="📝" title="Add a note">
             <TextInput
@@ -384,9 +391,10 @@ export default function CounterScreen() {
       <SafeAreaView
         style={[styles.safeArea, twoUp && styles.safeAreaWide]}
         edges={['top', 'left', 'right']}>
+        {header}
         {twoUp ? (
           <View style={styles.columns}>
-            <View style={styles.colCounter}>{main}</View>
+            <View style={styles.colCounter}>{body}</View>
             {/* Scrolls on its own, so reading ahead never moves the + button out from under the
                 cursor — the whole point of putting them side by side. */}
             <View style={styles.colRows}>
@@ -409,7 +417,7 @@ export default function CounterScreen() {
             </View>
           </View>
         ) : (
-          main
+          body
         )}
       </SafeAreaView>
     </ThemedView>
@@ -475,6 +483,12 @@ const styles = StyleSheet.create({
   safeAreaWide: {
     maxWidth: 1080,
     alignItems: 'stretch',
+  },
+  // Spread to the corners the header would be as wide as both columns, which is the opposite of
+  // what the extra width is for. Clustered in the middle it stays one object, over one screen.
+  topbarWide: {
+    justifyContent: 'center',
+    gap: Spacing.three,
   },
   columns: {
     flex: 1,
