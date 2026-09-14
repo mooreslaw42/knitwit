@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton, Thumb } from '@/components/knitwit-ui';
@@ -127,23 +127,19 @@ export default function LibraryScreen() {
                 ))}
               </ScrollView>
 
-              <View style={styles.grid}>
+              <View style={styles.libList}>
                 {visible.map(([id, pt]) => (
                   // The favourite toggle is a sibling of the link, not inside it. A button nested
-                  // in an anchor is invalid on web, and tapping the heart would follow the link
-                  // as well as toggling — so the card is a link and the heart sits on top of it.
-                  <View key={id} style={styles.libCardWrap}>
-                    <CardLink href={`/pattern/${id}`} style={styles.libCard}>
-                      <View style={[styles.libThumb, { backgroundColor: pt.accentColor }]}>
-                        {pt.photo ? (
-                          <Image source={{ uri: pt.photo }} style={styles.libPhoto} />
-                        ) : null}
-                      </View>
+                  // in an anchor is invalid on web, and tapping the heart would follow the link as
+                  // well as toggling — so the row is a link and the heart sits beside it.
+                  <View key={id} style={styles.libRowWrap}>
+                    <CardLink href={`/pattern/${id}`} style={styles.libRow}>
+                      <Thumb photo={pt.photo} color={pt.accentColor} />
                       <View style={styles.libInfo}>
                         <ThemedText type="smallBold" numberOfLines={1}>
                           {pt.name}
                         </ThemedText>
-                        <ThemedText type="small" themeColor="inkSoft">
+                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
                           {CATEGORY_LABELS[pt.category]}
                           {pt.needleSize || pt.weight ? ` · ${pt.needleSize || pt.weight}` : ''}
                         </ThemedText>
@@ -323,40 +319,31 @@ const styles = StyleSheet.create({
   filterChipActive: {
     backgroundColor: Colors.blushDeep,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  libList: {
     gap: Spacing.two,
   },
-  libCard: {
-    width: '100%',
+  // The row is the link and the heart is its neighbour, so the row takes the space and the heart
+  // keeps the end. No absolute positioning: in a row there is a real place for it to sit.
+  libRowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
-    overflow: 'hidden',
+    paddingRight: Spacing.three,
   },
-  libThumb: {
-    aspectRatio: 1,
-    overflow: 'hidden',
-  },
-  libPhoto: {
-    width: '100%',
-    height: '100%',
+  libRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
   },
   libInfo: {
-    padding: Spacing.two,
     gap: 2,
+    flexShrink: 1,
   },
-  libCardWrap: {
-    position: 'relative',
-    width: '47%',
-  },
-  // Top-right of the picture. It used to hang off the info block by a negative offset, which only
-  // worked while it was a child of it; now that it sits outside the link it needs an anchor that
-  // doesn't depend on where the text happens to start.
   heartBtn: {
-    position: 'absolute',
-    top: Spacing.two,
-    right: Spacing.two,
+    marginLeft: 'auto',
   },
   emptyCard: {
     gap: Spacing.one,

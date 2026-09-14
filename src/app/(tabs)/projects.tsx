@@ -1,9 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton, ProgressBar, ProjectStatusBadge, Thumb } from '@/components/knitwit-ui';
+import { Card, PillButton, ProgressBar, ProjectStatusBadge } from '@/components/knitwit-ui';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -168,25 +168,40 @@ export default function ProjectsScreen() {
               </ThemedText>
             </Card>
           ) : (
-            <View style={styles.projList}>
+            <View style={styles.projGrid}>
               {visible.map(([key, p]) => {
                 const pct = projectProgress(p).pct;
                 const cur = p.sections[currentSectionIndexOf(p)];
                 return (
+                  // The width lives on this wrapper, not on the CardLink. `Link asChild` hands its
+                  // own props to the anchor and the card style lands on a View inside it, so a
+                  // percentage set there would measure against an anchor that is only as wide as
+                  // its contents — which is exactly how the grid first came out.
+                  <View key={key} style={styles.projCardWrap}>
                   <CardLink
-                    key={key}
                     href={`/project/${key}`}
-                    style={styles.projRow}
+                    style={styles.projCard}
                     accessibilityLabel={`${p.name}, ${Math.round(pct * 100)}% complete`}>
-                    <Thumb photo={p.photo} color={p.color} />
+                    {/* The picture leads, at the size a picture is worth having. A project is the
+                        thing you made; a square of it says more than any line of text here. */}
+                    <View style={[styles.projThumb, { backgroundColor: p.color }]}>
+                      {p.photo ? (
+                        <Image source={{ uri: p.photo }} style={styles.projPhoto} />
+                      ) : null}
+                      <ThemedText type="smallBold" themeColor="white" style={styles.projPct}>
+                        {Math.round(pct * 100)}%
+                      </ThemedText>
+                    </View>
                     <View style={styles.projInfo}>
-                      <ThemedText type="smallBold">{p.name}</ThemedText>
+                      <ThemedText type="smallBold" numberOfLines={1}>
+                        {p.name}
+                      </ThemedText>
                       {/* The project's combined state, not the current section's. Under "All" the
-                          rows were otherwise indistinguishable: a frogged project and one on the
+                          cards were otherwise indistinguishable: a frogged project and one on the
                           needles both just read "row 12 of 40". */}
                       <View style={styles.projMeta}>
                         <ProjectStatusBadge status={projectState(p)} />
-                        {p.labels.slice(0, 2).map((l) => (
+                        {p.labels.slice(0, 1).map((l) => (
                           <View key={l} style={styles.labelPill}>
                             <ThemedText
                               type="small"
@@ -197,18 +212,17 @@ export default function ProjectsScreen() {
                             </ThemedText>
                           </View>
                         ))}
-                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1} style={styles.projWhere}>
-                          {CRAFT_LABELS[p.craft]} · {cur.name} · row {cur.row} of {cur.totalRows}
-                        </ThemedText>
                       </View>
-                      <View style={{ marginTop: Spacing.one }}>
-                        <ProgressBar pct={pct} color={p.colorDeep} />
-                      </View>
+                      <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                        {CRAFT_LABELS[p.craft]} · {cur.name}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                        row {cur.row} of {cur.totalRows}
+                      </ThemedText>
+                      <ProgressBar pct={pct} color={p.colorDeep} />
                     </View>
-                    <ThemedText type="smallBold" themeColor="sageDeep" style={styles.pct}>
-                      {Math.round(pct * 100)}%
-                    </ThemedText>
                   </CardLink>
+                  </View>
                 );
               })}
             </View>
@@ -287,31 +301,51 @@ const styles = StyleSheet.create({
   emptyCard: {
     gap: Spacing.one,
   },
-  projList: {
+  projGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  projRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
+  projCardWrap: {
+    width: '47%',
+  },
+  projCard: {
+    width: '100%',
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
-    padding: Spacing.three,
+    overflow: 'hidden',
+  },
+  projThumb: {
+    aspectRatio: 1,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    padding: Spacing.two,
+  },
+  projPhoto: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  // Over the corner of the picture, with its own backing so it stays readable on a pale photo —
+  // the same trick the project hero uses.
+  projPct: {
+    backgroundColor: 'rgba(74, 59, 56, 0.55)',
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 2,
+    overflow: 'hidden',
   },
   projInfo: {
-    flex: 1,
+    padding: Spacing.two,
     gap: Spacing.one,
   },
   projMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-  },
-  // Shrinks before the badge does: which section you're on matters less than what the project is.
-  projWhere: {
-    flexShrink: 1,
-  },
-  pct: {
-    flexShrink: 0,
+    flexWrap: 'wrap',
+    gap: Spacing.one,
   },
 });
