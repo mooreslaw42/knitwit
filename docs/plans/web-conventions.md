@@ -66,6 +66,17 @@ element that receives the style. Worth doing one screen first and looking at it 
 
 ### W4 — Layout, where a screen has two columns of content — **not built**
 
+Decided by survey, 2026-09-14, with "quite a lot of iPad users in browser" as the driving context:
+
+- **Breakpoint 1100px.** iPad portrait (820–834, or 1024 on the 13") keeps one column; every iPad
+  in landscape (1180–1366) gets two, as does desktop. Rotation is therefore a real layout change.
+- **Two columns of the same rows**, not master–detail. Master–detail is the better tablet idiom
+  and is deferred as its own piece, because detail screens are separate routes today and turning
+  them into panes has URL and back-button consequences worth thinking through on their own.
+- **The Counter scales up on a big screen and gains the chart beside it** — bigger number, bigger
+  button, chart in the space to the side rather than above. It stays centred.
+- **The stitch editor is in scope.**
+
 `MaxContentWidth` is 800px. On a 1500px display everything is a narrow ribbon with empty space
 either side. But the answer is not "make it wider" — a list of rows at 1400px is worse to read,
 not better. The answer is a second column only where there are genuinely two things to look at.
