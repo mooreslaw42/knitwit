@@ -92,3 +92,23 @@ export function restoreMessage(result: RestoreResult): string {
   if (result.status === 'empty') return 'That backup is empty — there is nothing in it to restore.';
   return '';
 }
+
+// ---------------------------------------------------------------------------
+// Getting the data out when the app itself is broken.
+//
+// A backup file is built by parsing the store, which is exactly what cannot be relied on when the
+// store is the thing that failed. This reads the bytes and asks no questions: not a restorable
+// backup, a rescue copy — something to keep, or to send on, before anyone is tempted to "clear site
+// data and try again", which is the one action that turns a bad morning into a lost year of work.
+
+export function rescueFilename(now = new Date()): string {
+  return `knitwit-rescue-${now.toISOString().slice(0, 10)}.json`;
+}
+
+export async function readRawStore(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(STORE_KEY);
+  } catch {
+    return null;
+  }
+}

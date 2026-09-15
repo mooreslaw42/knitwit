@@ -52,6 +52,10 @@ type KnitwitState = {
   // False until the saved state has been read back off the device. The UI waits on this so it
   // never flashes seed data before the user's real projects load.
   hasHydrated: boolean;
+  // Set when the saved data could not be read at all. The app still starts — it has to, or there
+  // is no way to reach the rescue — but it starts empty, and this is what tells the difference
+  // between "no work yet" and "your work is here and we cannot see it".
+  hydrationError: string | null;
   setHasHydrated: (value: boolean) => void;
 
   settings: UserSettings;
@@ -457,10 +461,44 @@ function clampSectionIndex(projects: Record<string, Project>, projectKey: string
   return index;
 }
 
+// What happens when the persisted store has been read — or could not be.
+//
+// Both arguments matter, and the second one used to be dropped. `state` is undefined when hydration
+// threw: corrupt storage, or a repair meeting a shape it did not expect. The old line was
+// `state?.setHasHydrated(true)`, so on that path nothing was set, `ready` in the root layout stayed
+// false, and the app sat on its loading screen for ever. The knitter's work was still on the disk,
+// whole; nothing said so, and the obvious thing to try next — clear the site data and reload — is
+// the one action that destroys it.
+//
+// So the flag is always set, written straight to the store rather than through a state that may not
+// exist, and the failure is kept for the screen that has to explain it.
+//
+// Exported because this is the branch that matters and the one hardest to reach through the
+// storage layer in a test.
+export function finishHydration(state: KnitwitState | undefined, error?: unknown): void {
+  if (error) {
+    // Hydration always fails during the server render — there is no `window` there, so no
+    // localStorage to read. That is normal and was harmless while this branch did nothing; writing
+    // state here is not, because persisting it reaches for the same missing localStorage and throws
+    // again, this time out of the render. Nothing on the server has data to lose or a knitter to
+    // tell, so leave it exactly as it was: unhydrated, rendering nothing, waiting for the client.
+    if (typeof window === 'undefined') return;
+
+    console.error('knitwit: could not read saved data', error);
+    useKnitwitStore.setState({
+      hasHydrated: true,
+      hydrationError: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  state?.setHasHydrated(true);
+}
+
 export const useKnitwitStore = create<KnitwitState>()(
   persist(
     (set, get) => ({
       hasHydrated: false,
+      hydrationError: null,
       setHasHydrated: (value) => set({ hasHydrated: value }),
 
       // Metric by default: the app's own defaults, the seed data and the reference mockup are all
@@ -1478,9 +1516,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         projectSeq: state.projectSeq,
       }),
 
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      },
+      onRehydrateStorage: () => finishHydration,
     },
   ),
 );

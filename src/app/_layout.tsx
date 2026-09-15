@@ -10,13 +10,20 @@ import {
   Nunito_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/nunito';
-import { DefaultTheme, Stack, ThemeProvider, usePathname } from 'expo-router';
+import {
+  DefaultTheme,
+  type ErrorBoundaryProps,
+  Stack,
+  ThemeProvider,
+  usePathname,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import { Colors } from '@/constants/theme';
+import { CrashScreen } from '@/components/crash-screen';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,10 +32,26 @@ SplashScreen.preventAutoHideAsync();
 // and needs the shared header so navigation stays reachable while editing.
 const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/calculator', '/account'];
 
+// Anything a screen throws while rendering lands here instead of taking the app down with it.
+//
+// Expo Router looks for this export by name. Without one, a render error unmounts the tree and
+// leaves a knitter staring at nothing, with no way to reach their data and every reason to start
+// deleting things.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <CrashScreen
+      title="Knitwit hit a snag"
+      detail={`${error.name}: ${error.message}\n\n${error.stack ?? ''}`}
+      onRetry={() => void retry()}
+    />
+  );
+}
+
 export default function RootLayout() {
   // Saved projects are read off the device asynchronously; hold the splash screen until they
   // land so the app never renders seed data over the user's real work.
   const hasHydrated = useKnitwitStore((state) => state.hasHydrated);
+  const hydrationError = useKnitwitStore((state) => state.hydrationError);
   const [fontsLoaded] = useFonts({
     Quicksand_500Medium,
     Quicksand_600SemiBold,
@@ -50,6 +73,16 @@ export default function RootLayout() {
 
   if (!ready) {
     return null;
+  }
+
+  // The saved data could not be read. The app is running and empty, which looks exactly like a
+  // fresh install — so say plainly that it is not one, before anyone tidies up.
+  if (hydrationError) {
+    return (
+      <ThemeProvider value={DefaultTheme}>
+        <CrashScreen title="Knitwit couldn’t read your saved data" detail={hydrationError} />
+      </ThemeProvider>
+    );
   }
 
   return (

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { projectToPattern } from '@/lib/project-to-pattern';
-import { useKnitwitStore } from '@/store/useKnitwitStore';
+import { finishHydration, useKnitwitStore } from '@/store/useKnitwitStore';
 
 type KnitwitStore = ReturnType<typeof useKnitwitStore.getState>;
 
@@ -1425,5 +1425,50 @@ describe('hydrating a store saved before notes split in two', () => {
     expect(state.projects.p.notes).toBe('project note');
     expect(state.projects.p.sections[0].notes).toBe('section note');
     expect(state.projects.p.sections[0].rowNotes).toEqual(oldNotes);
+  });
+});
+
+// The failure that could quietly cost someone a year of work: storage that cannot be read used to
+// leave the app on its loading screen for ever, looking broken while the data sat intact on disk.
+//
+// Tested at the callback rather than through the storage layer, because the AsyncStorage jest mock
+// does not reject the way the real one does — so driving it from a corrupt string would test the
+// mock, not this.
+describe('finishing hydration when the saved data cannot be read', () => {
+  afterEach(() => {
+    useKnitwitStore.setState({ hydrationError: null, hasHydrated: true });
+  });
+
+  it('still finishes starting up, so there is something to rescue the data from', () => {
+    useKnitwitStore.setState({ hasHydrated: false, hydrationError: null });
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    finishHydration(undefined, new SyntaxError('Unexpected token h in JSON at position 2'));
+
+    // Both halves matter. Without the first the root layout never renders at all; without the
+    // second it renders an empty app indistinguishable from a fresh install.
+    expect(useKnitwitStore.getState().hasHydrated).toBe(true);
+    expect(useKnitwitStore.getState().hydrationError).toMatch(/Unexpected token/);
+    quiet.mockRestore();
+  });
+
+  it('describes a thrown value that is not an Error', () => {
+    useKnitwitStore.setState({ hasHydrated: false, hydrationError: null });
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    finishHydration(undefined, 'storage unavailable');
+
+    expect(useKnitwitStore.getState().hasHydrated).toBe(true);
+    expect(useKnitwitStore.getState().hydrationError).toBe('storage unavailable');
+    quiet.mockRestore();
+  });
+
+  it('leaves no error behind on an ordinary start', () => {
+    useKnitwitStore.setState({ hasHydrated: false, hydrationError: null });
+
+    finishHydration(useKnitwitStore.getState());
+
+    expect(useKnitwitStore.getState().hasHydrated).toBe(true);
+    expect(useKnitwitStore.getState().hydrationError).toBeNull();
   });
 });
