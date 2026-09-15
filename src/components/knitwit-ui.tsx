@@ -138,16 +138,35 @@ export function PillButton({
   );
 }
 
-export function FormField({
-  label,
-  style,
-  ...props
-}: TextInputProps & { label: string }) {
-  return (
-    <View style={styles.field}>
+// A field's label, with room beside it for a mark saying where the value came from. Shared so the
+// three field components put the badge in the same place rather than each inventing a spot.
+function FieldLabel({ label, badge }: { label: string; badge?: React.ReactNode }) {
+  if (!badge) {
+    return (
       <ThemedText type="smallBold" themeColor="inkSoft">
         {label}
       </ThemedText>
+    );
+  }
+  return (
+    <View style={styles.labelRow}>
+      <ThemedText type="smallBold" themeColor="inkSoft">
+        {label}
+      </ThemedText>
+      {badge}
+    </View>
+  );
+}
+
+export function FormField({
+  label,
+  badge,
+  style,
+  ...props
+}: TextInputProps & { label: string; badge?: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <FieldLabel label={label} badge={badge} />
       <TextInput
         placeholderTextColor={Colors.inkSoft}
         style={[styles.input, style]}
@@ -159,20 +178,20 @@ export function FormField({
 
 export function SelectField<T extends string>({
   label,
+  badge,
   options,
   value,
   onChange,
 }: {
   label: string;
+  badge?: React.ReactNode;
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
 }) {
   return (
     <View style={styles.field}>
-      <ThemedText type="smallBold" themeColor="inkSoft">
-        {label}
-      </ThemedText>
+      <FieldLabel label={label} badge={badge} />
       <View style={styles.selectBox}>
         <Picker<T>
           selectedValue={value}
@@ -283,6 +302,12 @@ export function DeleteButton({ onPress }: { onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    overflow: 'visible',
+  },
   card: {
     backgroundColor: Colors.white,
     borderRadius: Radii.large,
@@ -336,8 +361,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
+  // Visible so a source badge's tooltip can hang past the bottom of the field it belongs to.
   field: {
     gap: Spacing.one,
+    overflow: 'visible',
   },
   input: InputStyle,
   selectBox: {

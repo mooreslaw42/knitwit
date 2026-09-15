@@ -25,11 +25,13 @@ type Window = { width: number; height: number; unit: LengthUnit };
 // either lose the 1.6% difference or make them do the arithmetic themselves.
 export function GaugeField({
   label = 'Gauge',
+  badge,
   hint,
   value,
   onChange,
 }: {
   label?: string;
+  badge?: React.ReactNode;
   hint?: string;
   value: Gauge | null;
   onChange: (gauge: Gauge | null) => void;
@@ -67,9 +69,18 @@ export function GaugeField({
 
   return (
     <View style={styles.wrap}>
-      <ThemedText type="smallBold" themeColor="inkSoft">
-        {label}
-      </ThemedText>
+      {badge ? (
+        <View style={styles.labelRow}>
+          <ThemedText type="smallBold" themeColor="inkSoft">
+            {label}
+          </ThemedText>
+          {badge}
+        </View>
+      ) : (
+        <ThemedText type="smallBold" themeColor="inkSoft">
+          {label}
+        </ThemedText>
+      )}
       {hint ? (
         <ThemedText type="small" themeColor="inkSoft">
           {hint}
@@ -125,7 +136,13 @@ export function GaugeField({
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: Spacing.two },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    overflow: 'visible',
+  },
+  wrap: { gap: Spacing.two, overflow: 'visible' },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +10,7 @@ import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage, takePhoto } from '@/lib/pick-image';
+import { SourceBadge, type FieldSource } from '@/components/source-badge';
 import {
   lookUpYarn,
   missingCount,
@@ -24,20 +25,6 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
 const STEPS = ['Photo', 'Identity', 'Yarn', 'Care', 'Craft'] as const;
-
-// What each field is called when the screen reports back what the band gave up.
-const FIELD_LABELS: Partial<Record<keyof Material, string>> = {
-  brand: 'brand',
-  colorName: 'colour',
-  colorLot: 'dye lot',
-  composition: 'composition',
-  weight: 'weight',
-  washing: 'care',
-  grams: 'grams',
-  meters: 'meters',
-  thickness: 'needle size',
-  gauge: 'tension',
-};
 
 const BLANK: Material = {
   brand: '',
@@ -80,16 +67,27 @@ export default function NewMaterialWizardScreen() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<Material>(BLANK);
   const [reading, setReading] = useState(false);
-  // What the last scan produced, so step 1 can say what it found rather than leaving the knitter
-  // to spot the difference across four steps of form.
-  const [scan, setScan] = useState<{ found: string[]; confident: boolean } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
-  // What the search filled, and what it thought it was looking at. Kept apart from `scan` so the
-  // two sources of a prefilled form stay distinguishable to the knitter.
-  const [lookup, setLookup] = useState<{ found: boolean; filled: string[]; name: string } | null>(
-    null,
-  );
+  // Where each filled value came from, marked on the field itself rather than listed in prose
+  // above the form. A knitter checking a prefilled form needs to know which parts are theirs at
+  // the moment they look at each one, not in a summary four steps earlier.
+  const [sources, setSources] = useState<Partial<Record<keyof Material, FieldSource>>>({});
+  // Only for the messages that are about the whole attempt rather than any one field: a photo too
+  // blurry to trust, or a yarn the search could not identify.
+  const [unsure, setUnsure] = useState(false);
+  const [noMatch, setNoMatch] = useState(false);
+  const [matchedName, setMatchedName] = useState('');
+
+  // The form as last committed, readable after an await.
+  //
+  // A search takes seconds, and in those seconds the knitter may type into the very field being
+  // looked up — so the merge has to decide against the form as it is when the answer lands, not as
+  // it was when the button was pressed. Reading `form` from the closure would use the older one.
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
   // Photograph the band, read it, and drop whatever it says into the form. Everything stays
   // editable: this is a head start, not an answer.
@@ -108,10 +106,12 @@ export default function NewMaterialWizardScreen() {
     try {
       const result = await readYarnLabel(picked.dataUrl);
       setForm((f) => ({ ...f, ...result.values }));
-      setScan({
-        found: result.filled.map((k) => FIELD_LABELS[k] ?? k),
-        confident: result.confident,
+      setSources((prev) => {
+        const next = { ...prev };
+        for (const key of result.filled) next[key] = 'band';
+        return next;
       });
+      setUnsure(!result.confident);
       setStep(1);
     } catch (error) {
       setScanError(
@@ -129,21 +129,33 @@ export default function NewMaterialWizardScreen() {
     try {
       const wanted = missingFields(form);
       const result = await lookUpYarn(form.brand, form.colorName, wanted);
-      setForm((f) => {
-        const next = { ...f };
-        for (const [key, value] of Object.entries(result.values) as [keyof Material, never][]) {
-          // Blanks only, checked here as well as asked for there: between asking and answering the
-          // knitter may have typed the very field being looked up.
-          const current = key === 'gauge' ? f.gauge : String(f[key] ?? '').trim();
-          if (!current) next[key] = value;
+
+      // Decided in one pass against the current form, so the values written and the fields marked
+      // can never disagree. Working it out inside a setForm updater looked tidier and was wrong:
+      // the updater runs later, so the list of what had been written was still empty by the time
+      // the marks were set, and no web badge ever appeared.
+      const latest = formRef.current;
+      const merged = { ...latest };
+      const written: (keyof Material)[] = [];
+      for (const [key, value] of Object.entries(result.values) as [keyof Material, never][]) {
+        // Blanks only, checked here as well as asked for there.
+        const current = key === 'gauge' ? latest.gauge : String(latest[key] ?? '').trim();
+        if (!current) {
+          merged[key] = value;
+          written.push(key);
         }
+      }
+
+      setForm(merged);
+      // Only what was actually written gets marked. A field the search returned but the merge
+      // skipped is the knitter's own, and badging it would be a lie.
+      setSources((prev) => {
+        const next = { ...prev };
+        for (const key of written) next[key] = 'web';
         return next;
       });
-      setLookup({
-        found: result.found,
-        filled: result.filled.map((k) => FIELD_LABELS[k] ?? k),
-        name: result.matchedName,
-      });
+      setNoMatch(!result.found);
+      setMatchedName(result.matchedName);
     } catch (error) {
       setScanError(
         error instanceof Error ? error.message : "Couldn't look that yarn up. Fill the rest in yourself.",
@@ -153,8 +165,28 @@ export default function NewMaterialWizardScreen() {
     }
   };
 
-  const set = <K extends keyof Material>(key: K, value: Material[K]) =>
+  const set = <K extends keyof Material>(key: K, value: Material[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
+    // Typing over a value makes it the knitter's, so the mark saying where it came from goes.
+    setSources((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  // The mark for a field, or nothing when the knitter put the value there themselves.
+  const badgeFor = (key: keyof Material) => {
+    const source = sources[key];
+    if (!source) return undefined;
+    return (
+      <SourceBadge
+        source={source}
+        detail={source === 'web' && matchedName ? `The search matched ${matchedName}.` : undefined}
+      />
+    );
+  };
 
   const isLast = step === STEPS.length - 1;
   const stillMissing = missingCount(missingFields(form));
@@ -255,19 +287,15 @@ export default function NewMaterialWizardScreen() {
           {step === 1 && (
             <>
               <ThemedText type="subtitle">Which yarn is it?</ThemedText>
-              {/* Says what came off the band and how much to trust it. A prefilled form that never
-                  explains itself leaves the knitter unsure which values are theirs. */}
-              {scan ? (
-                <View style={[styles.scanNote, !scan.confident && styles.scanNoteUnsure]}>
-                  <ThemedText type="smallBold" themeColor={scan.confident ? 'sageDeep' : 'coralDeep'}>
-                    {scan.found.length > 0
-                      ? `Read from the band: ${scan.found.join(', ')}.`
-                      : 'Nothing could be read from that photo.'}
+              {/* The badges beside each field say what came from where. This is only for the
+                  thing no single field can say: that the photo as a whole was hard to read. */}
+              {unsure ? (
+                <View style={[styles.scanNote, styles.scanNoteUnsure]}>
+                  <ThemedText type="smallBold" themeColor="coralDeep">
+                    That photo was hard to read
                   </ThemedText>
                   <ThemedText type="small" themeColor="inkSoft">
-                    {scan.confident
-                      ? 'Check it as you go — everything here is editable.'
-                      : 'The photo was hard to read, so check every field carefully.'}
+                    Check every marked field carefully, or retake the photo straighter on.
                   </ThemedText>
                 </View>
               ) : (
@@ -296,26 +324,21 @@ export default function NewMaterialWizardScreen() {
                 )
               ) : null}
 
-              {lookup ? (
-                <View style={[styles.scanNote, !lookup.found && styles.scanNoteUnsure]}>
-                  <ThemedText
-                    type="smallBold"
-                    themeColor={lookup.found ? 'sageDeep' : 'coralDeep'}>
-                    {lookup.found && lookup.filled.length > 0
-                      ? `From the web, on ${lookup.name}: ${lookup.filled.join(', ')}.`
-                      : lookup.found
-                        ? `Found ${lookup.name}, but it added nothing new.`
-                        : "Couldn't find that yarn — the name may be too general."}
+              {noMatch ? (
+                <View style={[styles.scanNote, styles.scanNoteUnsure]}>
+                  <ThemedText type="smallBold" themeColor="coralDeep">
+                    Couldn&apos;t find that yarn
                   </ThemedText>
                   <ThemedText type="small" themeColor="inkSoft">
-                    {lookup.found
-                      ? 'From a search, not from your band — worth a glance. The dye lot and price are never looked up.'
-                      : 'Try the full name, maker and range together, like “DROPS Baby Merino”.'}
+                    The name may be too general. Try the maker and range together, like “DROPS Baby
+                    Merino”.
                   </ThemedText>
                 </View>
               ) : null}
+
               <FormField
                 label="Brand"
+                badge={badgeFor('brand')}
                 value={form.brand}
                 maxLength={MaxNameLength}
                 onChangeText={(v) => set('brand', v)}
@@ -323,6 +346,7 @@ export default function NewMaterialWizardScreen() {
               />
               <FormField
                 label="Color name"
+                badge={badgeFor('colorName')}
                 value={form.colorName}
                 maxLength={MaxNameLength}
                 onChangeText={(v) => set('colorName', v)}
@@ -330,12 +354,14 @@ export default function NewMaterialWizardScreen() {
               />
               <FormField
                 label="Dye lot / batch #"
+                badge={badgeFor('colorLot')}
                 value={form.colorLot}
                 onChangeText={(v) => set('colorLot', v)}
                 placeholder="e.g. L28304"
               />
               <FormField
                 label="Price / skein (€)"
+                badge={badgeFor('price')}
                 value={form.price}
                 onChangeText={(v) => set('price', v)}
                 keyboardType="decimal-pad"
@@ -352,18 +378,21 @@ export default function NewMaterialWizardScreen() {
               </ThemedText>
               <FormField
                 label="Material"
+                badge={badgeFor('composition')}
                 value={form.composition}
                 onChangeText={(v) => set('composition', v)}
                 placeholder="e.g. 100% wool, or 80/20 wool/nylon"
               />
               <SelectField
                 label="Yarn weight"
+                badge={badgeFor('weight')}
                 options={WEIGHT_OPTIONS}
                 value={form.weight}
                 onChange={(v) => set('weight', v)}
               />
               <FormField
                 label="Grams"
+                badge={badgeFor('grams')}
                 value={form.grams}
                 onChangeText={(v) => set('grams', v)}
                 keyboardType="numeric"
@@ -371,6 +400,7 @@ export default function NewMaterialWizardScreen() {
               />
               <FormField
                 label="Meters"
+                badge={badgeFor('meters')}
                 value={form.meters}
                 onChangeText={(v) => set('meters', v)}
                 keyboardType="numeric"
@@ -387,6 +417,7 @@ export default function NewMaterialWizardScreen() {
               </ThemedText>
               <SelectField
                 label="Washing"
+                badge={badgeFor('washing')}
                 options={WASHING_OPTIONS}
                 value={form.washing}
                 onChange={(v) => set('washing', v)}
@@ -400,6 +431,7 @@ export default function NewMaterialWizardScreen() {
               />
               <FormField
                 label="Product link (optional)"
+                badge={badgeFor('link')}
                 value={form.link}
                 onChangeText={(v) => set('link', v)}
                 placeholder="https://…"
@@ -420,12 +452,14 @@ export default function NewMaterialWizardScreen() {
                 onChange={(v) => set('craftType', v)}
               />
               <SelectField
+                badge={badgeFor('thickness')}
                 label={form.craftType === 'crochet' ? 'Hook size' : 'Needle size'}
                 options={toolSizeOptions(form.thickness, form.craftType)}
                 value={form.thickness}
                 onChange={(v) => set('thickness', v)}
               />
               <GaugeField
+                badge={badgeFor('gauge')}
                 value={form.gauge}
                 onChange={(g) => set('gauge', g)}
                 hint="What the ball band says, or what you got on a swatch."
