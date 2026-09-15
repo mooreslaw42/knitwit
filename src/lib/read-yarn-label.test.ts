@@ -1,4 +1,9 @@
-import { readYarnLabel } from '@/lib/read-yarn-label';
+import {
+  lookUpYarn,
+  missingCount,
+  missingFields,
+  readYarnLabel,
+} from '@/lib/read-yarn-label';
 
 jest.mock('@/lib/edge-function', () => ({
   invokeEdgeFunction: jest.fn(),
@@ -111,6 +116,107 @@ describe('reading a ball band into a material', () => {
     expect(invokeEdgeFunction).toHaveBeenCalledWith(
       'parse-pattern',
       { task: 'material', image: PHOTO },
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
+  });
+});
+
+describe('working out what is still missing', () => {
+  const blank = {
+    weight: '',
+    grams: '',
+    meters: '',
+    composition: '',
+    thickness: '',
+    washing: '',
+    link: '',
+    gauge: null,
+  };
+
+  it('asks for everything when the form is empty', () => {
+    expect(missingFields(blank)).toEqual([
+      'weight',
+      'grams',
+      'meters',
+      'composition',
+      'thickness',
+      'washing',
+      'link',
+      'gaugeStitches',
+      'gaugeRows',
+      'gaugeSize',
+    ]);
+  });
+
+  it('leaves out what the band already gave', () => {
+    const fields = missingFields({ ...blank, grams: '50', composition: '100% wool' });
+    expect(fields).not.toContain('grams');
+    expect(fields).not.toContain('composition');
+    expect(fields).toContain('meters');
+  });
+
+  it('treats a gauge of nothing as missing and a real one as present', () => {
+    const empty = { stitches: 0, rows: 0, width: 10, height: 10, unit: 'cm' as const };
+    expect(missingFields({ ...blank, gauge: empty })).toContain('gaugeStitches');
+    expect(missingFields({ ...blank, gauge: { ...empty, stitches: 24 } })).not.toContain(
+      'gaugeStitches',
+    );
+  });
+
+  // Never price, never dye lot: a dye lot belongs to one skein and a price to one shop.
+  it('never asks for the two fields a search cannot know', () => {
+    const fields = missingFields(blank);
+    expect(fields).not.toContain('price');
+    expect(fields).not.toContain('colorLot');
+  });
+
+  it('counts the three gauge keys as the one thing a knitter sees', () => {
+    expect(missingCount(['grams', 'gaugeStitches', 'gaugeRows', 'gaugeSize'])).toBe(2);
+    expect(missingCount(['grams', 'meters'])).toBe(2);
+    expect(missingCount([])).toBe(0);
+  });
+});
+
+describe('looking a yarn up', () => {
+  beforeEach(() => invokeEdgeFunction.mockReset());
+
+  it('keeps what the search found', async () => {
+    invokeEdgeFunction.mockResolvedValueOnce({
+      material: { grams: '50', meters: '175', composition: '100% merino', thickness: '3' },
+      found: true,
+      matchedName: 'DROPS Baby Merino',
+    });
+
+    const result = await lookUpYarn('DROPS Baby Merino', '', ['grams', 'meters']);
+
+    expect(result.found).toBe(true);
+    expect(result.matchedName).toBe('DROPS Baby Merino');
+    expect(result.values.meters).toBe('175');
+  });
+
+  // The server's guard already refuses a mismatch; nothing should arrive to be merged.
+  it('brings back nothing when the search matched no yarn', async () => {
+    invokeEdgeFunction.mockResolvedValueOnce({ material: {}, found: false, matchedName: '' });
+    const result = await lookUpYarn('DROPS Design', '', ['grams']);
+    expect(result.found).toBe(false);
+    expect(result.values).toEqual({});
+  });
+
+  it('strips a unit off a needle size given as a range', async () => {
+    invokeEdgeFunction.mockResolvedValueOnce({
+      material: { thickness: '3.5-4 mm' },
+      found: true,
+      matchedName: 'Rowan Felted Tweed',
+    });
+    expect((await lookUpYarn('Rowan Felted Tweed', '', ['thickness'])).values.thickness).toBe('3.5');
+  });
+
+  it('sends an enrich task with only the fields asked for', async () => {
+    invokeEdgeFunction.mockResolvedValueOnce({ material: {}, found: false });
+    await lookUpYarn('Rowan Felted Tweed', 'Ancient', ['grams', 'meters']);
+    expect(invokeEdgeFunction).toHaveBeenCalledWith(
+      'parse-pattern',
+      { task: 'enrich', brand: 'Rowan Felted Tweed', colorName: 'Ancient', missing: ['grams', 'meters'] },
       expect.objectContaining({ timeoutMs: expect.any(Number) }),
     );
   });

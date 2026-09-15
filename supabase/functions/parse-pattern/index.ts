@@ -14,6 +14,12 @@ import {
   SPANS,
   STITCH_TYPES,
   type DocumentRequest,
+  buildEnrichQuery,
+  ENRICH_SCHEMA,
+  ENRICH_SYSTEM_PROMPT,
+  ENRICHABLE_FIELDS,
+  type EnrichRequest,
+  nameLooksLikeMatch,
   MATERIAL_SCHEMA,
   MATERIAL_SYSTEM_PROMPT,
   type MaterialRequest,
@@ -46,6 +52,12 @@ const MAX_OUTPUT_TOKENS = 8_000;
 const MAX_IMAGE_CHARS = 1_800_000;
 // The answer is a dozen short strings. Room to think, not room to ramble.
 const MAX_MATERIAL_OUTPUT_TOKENS = 2_000;
+// Five results is GreenPT's default and measured enough: the snippets alone carried composition,
+// ball weight and weight class for a real yarn, and the endpoint itself advises against fetching
+// whole pages. A scraped page is five to ten times the tokens for the same answer.
+const SEARCH_RESULTS = 5;
+const MAX_SEARCH_CHARS = 12_000;
+const MAX_NAME_CHARS = 120;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -286,6 +298,116 @@ function validateMaterialRequest(body: Record<string, unknown>): MaterialRequest
   };
 }
 
+// A web search, straight to the tool endpoint. Not behind the provider seam: that seam is about
+// "a model that returns JSON matching a schema", and this returns neither a model's words nor a
+// schema. Keeping it separate leaves the seam meaning one thing.
+async function searchTheWeb(query: string, apiKey: string): Promise<string> {
+  const response = await fetch('https://api.greenpt.ai/v1/tools/websearch', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, count: SEARCH_RESULTS, language: 'en' }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    const error = new Error(`Search returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+    (error as { status?: number }).status = response.status;
+    throw error;
+  }
+  return (await response.text()).slice(0, MAX_SEARCH_CHARS);
+}
+
+function validateEnrichRequest(body: Record<string, unknown>): EnrichRequest {
+  const brand = typeof body.brand === 'string' ? body.brand.trim().slice(0, MAX_NAME_CHARS) : '';
+  const colorName =
+    typeof body.colorName === 'string' ? body.colorName.trim().slice(0, MAX_NAME_CHARS) : '';
+  // Without a yarn name there is nothing to search for, and a search on a colour alone returns
+  // paint charts.
+  if (!brand && !colorName) throw new BadRequest('Name the yarn before looking it up.');
+
+  const asked = Array.isArray(body.missing) ? body.missing : [];
+  // Only fields this endpoint is allowed to fill. Price and dye lot are not among them by design
+  // (see ENRICHABLE_FIELDS), so asking for them here quietly gets nothing rather than an error.
+  const missing = ENRICHABLE_FIELDS.filter((field) => asked.includes(field));
+  if (missing.length === 0) throw new BadRequest('Nothing left to look up.');
+
+  return {
+    task: 'enrich',
+    brand,
+    colorName,
+    missing: [...missing],
+    model: typeof body.model === 'string' ? body.model : undefined,
+  };
+}
+
+async function handleEnrich(req: EnrichRequest, provider: ModelProvider): Promise<Response> {
+  const apiKey = Deno.env.get('GREENPT_API_KEY');
+  if (!apiKey) return json({ error: 'Looking yarn up is not configured on this server.' }, 503);
+
+  const query = buildEnrichQuery(req.brand, req.colorName, req.missing);
+  const results = await searchTheWeb(query, apiKey);
+
+  const result = await provider.complete({
+    system: ENRICH_SYSTEM_PROMPT,
+    user: [
+      `Yarn: ${[req.brand, req.colorName].filter(Boolean).join(' — ')}`,
+      `Fields still missing: ${req.missing.join(', ')}`,
+      '',
+      'Search results:',
+      results,
+    ].join('\n'),
+    schema: ENRICH_SCHEMA as unknown as Record<string, unknown>,
+    model: req.model ?? provider.defaultModel,
+    maxTokens: MAX_MATERIAL_OUTPUT_TOKENS,
+  });
+
+  const read = JSON.parse(result.text);
+  if (typeof read !== 'object' || read === null || Array.isArray(read)) {
+    throw new Error('Model returned something that is not a yarn.');
+  }
+
+  // Check the claim before passing it on. `found` is the model's own opinion and it was wrong in
+  // exactly the way that matters: asked about "DROPS Design" it answered confidently about a
+  // different DROPS yarn. Making it name what it matched turns that from an opinion into something
+  // that can be tested.
+  const matchedName = typeof (read as { matchedName?: unknown }).matchedName === 'string'
+    ? ((read as { matchedName: string }).matchedName)
+    : '';
+  const matched =
+    (read as { found?: unknown }).found === true && nameLooksLikeMatch(req.brand, matchedName);
+
+  // Asked for is not the same as allowed. The model answers the whole schema, so anything the
+  // caller did not ask about is dropped here rather than travelling back as a value it never
+  // requested and would have no reason to check.
+  const filled: Record<string, unknown> = {};
+  if (matched) {
+    for (const field of req.missing) filled[field] = (read as Record<string, unknown>)[field];
+  }
+
+  console.log(
+    JSON.stringify({
+      event: 'parse-pattern',
+      task: 'enrich',
+      provider: provider.name,
+      model: result.model,
+      asked: req.missing.length,
+      found: (read as { found?: unknown }).found === true,
+      matched,
+      matched_name: matchedName.slice(0, 80),
+      search_chars: results.length,
+      usage: result.usage,
+    }),
+  );
+
+  return json({
+    model: result.model,
+    material: filled,
+    found: matched,
+    matchedName,
+    usage: result.usage,
+  });
+}
+
 async function handleMaterial(req: MaterialRequest, provider: ModelProvider): Promise<Response> {
   const result = await provider.complete({
     system: MATERIAL_SYSTEM_PROMPT,
@@ -366,6 +488,25 @@ Deno.serve(async (request: Request): Promise<Response> => {
   } catch (error) {
     console.error('provider unavailable', error);
     return json({ error: 'Pattern reading is not configured on this server.' }, 503);
+  }
+
+  if (task === 'enrich') {
+    let req: EnrichRequest;
+    try {
+      req = validateEnrichRequest(body as Record<string, unknown>);
+    } catch (error) {
+      return json(
+        { error: error instanceof BadRequest ? error.message : 'Malformed request.' },
+        400,
+      );
+    }
+    try {
+      return await handleEnrich(req, provider);
+    } catch (error) {
+      console.error('parse-pattern enrich failed', error);
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      return json({ error: `Couldn't look that yarn up: ${message}` }, statusOf(error));
+    }
   }
 
   if (task === 'material') {

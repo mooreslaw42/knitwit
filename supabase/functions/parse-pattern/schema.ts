@@ -466,7 +466,13 @@ export type MaterialRequest = {
 export const MATERIAL_SCHEMA = {
   type: 'object',
   properties: {
-    brand: { type: 'string', description: 'Manufacturer or brand. Empty string if not visible.' },
+    brand: {
+      type: 'string',
+      description:
+        "The yarn's full name: manufacturer and range together, as you would say it out loud — " +
+        '"DROPS Baby Merino", "Rowan Felted Tweed". The maker alone is not enough to identify a ' +
+        'yarn, and the range is usually the largest words on the band. Empty string if not visible.',
+    },
     colorName: { type: 'string', description: 'Colour name or number as printed.' },
     colorLot: {
       type: 'string',
@@ -491,6 +497,12 @@ export const MATERIAL_SCHEMA = {
     composition: {
       type: 'string',
       description: 'Fibre content as printed, e.g. "75% wool, 25% nylon".',
+    },
+    price: {
+      type: 'string',
+      description:
+        'Price, only if it is actually on the band or a shop sticker stuck to it. Keep the currency ' +
+        'symbol as printed, e.g. "\u20ac4,95". Empty string if no price is visible — never estimate one.',
     },
     thickness: {
       type: 'string',
@@ -523,6 +535,7 @@ export const MATERIAL_SCHEMA = {
     'brand',
     'colorName',
     'colorLot',
+    'price',
     'weight',
     'grams',
     'meters',
@@ -558,3 +571,135 @@ export const MATERIAL_SYSTEM_PROMPT = [
   '- If the tension is given per 4 inches, convert it to a 10 cm square.',
   '- Set confident to false if the band is blurred, angled away, or mostly out of frame.',
 ].join('\n');
+
+// ---------------------------------------------------------------------------
+// Filling the gaps a band left, from a web search.
+//
+// Two fields are deliberately absent and must stay absent.
+//
+// The **dye lot** is a property of one physical batch. No page on the internet knows which skein is
+// in the knitter's hand, so anything found for it would be invention dressed as a fact — and the
+// dye lot is the one field whose whole purpose is matching a second skein to the first. A wrong one
+// is worse than none.
+//
+// The **price** varies by shop, country and week. A number that looks authoritative and is wrong by
+// half is worse in a stash than a blank.
+//
+// Both come from the photograph or not at all.
+
+export const ENRICHABLE_FIELDS = [
+  'weight',
+  'grams',
+  'meters',
+  'composition',
+  'thickness',
+  'washing',
+  'gaugeStitches',
+  'gaugeRows',
+  'gaugeSize',
+  'link',
+] as const;
+
+export type EnrichRequest = {
+  task: 'enrich';
+  brand: string;
+  colorName: string;
+  // Which fields the band did not give up. Only these are asked for and only these are returned.
+  missing: string[];
+  model?: string;
+};
+
+export const ENRICH_SCHEMA = {
+  type: 'object',
+  properties: {
+    weight: {
+      type: 'string',
+      enum: [...YARN_WEIGHT_CODES, ''],
+      description:
+        'Craft Yarn Council weight, from the stitches per 10 cm if the sources state a tension: ' +
+        '33-40 = 0, 27-32 = 1, 23-26 = 2, 21-24 = 3, 16-20 = 4, 12-15 = 5, 7-11 = 6, under 7 = 7.',
+    },
+    grams: { type: 'string', description: 'Ball weight in grams, digits only.' },
+    meters: { type: 'string', description: 'Ball length in metres, digits only. Convert from yards.' },
+    composition: { type: 'string', description: 'Fibre content, e.g. "100% merino wool".' },
+    thickness: { type: 'string', description: 'Recommended needle size in mm, digits only.' },
+    washing: { type: 'string', enum: [...WASHING_CODES, ''] },
+    gaugeStitches: { type: 'string', description: 'Stitches per tension square, digits only.' },
+    gaugeRows: { type: 'string', description: 'Rows per tension square, digits only.' },
+    gaugeSize: { type: 'string', description: 'Side of the tension square in cm, digits only.' },
+    link: {
+      type: 'string',
+      description:
+        "The manufacturer's own page for this yarn, or its Ravelry yarn-library page. One URL, " +
+        'copied exactly from the search results — never assembled or guessed.',
+    },
+    matchedName: {
+      type: 'string',
+      description:
+        'The exact name of the yarn the sources you used are describing, copied from them. This is ' +
+        'checked against the yarn that was asked about, so copy what the source says rather than ' +
+        'repeating the question back.',
+    },
+    found: {
+      type: 'boolean',
+      description: 'False if the sources are about a different yarn, or say nothing useful.',
+    },
+  },
+  required: [...ENRICHABLE_FIELDS, 'matchedName', 'found'],
+  additionalProperties: false,
+} as const;
+
+export const ENRICH_SYSTEM_PROMPT = [
+  'You are given search results about one yarn and you report only what those results actually',
+  'state about it. You are filling gaps a ball band left blank.',
+  '',
+  'Rules:',
+  '- Report only what the sources support. An empty string means the sources do not say. Leaving a',
+  '  field empty is always better than filling it with a plausible guess.',
+  '- The sources must be about this yarn. Shops list many yarns on one page and search engines',
+  '  return near-misses; if the results are about a different yarn from the same brand, set found',
+  '  to false and return empty strings rather than reporting the wrong yarn.',
+  '- Colourways of one yarn can differ in length. If the results give a range or disagree, leave',
+  '  meters empty rather than picking one.',
+  '- Every numeric field is digits only, with units stripped: "50 g" is "50", "3 mm" is "3".',
+  '- Never report a price and never report a dye lot, whatever the sources say. A dye lot belongs',
+  '  to one physical skein and a price belongs to one shop on one day; neither is knowable here.',
+].join('\n');
+
+// A tight product query. Deriving the terms from the field names put words like "washing" and
+// "link" into the search, which described the question rather than the yarn; a fixed set of the
+// things a yarn page always states finds the page itself, and the page carries the rest.
+//
+// The colour is left out on purpose. It varies by skein and narrows the search to one shop's
+// listing of one colourway, when what is wanted is the yarn's own page.
+export function buildEnrichQuery(brand: string, _colorName: string, _missing: string[]): string {
+  return `${brand} yarn composition weight meters gauge needle size`.replace(/\s+/g, ' ').trim();
+}
+
+// Does the yarn the sources describe look like the yarn that was asked about?
+//
+// The guard exists because the failure it catches is silent and confident. Asked about "DROPS
+// Design" with no range, the model found real pages about real DROPS yarns and reported one of
+// them — 50% cotton, 100m — as though it were the merino in the knitter's hand. Every word of it
+// was true about some yarn and wrong about this one, and nothing in the answer looked doubtful.
+//
+// So the model must name what it matched, and that name has to carry the distinguishing words of
+// what was asked. Words of three letters or fewer are ignored, and the maker's name alone is not
+// enough: "DROPS" matching "DROPS" is what let the wrong yarn through.
+export function nameLooksLikeMatch(asked: string, matched: string): boolean {
+  const words = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+
+  const wanted = words(asked);
+  if (wanted.length === 0) return false;
+  const got = new Set(words(matched));
+  const hits = wanted.filter((w) => got.has(w));
+
+  // Every distinguishing word has to land. With one word to go on there is nothing to distinguish,
+  // so a single-word name is not enough to accept a match on.
+  return wanted.length > 1 && hits.length === wanted.length;
+}

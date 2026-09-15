@@ -10,7 +10,12 @@ import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage, takePhoto } from '@/lib/pick-image';
-import { readYarnLabel } from '@/lib/read-yarn-label';
+import {
+  lookUpYarn,
+  missingCount,
+  missingFields,
+  readYarnLabel,
+} from '@/lib/read-yarn-label';
 import { WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
@@ -79,6 +84,12 @@ export default function NewMaterialWizardScreen() {
   // to spot the difference across four steps of form.
   const [scan, setScan] = useState<{ found: string[]; confident: boolean } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  // What the search filled, and what it thought it was looking at. Kept apart from `scan` so the
+  // two sources of a prefilled form stay distinguishable to the knitter.
+  const [lookup, setLookup] = useState<{ found: boolean; filled: string[]; name: string } | null>(
+    null,
+  );
 
   // Photograph the band, read it, and drop whatever it says into the form. Everything stays
   // editable: this is a head start, not an answer.
@@ -110,10 +121,43 @@ export default function NewMaterialWizardScreen() {
       setReading(false);
     }
   };
+  // Fills the blanks the band left, from a web search. Never touches a field that already has
+  // something in it, so a value read off the band cannot be argued with by a search result.
+  const lookUp = async () => {
+    setScanError(null);
+    setLookingUp(true);
+    try {
+      const wanted = missingFields(form);
+      const result = await lookUpYarn(form.brand, form.colorName, wanted);
+      setForm((f) => {
+        const next = { ...f };
+        for (const [key, value] of Object.entries(result.values) as [keyof Material, never][]) {
+          // Blanks only, checked here as well as asked for there: between asking and answering the
+          // knitter may have typed the very field being looked up.
+          const current = key === 'gauge' ? f.gauge : String(f[key] ?? '').trim();
+          if (!current) next[key] = value;
+        }
+        return next;
+      });
+      setLookup({
+        found: result.found,
+        filled: result.filled.map((k) => FIELD_LABELS[k] ?? k),
+        name: result.matchedName,
+      });
+    } catch (error) {
+      setScanError(
+        error instanceof Error ? error.message : "Couldn't look that yarn up. Fill the rest in yourself.",
+      );
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
   const set = <K extends keyof Material>(key: K, value: Material[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const isLast = step === STEPS.length - 1;
+  const stillMissing = missingCount(missingFields(form));
 
   const handleNext = () => {
     if (!isLast) {
@@ -231,6 +275,45 @@ export default function NewMaterialWizardScreen() {
                   The dye lot matters if you ever need to match another skein.
                 </ThemedText>
               )}
+
+              {/* Offered only once the yarn has a name to search on and only while something is
+                  still blank, so the call is never made when it cannot buy anything. */}
+              {form.brand.trim() && stillMissing > 0 ? (
+                lookingUp ? (
+                  <View style={styles.readingRow}>
+                    <ActivityIndicator color={Colors.blushDeep} />
+                    <ThemedText type="small" themeColor="inkSoft">
+                      Looking up {form.brand.trim()}…
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => void lookUp()} hitSlop={6} style={styles.scanAlt}>
+                    <ThemedText type="smallBold" themeColor="sageDeep">
+                      Look up {stillMissing} missing{' '}
+                      {stillMissing === 1 ? 'field' : 'fields'} on the web →
+                    </ThemedText>
+                  </Pressable>
+                )
+              ) : null}
+
+              {lookup ? (
+                <View style={[styles.scanNote, !lookup.found && styles.scanNoteUnsure]}>
+                  <ThemedText
+                    type="smallBold"
+                    themeColor={lookup.found ? 'sageDeep' : 'coralDeep'}>
+                    {lookup.found && lookup.filled.length > 0
+                      ? `From the web, on ${lookup.name}: ${lookup.filled.join(', ')}.`
+                      : lookup.found
+                        ? `Found ${lookup.name}, but it added nothing new.`
+                        : "Couldn't find that yarn — the name may be too general."}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {lookup.found
+                      ? 'From a search, not from your band — worth a glance. The dye lot and price are never looked up.'
+                      : 'Try the full name, maker and range together, like “DROPS Baby Merino”.'}
+                  </ThemedText>
+                </View>
+              ) : null}
               <FormField
                 label="Brand"
                 value={form.brand}

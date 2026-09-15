@@ -90,3 +90,93 @@ export async function readYarnLabel(
     filled: Object.keys(values) as (keyof Material)[],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Looking up what the band did not say.
+//
+// Only ever fills blanks. The band is evidence and a search result is hearsay: a page about "DROPS
+// Baby Merino" describes a Baby Merino, not necessarily the skein in the knitter's hand, so it may
+// add to what was photographed but never argue with it.
+//
+// Price and dye lot are not on the list and cannot be. A dye lot belongs to one physical batch and
+// a price to one shop on one day; the server refuses to return either.
+
+// Everything a search is allowed to fill, in the order the form asks for it.
+const ENRICHABLE = [
+  'weight',
+  'grams',
+  'meters',
+  'composition',
+  'thickness',
+  'washing',
+  'link',
+] as const;
+
+// Which of those a given form is still missing. Gauge is one field to the knitter and three to the
+// model, so it is asked for as its parts and reassembled on the way back.
+export function missingFields(form: Pick<Material, (typeof ENRICHABLE)[number] | 'gauge'>): string[] {
+  const missing = ENRICHABLE.filter((key) => !String(form[key] ?? '').trim());
+  const gauge = form.gauge;
+  const needsGauge = !gauge || (!gauge.stitches && !gauge.rows);
+  return needsGauge
+    ? [...missing, 'gaugeStitches', 'gaugeRows', 'gaugeSize']
+    : [...missing];
+}
+
+// How many blanks a knitter would recognise, for the button's label. The three gauge keys are one
+// missing thing, not three.
+export function missingCount(fields: string[]): number {
+  return fields.filter((f) => !f.startsWith('gauge')).length + (fields.some((f) => f.startsWith('gauge')) ? 1 : 0);
+}
+
+export type YarnLookup = {
+  values: Partial<Material>;
+  // False when nothing matched — an unknown yarn, or a name too vague to identify one. The server
+  // makes the model name what it matched and checks it, so this is a verdict rather than a hope.
+  found: boolean;
+  // The yarn the sources actually described, to show alongside what was filled in.
+  matchedName: string;
+  filled: (keyof Material)[];
+};
+
+export async function lookUpYarn(
+  brand: string,
+  colorName: string,
+  missing: string[],
+  options: { signal?: AbortSignal } = {},
+): Promise<YarnLookup> {
+  const data = (await invokeEdgeFunction(
+    'parse-pattern',
+    { task: 'enrich', brand, colorName, missing },
+    {
+      timeoutMs: LABEL_TIMEOUT_MS,
+      signal: options.signal,
+      timeoutMessage: 'Looking that yarn up took too long. Try again, or fill the rest in yourself.',
+    },
+  )) as { material?: Record<string, unknown>; found?: unknown; matchedName?: unknown };
+
+  const read = data?.material ?? {};
+  const values: Partial<Material> = {};
+
+  for (const [key, value] of [
+    ['composition', str(read.composition)],
+    ['weight', str(read.weight)],
+    ['washing', str(read.washing)],
+    ['link', str(read.link)],
+    ['grams', digits(read.grams)],
+    ['meters', digits(read.meters)],
+    ['thickness', digits(read.thickness)],
+  ] as const) {
+    if (value) values[key] = value;
+  }
+
+  const gauge = gaugeFrom(read);
+  if (gauge) values.gauge = gauge;
+
+  return {
+    values,
+    found: data?.found === true,
+    matchedName: str(data?.matchedName),
+    filled: Object.keys(values) as (keyof Material)[],
+  };
+}
