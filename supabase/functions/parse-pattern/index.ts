@@ -59,10 +59,10 @@ const SEARCH_RESULTS = 5;
 const MAX_SEARCH_CHARS = 12_000;
 const MAX_NAME_CHARS = 120;
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+    headers: { ...CORS, 'Content-Type': 'application/json', ...extra },
   });
 }
 
@@ -285,6 +285,95 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
   return json({ model: result.model, rows, usage: result.usage });
 }
 
+
+// ---------------------------------------------------------------------------
+// The daily spend cap.
+//
+// See supabase/migrations/…_ai_usage_cap.sql for why this exists: the key that reaches here is
+// public, so without a cap one stranger with a loop is an unbounded bill.
+//
+// Units, not requests. A document parse is allowed up to 32k output tokens and costs about €0.16;
+// a yarn photo costs about €0.001. Counting them the same would either throttle the cheap thing
+// pointlessly or leave the expensive one wide open.
+const UNITS: Record<string, number> = {
+  document: 10,
+  rows: 5,
+  enrich: 2,
+  material: 1,
+};
+
+// Per caller per day, and for everyone per day. The per-IP number is generous for a real knitter —
+// fifteen whole-pattern imports in a day is far more than anyone does — while the global number is
+// the one that actually bounds the bill, at roughly €10 a day if every unit went on the dearest
+// task. Raise them when there are accounts to attach usage to.
+const DAILY_UNITS_PER_CALLER = 150;
+const DAILY_UNITS_TOTAL = 600;
+
+// The first address in x-forwarded-for is the client; the rest are proxies. Missing or unparseable
+// means everyone shares one bucket, which is the safe direction to fail.
+function callerBucket(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for') ?? '';
+  const first = forwarded.split(',')[0]?.trim();
+  return first && first.length <= 64 ? first : 'unknown';
+}
+
+// Claims budget for a call. Returns null to proceed, or a response to send instead.
+//
+// Fails open. If the counter is unreachable the call goes through: a knitter halfway up a sleeve
+// should not be stopped by a database hiccup, and the ceilings inside the function still bound what
+// any single call can cost. The cap is there for a script, and a script would have to knock the
+// database over first.
+async function claimBudget(request: Request, task: string): Promise<Response | null> {
+  const units = UNITS[task] ?? 1;
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) {
+    console.warn('spend cap not configured; letting the call through');
+    return null;
+  }
+
+  let verdict: string;
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/claim_ai_units`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_bucket: callerBucket(request),
+        p_units: units,
+        p_bucket_limit: DAILY_UNITS_PER_CALLER,
+        p_global_limit: DAILY_UNITS_TOTAL,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) {
+      console.error('spend cap unavailable', response.status, await response.text().catch(() => ''));
+      return null;
+    }
+    verdict = (await response.json()) as string;
+  } catch (error) {
+    console.error('spend cap unreachable', error);
+    return null;
+  }
+
+  if (verdict === 'ok') return null;
+
+  console.warn(`spend cap hit: ${verdict}, task ${task}`);
+  // 429 so the client shows it as "too many", and a Retry-After pointing at midnight UTC, which is
+  // when current_date rolls over and the counters start again.
+  const midnight = new Date();
+  midnight.setUTCHours(24, 0, 0, 0);
+  return json(
+    {
+      error:
+        verdict === 'global'
+          ? "Knitwit's daily allowance for reading patterns is used up. It resets tomorrow."
+          : "You've read a lot of patterns today — the daily limit resets tomorrow.",
+    },
+    429,
+    { 'Retry-After': String(Math.ceil((midnight.getTime() - Date.now()) / 1000)) },
+  );
+}
+
 function validateMaterialRequest(body: Record<string, unknown>): MaterialRequest {
   const image = body.image;
   if (typeof image !== 'string' || !image.startsWith('data:image/')) {
@@ -489,6 +578,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     console.error('provider unavailable', error);
     return json({ error: 'Pattern reading is not configured on this server.' }, 503);
   }
+
+  // Before any work, and before any money is spent. Placed after selectProvider so a server that
+  // is not configured still says so rather than charging budget for a call that cannot happen.
+  const refusal = await claimBudget(request, typeof task === 'string' ? task : 'unknown');
+  if (refusal) return refusal;
 
   if (task === 'enrich') {
     let req: EnrichRequest;

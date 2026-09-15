@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton } from '@/components/knitwit-ui';
@@ -9,6 +9,9 @@ import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { allProgress, standing } from '@/lib/awards';
+import { backupFilename, buildBackup, readBackup, restoreMessage, writeBackup } from '@/lib/backup';
+import { openTextFile } from '@/lib/open-file';
+import { saveTextFile } from '@/lib/save-file';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { LengthUnit } from '@/types/knitwit';
 
@@ -29,10 +32,57 @@ export default function AccountScreen() {
   const earned = allProgress(achievements).filter((p) => p.earned).length;
   const settings = useKnitwitStore((state) => state.settings);
   const updateSettings = useKnitwitStore((state) => state.updateSettings);
+  const [backupNote, setBackupNote] = useState<string | null>(null);
+  const [confirmingRestore, setConfirmingRestore] = useState(false);
+
+  const exportBackup = async () => {
+    setBackupNote(null);
+    try {
+      const text = await buildBackup();
+      if (!text) {
+        setBackupNote('There is nothing saved yet to back up.');
+        return;
+      }
+      const saved = await saveTextFile(backupFilename(), text);
+      if (saved) {
+        setBackupNote(`Saved ${Math.round(text.length / 1024)} KB — keep it somewhere that is not this device.`);
+      }
+    } catch {
+      setBackupNote("Couldn't write the backup file.");
+    }
+  };
+
+  // Replaces everything, so it asks first and only then opens the picker. A knitter who taps this
+  // by accident should meet a question, not a file browser.
+  const importBackup = async () => {
+    setBackupNote(null);
+    setConfirmingRestore(false);
+    try {
+      const file = await openTextFile();
+      if (!file) return;
+
+      const result = readBackup(file.text);
+      if ('status' in result) {
+        setBackupNote(restoreMessage(result));
+        return;
+      }
+
+      await writeBackup(result.store);
+      // The store is read once at launch, so the app has to start again to see the restored data.
+      // Saying so is better than leaving the old data on screen and looking as though nothing
+      // happened.
+      setBackupNote(
+        `Restored the backup from ${result.exportedAt.slice(0, 10) || 'that file'}. Reload Knitwit to see it.`,
+      );
+    } catch {
+      setBackupNote("Couldn't read that file.");
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <ScrollView contentContainerStyle={styles.scroll}>
         <ThemedText type="title" heading={1}>Account</ThemedText>
         <ThemedText type="default" themeColor="inkSoft">
           Currently saved as “{savedName}”. Sign-in isn&apos;t wired up yet — this just renames
@@ -88,12 +138,79 @@ export default function AccountScreen() {
             );
           })}
         </View>
+
+        <ThemedText type="smallBold" style={styles.label}>
+          Your data
+        </ThemedText>
+        <ThemedText type="small" themeColor="inkSoft">
+          Everything — projects, patterns, stash, row counts, awards — is saved in this browser and
+          nowhere else. There is no account behind it, so this file is the only copy that survives
+          clearing your site data or changing device.
+        </ThemedText>
+
+        <PillButton variant="secondary" onPress={() => void exportBackup()} style={styles.saveBtn}>
+          <ThemedText type="smallBold" themeColor="ink">
+            Download a backup
+          </ThemedText>
+        </PillButton>
+
+        {confirmingRestore ? (
+          <View style={styles.confirmRow}>
+            <ThemedText type="small" themeColor="coralDeep">
+              Restoring replaces everything on this device. Download a backup first if you have not.
+            </ThemedText>
+            <View style={styles.confirmBtns}>
+              <Pressable onPress={() => setConfirmingRestore(false)} style={styles.cancelBtn}>
+                <ThemedText type="smallBold" themeColor="ink">
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <PillButton onPress={() => void importBackup()} style={styles.saveBtn}>
+                <ThemedText type="smallBold" themeColor="white">
+                  Choose a backup file
+                </ThemedText>
+              </PillButton>
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={() => setConfirmingRestore(true)} hitSlop={6} style={styles.restoreLink}>
+            <ThemedText type="smallBold" themeColor="sageDeep">
+              Restore from a backup →
+            </ThemedText>
+          </Pressable>
+        )}
+
+        {backupNote ? (
+          <ThemedText type="small" themeColor="inkSoft">
+            {backupNote}
+          </ThemedText>
+        ) : null}
+        </ScrollView>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    paddingBottom: Spacing.six * 2,
+  },
+  confirmRow: {
+    gap: Spacing.two,
+  },
+  confirmBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  cancelBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  restoreLink: {
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.one,
+  },
   container: {
     flex: 1,
     alignItems: 'center',
