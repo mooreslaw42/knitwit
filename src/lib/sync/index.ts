@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { currentUserId, ensureSession } from '@/lib/session';
+import { currentUserId, ensureSession, onSessionChange } from '@/lib/session';
 import { markAllDirty, syncEntity } from '@/lib/sync/engine';
 import { ENTITIES } from '@/lib/sync/registry';
 import { watchAll } from '@/lib/sync/watch';
+import { setOutboxOwner } from '@/lib/sync/outbox';
 import { onMissingPhoto, onPhotoStored } from '@/lib/photo-store';
 import { downloadPhoto, markAllPhotosForUpload, markPhotoForUpload, pushPhotos } from '@/lib/sync/photos';
 
@@ -102,10 +103,18 @@ export function startSync(): () => void {
 
   const unwatch = watchAll(scheduleSync);
 
+  // The outbox follows the account, including when it changes under us — a token refresh, a sign-in,
+  // a sign-out. What one account has not yet sent is not another's to send.
+  const unlisten = onSessionChange((state) => {
+    void setOutboxOwner(state.session?.user.id ?? null);
+  });
+
   void (async () => {
     const session = await ensureSession();
     const userId = currentUserId();
     if (!session || !userId) return;
+
+    await setOutboxOwner(userId);
 
     // The first time an account exists, everything already on the device is queued. Without this
     // the stash a knitter built up before accounts existed would sit there for ever, since only
@@ -123,6 +132,7 @@ export function startSync(): () => void {
 
   return () => {
     unwatch();
+    unlisten();
     if (timer) clearTimeout(timer);
     started = false;
   };

@@ -210,7 +210,8 @@ describe('taking what arrived', () => {
 
     await syncEntity(entity);
 
-    const stored = JSON.parse((await AsyncStorage.getItem('knitwit-sync-watermark')) ?? '{}');
+    // Under this account's key, not a shared one — see the note on watermarks.
+    const stored = JSON.parse((await AsyncStorage.getItem('knitwit-sync-watermark:u1')) ?? '{}');
     // The server's newest value, not the device's clock.
     expect(stored.materials).toBe('2026-09-16T11:00:00Z');
   });
@@ -223,6 +224,45 @@ describe('taking what arrived', () => {
 
     expect(result.pulled).toBe(0);
     expect(state.value.m1).toEqual({ brand: 'Rowan' });
+  });
+});
+
+// One device can hold two accounts over its life. A shared watermark means the second is asked only
+// for rows newer than the first's high-water mark, so everything older is never requested — a
+// partial copy of the knitter's own stash, with nothing reporting an error.
+describe('two accounts on one device', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    resetOutboxCache();
+    resetWatermarkCache();
+    mockUpsert.mockReset();
+    mockSelect.mockReset();
+    mockUpsert.mockResolvedValue(ok);
+  });
+
+  it('does not let one account inherit the other’s watermark', async () => {
+    mockSelect.mockResolvedValue({
+      data: [{ id: 'a', data: {}, updated_at: '2026-09-16T11:00:00Z', deleted_at: null }],
+      error: null,
+    });
+
+    mockEnsureSession.mockResolvedValue({ user: { id: 'first' } });
+    mockCurrentUserId.mockReturnValue('first');
+    const { entity } = entityOver({});
+    await syncEntity(entity);
+
+    // Same device, different account.
+    resetWatermarkCache();
+    mockEnsureSession.mockResolvedValue({ user: { id: 'second' } });
+    mockCurrentUserId.mockReturnValue('second');
+    await syncEntity(entity);
+
+    const first = JSON.parse((await AsyncStorage.getItem('knitwit-sync-watermark:first')) ?? '{}');
+    const second = JSON.parse((await AsyncStorage.getItem('knitwit-sync-watermark:second')) ?? '{}');
+    expect(first.materials).toBe('2026-09-16T11:00:00Z');
+    expect(second.materials).toBe('2026-09-16T11:00:00Z');
+    // And the second account asked from the beginning rather than from the first's mark.
+    expect(await AsyncStorage.getItem('knitwit-sync-watermark')).toBeNull();
   });
 });
 

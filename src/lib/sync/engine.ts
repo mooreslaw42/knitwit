@@ -25,11 +25,18 @@ import { clear, mark, pending, type Pending } from '@/lib/sync/outbox';
 // twice and the later correction stands. For anything that accumulates it would be wrong, which is
 // why nothing that accumulates is in M2.
 //
-// ## The watermark is the server's, never ours
+// ## The watermark is the server's, never ours — and it belongs to one account
 //
 // A pull asks for everything changed since the newest `updated_at` it has already seen, and that
 // value comes from the rows themselves. Using the device clock would re-pull the world after a
 // clock change, or worse, skip rows written while it was fast.
+//
+// It is kept per user, which it was not at first, and the bug that hid there is quiet enough to be
+// worth naming. One device can hold two accounts over its life — an anonymous one to begin with,
+// then a real one after signing in. A single shared watermark means the second account is asked for
+// everything newer than the *first* account's high-water mark, so all of its older rows are never
+// requested at all. The knitter signs in and sees a partial copy of their own stash, with nothing
+// anywhere reporting an error.
 
 const WATERMARK_KEY = 'knitwit-sync-watermark';
 
@@ -76,24 +83,31 @@ export type Entity<T> = {
 
 type Watermarks = Record<string, string>;
 
-let watermarks: Watermarks | null = null;
+// Cached for the account it was read for, so switching accounts cannot serve one the other's marks.
+let cached: { userId: string; marks: Watermarks } | null = null;
 
-async function loadWatermarks(): Promise<Watermarks> {
-  if (watermarks) return watermarks;
-  try {
-    const raw = await AsyncStorage.getItem(WATERMARK_KEY);
-    watermarks = raw ? (JSON.parse(raw) as Watermarks) : {};
-  } catch {
-    watermarks = {};
-  }
-  return watermarks;
+function watermarkKey(userId: string): string {
+  return `${WATERMARK_KEY}:${userId}`;
 }
 
-async function setWatermark(table: string, value: string): Promise<void> {
-  const all = await loadWatermarks();
+async function loadWatermarks(userId: string): Promise<Watermarks> {
+  if (cached?.userId === userId) return cached.marks;
+  let marks: Watermarks = {};
+  try {
+    const raw = await AsyncStorage.getItem(watermarkKey(userId));
+    marks = raw ? (JSON.parse(raw) as Watermarks) : {};
+  } catch {
+    marks = {};
+  }
+  cached = { userId, marks };
+  return marks;
+}
+
+async function setWatermark(userId: string, table: string, value: string): Promise<void> {
+  const all = await loadWatermarks(userId);
   all[table] = value;
   try {
-    await AsyncStorage.setItem(WATERMARK_KEY, JSON.stringify(all));
+    await AsyncStorage.setItem(watermarkKey(userId), JSON.stringify(all));
   } catch {
     // Losing a watermark costs a full re-pull next time, which is slow and harmless.
   }
@@ -129,7 +143,7 @@ export async function syncEntity<T>(entity: Entity<T>): Promise<SyncResult> {
 
   const supabase = getSupabase();
   const pushed = await push(entity, userId, supabase);
-  const pulled = await pull(entity, supabase);
+  const pulled = await pull(entity, userId, supabase);
   return { pushed, pulled };
 }
 
@@ -205,9 +219,10 @@ async function push<T>(
 
 async function pull<T>(
   entity: Entity<T>,
+  userId: string,
   supabase: ReturnType<typeof getSupabase>,
 ): Promise<number> {
-  const since = (await loadWatermarks())[entity.table] ?? EPOCH;
+  const since = (await loadWatermarks(userId))[entity.table] ?? EPOCH;
 
   const { data, error } = await supabase
     .from(entity.table)
@@ -254,7 +269,7 @@ async function pull<T>(
 
   // The newest timestamp actually seen, not the current time. Rows sharing that exact timestamp may
   // be pulled again next round, which is harmless — applying the same row twice is the same row.
-  await setWatermark(entity.table, rows[rows.length - 1].updated_at);
+  await setWatermark(userId, entity.table, rows[rows.length - 1].updated_at);
   return applied;
 }
 
@@ -270,5 +285,5 @@ export async function markAllDirty<T>(entity: Entity<T>): Promise<number> {
 }
 
 export function resetWatermarkCache(): void {
-  watermarks = null;
+  cached = null;
 }

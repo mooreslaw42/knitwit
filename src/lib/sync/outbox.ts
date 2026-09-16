@@ -27,6 +27,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OUTBOX_KEY = 'knitwit-outbox';
 
+// Where marks go before anybody has signed in.
+//
+// The watcher starts with the app and an edit can land before the session resolves — certainly so
+// on a first launch with no signal. Those marks are real and must not be thrown away, so they wait
+// here and are adopted by the first account to appear.
+const UNCLAIMED = '__unclaimed';
+
 export type PendingKind = 'upsert' | 'delete';
 export type Pending = { table: string; id: string; kind: PendingKind };
 
@@ -42,6 +49,18 @@ function parse(key: string): { table: string; id: string } {
   return { table: key.slice(0, slash), id: key.slice(slash + 1) };
 }
 
+// Whose outbox this is.
+//
+// One device can hold two accounts over its life — anonymous to begin with, a real one after signing
+// in — and what one of them has not yet sent is not the other's to send. Sharing a single outbox
+// means the first account's unsent changes get pushed up as though the second had made them, which
+// is a merge nobody asked for and nobody can see happening.
+let owner: string = UNCLAIMED;
+
+function storageKey(who: string): string {
+  return `${OUTBOX_KEY}:${who}`;
+}
+
 // Held in memory and written through, because marking happens on every keystroke-ish change and a
 // read-modify-write of storage each time would be absurd.
 let cache: Stored | null = null;
@@ -50,7 +69,7 @@ let writing: Promise<void> = Promise.resolve();
 async function load(): Promise<Stored> {
   if (cache) return cache;
   try {
-    const raw = await AsyncStorage.getItem(OUTBOX_KEY);
+    const raw = await AsyncStorage.getItem(storageKey(owner));
     cache = raw ? (JSON.parse(raw) as Stored) : {};
   } catch {
     // An unreadable outbox is not worth failing over: the cost is re-sending things that were
@@ -67,7 +86,7 @@ async function load(): Promise<Stored> {
 function persist(): Promise<void> {
   writing = writing.then(async () => {
     try {
-      await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(cache ?? {}));
+      await AsyncStorage.setItem(storageKey(owner), JSON.stringify(cache ?? {}));
     } catch {
       // Out of space, most likely. The in-memory copy is still correct, so this session will still
       // sync; only a reload before the next successful write would lose the marks.
@@ -110,7 +129,68 @@ export async function count(): Promise<number> {
   return Object.keys(await load()).length;
 }
 
-// Tests only: the cache is module state and a second test must not inherit the first's.
+// Points the outbox at an account, taking anything marked before there was one.
+//
+// Adoption is deliberate and only ever happens from the unclaimed bucket: work done on this device
+// while signed out belongs to whoever signs in next, because it is *their* device and *their*
+// knitting. One account's unsent changes are never handed to another that way — those stay in their
+// own bucket, which is the whole point of the split.
+export async function setOutboxOwner(userId: string | null): Promise<void> {
+  const next = userId ?? UNCLAIMED;
+  if (next === owner) return;
+
+  // Whatever is half-written for the current owner lands before the key changes underneath it.
+  await writing;
+
+  const adopting =
+    owner === UNCLAIMED && next !== UNCLAIMED
+      ? { ...(await legacyEntries()), ...(cache ?? (await load())) }
+      : null;
+
+  owner = next;
+  cache = null;
+
+  if (adopting && Object.keys(adopting).length > 0) {
+    const mine = await load();
+    for (const [key, kind] of Object.entries(adopting)) {
+      // A delete already recorded for this account outranks an inherited edit, same rule as mark().
+      if (mine[key] === 'delete' && kind === 'upsert') continue;
+      mine[key] = kind;
+    }
+    await persist();
+    try {
+      await AsyncStorage.removeItem(storageKey(UNCLAIMED));
+    } catch {
+      // Left behind it would be adopted again by the next account to sign in on this device.
+    }
+  }
+}
+
+export function currentOutboxOwner(): string {
+  return owner;
+}
+
+// Marks written before the outbox was split per account.
+//
+// They live under the old unsuffixed key and belong to whoever is signed in on this device, which is
+// the same person who made them — there was only ever one account here when they were written.
+// Dropping them instead would silently lose whatever a knitter had changed but not yet sent at the
+// moment this shipped.
+async function legacyEntries(): Promise<Stored> {
+  try {
+    const raw = await AsyncStorage.getItem(OUTBOX_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Stored;
+    await AsyncStorage.removeItem(OUTBOX_KEY);
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+// Tests only: the cache and the owner are module state and a second test must not inherit the
+// first's.
 export function resetOutboxCache(): void {
   cache = null;
+  owner = UNCLAIMED;
 }
