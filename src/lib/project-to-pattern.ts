@@ -1,4 +1,5 @@
 import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { newPatternSection } from '@/lib/entity-id';
 import { resolveTechnique } from '@/lib/technique-catalogue';
 import type {
   CatalogueTechnique,
@@ -139,7 +140,7 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
 
   const sections: PatternSection[] = project.sections.map((s) => {
     const from = sourceSection(s.name);
-    return {
+    return newPatternSection({
       name: s.name,
       totalRows: s.totalRows,
       castOn: s.castOn,
@@ -161,7 +162,7 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
       notes: s.notes.trim() ? s.notes : (from?.notes ?? ''),
       markers: s.markers,
       stitchMultiple: s.stitchMultiple ?? from?.stitchMultiple ?? null,
-    };
+    });
   });
 
   // The gauge the fabric was actually knitted at is the one a pattern written from it should state.

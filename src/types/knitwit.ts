@@ -266,6 +266,9 @@ export type PatternRow = {
 export type StitchMultiple = { of: number; plus: number };
 
 export type PatternSection = {
+  // As on ProjectSection, and for the same reason.
+  id: string;
+  updatedAt: string;
   name: string;
   // Both are stated per size on real patterns. A project resolves them to plain numbers for the
   // one size it is being knitted in.
@@ -328,6 +331,13 @@ export type Pattern = {
 };
 
 export type ProjectSection = {
+  // Stable across devices and across reordering. Sections used to be addressed by their position
+  // in the array, which identifies nothing: move a section and every stored reference to it now
+  // points at a different piece of knitting. See entity-id.ts.
+  id: string;
+  // When this section last changed, for reconciling two devices. Provisional — the server owns
+  // this once these are rows in Postgres.
+  updatedAt: string;
   name: string;
   totalRows: number;
   row: number;

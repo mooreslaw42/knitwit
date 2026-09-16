@@ -1393,6 +1393,49 @@ describe('hydrating a store saved before notes split in two', () => {
     expect(pattern.sections[0].markers).toEqual([]);
   });
 
+  // Sections predate having an identity. Every stored one needs one before anything can reconcile
+  // it, and no two may share.
+  it('gives every stored section an identity it did not have', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: { pat: { name: 'P', sections: [{ name: 'Body' }, { name: 'Sleeve' }] } },
+        projects: {
+          p: { name: 'Old', patternId: null, sections: [{ name: 'Main' }, { name: 'Cuff' }] },
+        },
+      },
+      version: CURRENT_VERSION,
+    });
+
+    const ids = [
+      ...state.patterns.pat.sections.map((s) => s.id),
+      ...state.projects.p.sections.map((s) => s.id),
+    ];
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(4);
+    expect(state.projects.p.sections[0].id).toMatch(/^psec_/);
+    expect(state.patterns.pat.sections[0].id).toMatch(/^sec_/);
+    // Old enough to lose to any real edit, since we cannot know when it actually changed.
+    expect(state.projects.p.sections[0].updatedAt).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('leaves an identity that is already there alone', async () => {
+    const state = await hydrate({
+      state: {
+        patterns: {},
+        projects: {
+          p: {
+            name: 'Old',
+            patternId: null,
+            sections: [{ name: 'Main', id: 'psec_mine', updatedAt: '2026-05-05T00:00:00.000Z' }],
+          },
+        },
+      },
+      version: CURRENT_VERSION,
+    });
+    expect(state.projects.p.sections[0].id).toBe('psec_mine');
+    expect(state.projects.p.sections[0].updatedAt).toBe('2026-05-05T00:00:00.000Z');
+  });
+
   it('gives a project and a pattern somewhere to write notes', async () => {
     const state = await hydrate({
       state: {

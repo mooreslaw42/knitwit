@@ -1,4 +1,5 @@
 import { CATEGORY_ORDER, SIZE_OPTIONS } from '@/constants/catalogs';
+import { newPatternSection } from '@/lib/entity-id';
 import { MaxNameLength } from '@/constants/theme';
 import { invokeEdgeFunction } from '@/lib/edge-function';
 import { parseSectionText } from '@/lib/parse-pattern-text';
@@ -200,7 +201,7 @@ function normaliseSections(
       const rows = parsed ? parsed.rows : [];
       const castOn = toSized(s.castOn, 0);
 
-      return {
+      return newPatternSection({
         name: str(s.name, MaxNameLength) || `Section ${i + 1}`,
         castOn,
         // Fall back to the number of rows we actually read, so the counter has something sane.
@@ -214,7 +215,7 @@ function normaliseSections(
         notes: '',
         markers: [],
         stitchMultiple: null,
-      };
+      });
     })
     .filter((s) => s.description || s.rows.length > 0);
 }

@@ -25,6 +25,7 @@ import AppHeader from '@/components/app-header';
 import { Colors } from '@/constants/theme';
 import { CrashScreen } from '@/components/crash-screen';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import { migratePhotos } from '@/lib/migrate-photos';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -70,6 +71,14 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [ready]);
+
+  // Photos saved before they had their own storage are moved out of the store, once, in the
+  // background. After the splash is gone on purpose: it is housekeeping, and a knitter opening the
+  // app to count a row should not wait on it. Safe to interrupt — see migrate-photos.ts.
+  useEffect(() => {
+    if (!hasHydrated) return;
+    void migratePhotos();
+  }, [hasHydrated]);
 
   if (!ready) {
     return null;

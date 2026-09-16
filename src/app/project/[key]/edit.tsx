@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { putPhoto } from '@/lib/photo-store';
+import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AutoGrowInput } from '@/components/auto-grow-input';
@@ -69,7 +71,7 @@ export default function ProjectEditScreen() {
   const choosePhoto = async () => {
     const result = await pickImage();
     if (result.status === 'picked') {
-      setPhoto(result.dataUrl);
+      setPhoto(await putPhoto(result.dataUrl));
       setPhotoError(null);
     } else {
       setPhotoError(pickImageMessage(result.status));
@@ -94,7 +96,7 @@ export default function ProjectEditScreen() {
           <Pressable
             onPress={choosePhoto}
             style={[styles.hero, { backgroundColor: project.colorDeep }]}>
-            {photo ? <Image source={{ uri: photo }} style={styles.heroPhoto} /> : null}
+            {photo ? <PhotoImage photo={photo} style={styles.heroPhoto} /> : null}
             <View style={styles.heroHint}>
               <ThemedText type="smallBold" themeColor="ink">
                 {photo ? 'Tap to change picture' : 'Tap to add a picture'}

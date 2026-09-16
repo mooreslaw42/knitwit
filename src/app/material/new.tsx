@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
+import { putPhoto } from '@/lib/photo-store';
+import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
@@ -101,7 +103,7 @@ export default function NewMaterialWizardScreen() {
 
     // The band is kept as the yarn's picture either way, so a scan that fails outright still
     // leaves the knitter better off than they started.
-    setForm((f) => ({ ...f, photo: picked.dataUrl }));
+    void putPhoto(picked.dataUrl).then((id) => setForm((f) => ({ ...f, photo: id })));
     setReading(true);
     try {
       const result = await readYarnLabel(picked.dataUrl);
@@ -248,7 +250,7 @@ export default function NewMaterialWizardScreen() {
               </ThemedText>
 
               {form.photo ? (
-                <Image source={{ uri: form.photo }} style={styles.preview} />
+                <PhotoImage photo={form.photo} style={styles.preview} />
               ) : null}
 
               {reading ? (

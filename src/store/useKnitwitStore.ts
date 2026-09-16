@@ -9,6 +9,7 @@ import {
   SEED_TECHNIQUES,
   SEED_TOOLS,
 } from '@/data/seed';
+import { entityId, newProjectSection, SEED_STAMP, stamp } from '@/lib/entity-id';
 import {
   currentSectionIndexOf,
   deriveProjectColors,
@@ -281,6 +282,20 @@ function keepKnown(ids: string[], stash: Record<string, unknown>): string[] {
 // Rescue before coercing, not after. Blanking `notes` to a string first and then looking for the
 // array in it destroys every row-pinned note in the section — which is exactly what the first
 // version of this did.
+// Sections predate having an identity, so every stored one needs a new one before anything can
+// reconcile it. Random, not derived from position: two devices doing this backfill independently
+// must not both decide the third section is `psec_3` and then disagree about which sleeve that is.
+//
+// The consequence is worth naming. A knitter who used Knitwit on a laptop and a phone *before*
+// accounts existed has two unrelated sets of ids for what they think of as the same project, and
+// no backfill can know that. Those will sync as duplicates, and the answer is to pick one device
+// as the source of truth the first time they sign in — not to guess here.
+function repairSectionIdentity(section: Record<string, unknown>, prefix: string): void {
+  if (typeof section.id !== 'string' || !section.id) section.id = entityId(prefix);
+  // Old enough to lose to any real edit, since we cannot know when it actually changed.
+  if (typeof section.updatedAt !== 'string' || !section.updatedAt) section.updatedAt = SEED_STAMP;
+}
+
 function repairSectionNotes(section: Record<string, unknown>): void {
   if (typeof section.description !== 'string') section.description = '';
   if (!('stitchMultiple' in section)) section.stitchMultiple = null;
@@ -331,6 +346,7 @@ function repairSectionKits(state: {
     if (!Array.isArray(project.labels)) project.labels = [];
 
     for (const section of (project.sections as Record<string, unknown>[]) ?? []) {
+      repairSectionIdentity(section, 'psec');
       repairSectionNotes(section);
     }
 
@@ -375,6 +391,7 @@ function repairSectionKits(state: {
     }
     if (typeof pattern.notes !== 'string') pattern.notes = '';
     for (const section of pattern.sections as Record<string, unknown>[]) {
+      repairSectionIdentity(section, 'sec');
       repairSectionNotes(section);
       for (const key of ['materials', 'tools', 'techniques', 'markers', 'rows'] as const) {
         if (!Array.isArray(section[key])) section[key] = [];
@@ -433,6 +450,15 @@ function reconcileTechniques(
   return changed ? next : mine;
 }
 
+// Marks a section as changed just now.
+//
+// Every write goes through this rather than setting updatedAt at each call site, because the one
+// that forgets is invisible: the section still saves, still looks right, and simply never wins a
+// reconciliation again. A stale timestamp is a silent bug, so there is one place to get it right.
+function touched<T extends { updatedAt: string }>(section: T): T {
+  return { ...section, updatedAt: stamp() };
+}
+
 // Rewrites one section of one project, leaving everything else identical. Returns an empty patch
 // for a section that isn't there, so a stale route parameter is a no-op rather than a crash.
 function patchSection(
@@ -448,7 +474,7 @@ function patchSection(
       ...state.projects,
       [projectKey]: {
         ...project,
-        sections: project.sections.map((s, i) => (i === index ? change(s) : s)),
+        sections: project.sections.map((s, i) => (i === index ? touched(change(s)) : s)),
       },
     },
   };
@@ -589,7 +615,8 @@ export const useKnitwitStore = create<KnitwitState>()(
         const ratio =
           pattern?.gauge && swatchGauge ? stitchRatio(pattern.gauge, swatchGauge) : null;
         const regauged = ratio != null && Math.abs(ratio - 1) > 0.0005 ? ratio : null;
-        const blank = (over: Partial<ProjectSection> & { name: string; totalRows: number }) => ({
+        const blank = (over: Partial<ProjectSection> & { name: string; totalRows: number }) =>
+          newProjectSection({
           row: 0,
           complete: false,
           seconds: 0,
@@ -608,7 +635,8 @@ export const useKnitwitStore = create<KnitwitState>()(
 
         const sections =
           patternSections.length > 0
-            ? patternSections.map((ps) => ({
+            ? patternSections.map((ps) =>
+                newProjectSection({
                 name: ps.name,
                 totalRows: Math.max(1, sizeValue(ps.totalRows, sizeIndex) || 1),
                 row: 0,
@@ -630,7 +658,8 @@ export const useKnitwitStore = create<KnitwitState>()(
                 // per-size number is resolved to the one size this project is being knitted in —
                 // from here on the project holds plain numbers.
                 ...resolveSection(ps, sizeIndex, regauged),
-              }))
+              }),
+              )
             : planned.length > 0
               ? planned.map((p, i) =>
                   blank({
@@ -744,7 +773,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...project,
               sections: [
                 ...project.sections,
-                {
+                newProjectSection({
                   name: name.trim() || `Section ${project.sections.length + 1}`,
                   totalRows: Math.max(1, totalRows || 1),
                   row: 0,
@@ -760,7 +789,7 @@ export const useKnitwitStore = create<KnitwitState>()(
                   markers: [],
                   castOn: 0,
                   rows: [],
-                },
+                }),
               ],
             },
           },
@@ -851,7 +880,7 @@ export const useKnitwitStore = create<KnitwitState>()(
             ...patterns,
             [patternId]: {
               ...pattern,
-              sections: pattern.sections.map((s, i) => (i === index ? { ...s, notes } : s)),
+              sections: pattern.sections.map((s, i) => (i === index ? touched({ ...s, notes }) : s)),
             },
           },
         });
@@ -899,7 +928,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...p,
               sections: p.sections.map((s) =>
                 s.materialIds.includes(id)
-                  ? { ...s, materialIds: s.materialIds.filter((m) => m !== id) }
+                  ? touched({ ...s, materialIds: s.materialIds.filter((m) => m !== id) })
                   : s,
               ),
             },
@@ -928,7 +957,7 @@ export const useKnitwitStore = create<KnitwitState>()(
             {
               ...p,
               sections: p.sections.map((s) =>
-                s.toolIds.includes(id) ? { ...s, toolIds: s.toolIds.filter((t) => t !== id) } : s,
+                s.toolIds.includes(id) ? touched({ ...s, toolIds: s.toolIds.filter((t) => t !== id) }) : s,
               ),
             },
           ]),
@@ -1074,7 +1103,7 @@ export const useKnitwitStore = create<KnitwitState>()(
                 ...p,
                 sections: p.sections.map((s) =>
                   s.techniqueIds.includes(id)
-                    ? { ...s, techniqueIds: s.techniqueIds.filter((t) => t !== id) }
+                    ? touched({ ...s, techniqueIds: s.techniqueIds.filter((t) => t !== id) })
                     : s,
                 ),
               },
@@ -1136,7 +1165,7 @@ export const useKnitwitStore = create<KnitwitState>()(
             [activeProjectKey]: {
               ...project,
               sections: project.sections.map((s, i) =>
-                i === activeSectionIndex ? { ...s, row: nextRow, totalRows, complete } : s,
+                i === activeSectionIndex ? touched({ ...s, row: nextRow, totalRows, complete }) : s,
               ),
             },
           },
@@ -1182,7 +1211,7 @@ export const useKnitwitStore = create<KnitwitState>()(
             [projectKey]: {
               ...projects[projectKey],
               sections: projects[projectKey].sections.map((s, i) =>
-                i === index ? { ...s, seconds: (s.seconds || 0) + elapsed } : s,
+                i === index ? touched({ ...s, seconds: (s.seconds || 0) + elapsed }) : s,
               ),
             },
           },
@@ -1209,7 +1238,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         const { projects, patterns, activeProjectKey, activeSectionIndex, achievements } = get();
         const project = projects[activeProjectKey];
         const sections = project.sections.map((s, i) =>
-          i === activeSectionIndex ? { ...s, complete: true } : s,
+          i === activeSectionIndex ? touched({ ...s, complete: true }) : s,
         );
         // A finish is recorded here rather than when the last row is counted. Binding off is
         // deliberate and happens once; counting the last row fired again every time the knitter
@@ -1237,7 +1266,7 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...projects[activeProjectKey],
               sections: projects[activeProjectKey].sections.map((s, i) =>
                 i === activeSectionIndex
-                  ? { ...s, rowNotes: [...s.rowNotes, { id: noteSeq, row, text }] }
+                  ? touched({ ...s, rowNotes: [...s.rowNotes, { id: noteSeq, row, text }] })
                   : s,
               ),
             },

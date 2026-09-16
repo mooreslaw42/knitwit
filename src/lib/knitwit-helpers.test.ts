@@ -23,6 +23,8 @@ import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/
 
 function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
   return {
+    id: 'psec_test',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     name: 'Section',
     totalRows: 10,
     row: 0,

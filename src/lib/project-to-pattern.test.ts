@@ -37,6 +37,8 @@ const material = (brand: string, colorName: string): Material =>
 const tool = (thickness: string): Tool => ({ type: 'circular', thickness, length: '80cm', quantity: 1 });
 
 const section = (over: Partial<ProjectSection> = {}): ProjectSection => ({
+  id: 'psec_test',
+  updatedAt: '2026-01-01T00:00:00.000Z',
   name: 'Back',
   totalRows: 40,
   row: 12,

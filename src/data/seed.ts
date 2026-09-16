@@ -1,6 +1,31 @@
 // Ported verbatim from reference/index.html's MATERIALS/TOOLS/PATTERNS/PROJECTS seed objects.
 // Techniques are new (no reference equivalent) — a couple of examples the user can edit or delete.
+import { SEED_STAMP, seedSectionId } from '@/lib/entity-id';
 import type { Material, Pattern, Project, Technique, Tool } from '@/types/knitwit';
+
+// The literals below predate sections having identity, so rather than threading an id through
+// nine hand-written objects the ids are derived from position once, here. Deterministic on
+// purpose — see seedSectionId.
+type Seeded<T extends { sections: unknown[] }> = Omit<T, 'sections'> & {
+  sections: Omit<T['sections'][number], 'id' | 'updatedAt'>[];
+};
+
+function withSectionIds<T extends { sections: { id: string; updatedAt: string }[] }>(
+  raw: Record<string, Seeded<T>>,
+): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const [key, owner] of Object.entries(raw)) {
+    out[key] = {
+      ...owner,
+      sections: owner.sections.map((section, index) => ({
+        ...section,
+        id: seedSectionId(key, index),
+        updatedAt: SEED_STAMP,
+      })),
+    } as T;
+  }
+  return out;
+}
 
 export const SEED_MATERIALS: Record<string, Material> = {
   m1: {
@@ -70,7 +95,7 @@ export const SEED_TECHNIQUES: Record<string, Technique> = {
   'magic-ring': { status: 'want', notes: '', addedOn: '2026-01-01' },
 };
 
-export const SEED_PATTERNS: Record<string, Pattern> = {
+const RAW_PATTERNS: Record<string, Seeded<Pattern>> = {
   p1: {
     name: 'Meadow Cardigan',
     category: 'sweaters',
@@ -322,7 +347,7 @@ export const SEED_PATTERNS: Record<string, Pattern> = {
   },
 };
 
-export const SEED_PROJECTS: Record<string, Project> = {
+const RAW_PROJECTS: Record<string, Seeded<Project>> = {
   meadow: {
     name: 'Meadow Cardigan',
     startedOn: null, craft: 'knit',
@@ -490,3 +515,6 @@ export const SEED_PROJECTS: Record<string, Project> = {
     ],
   },
 };
+
+export const SEED_PATTERNS: Record<string, Pattern> = withSectionIds<Pattern>(RAW_PATTERNS);
+export const SEED_PROJECTS: Record<string, Project> = withSectionIds<Project>(RAW_PROJECTS);

@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { putPhoto } from '@/lib/photo-store';
+import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
@@ -77,7 +79,7 @@ export default function PatternDetailScreen() {
   const choosePhoto = async () => {
     const result = await pickImage();
     if (result.status === 'picked') {
-      setDraft((d) => (d ? { ...d, photo: result.dataUrl } : d));
+      void putPhoto(result.dataUrl).then((id) => setDraft((d) => (d ? { ...d, photo: id } : d)));
       setPhotoError(null);
     } else {
       setPhotoError(pickImageMessage(result.status));
@@ -124,7 +126,7 @@ export default function PatternDetailScreen() {
                 onPress={choosePhoto}
                 style={[styles.hero, styles.heroPress, { backgroundColor: view.accentColor }]}>
                 {view.photo ? (
-                  <Image source={{ uri: view.photo }} style={styles.heroPhoto} />
+                  <PhotoImage photo={view.photo} style={styles.heroPhoto} />
                 ) : null}
                 <View style={styles.heroHint}>
                   <ThemedText type="smallBold" themeColor="ink">
@@ -151,7 +153,7 @@ export default function PatternDetailScreen() {
           ) : (
             <View style={[styles.hero, { backgroundColor: view.accentColor }]}>
               {view.photo ? (
-                <Image source={{ uri: view.photo }} style={styles.heroPhoto} />
+                <PhotoImage photo={view.photo} style={styles.heroPhoto} />
               ) : null}
             </View>
           )}

@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
+import { putPhoto } from '@/lib/photo-store';
+import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AutoGrowInput } from '@/components/auto-grow-input';
@@ -125,7 +127,9 @@ export default function NewPatternWizardScreen() {
   const choosePhoto = async () => {
     const result = await pickImage();
     if (result.status === 'picked') {
-      setForm((f) => ({ ...f, photo: result.dataUrl }));
+      setForm((f) => ({ ...f, photo: null }));
+      // Bytes to their own key, id on the record. See photo-store.ts.
+      void putPhoto(result.dataUrl).then((id) => setForm((f) => ({ ...f, photo: id })));
       setPhotoError(null);
     } else {
       setPhotoError(pickImageMessage(result.status));
@@ -469,7 +473,7 @@ export default function NewPatternWizardScreen() {
                 </ThemedText>
                 <Pressable onPress={choosePhoto} style={styles.photoPick}>
                   {form.photo ? (
-                    <Image source={{ uri: form.photo }} style={styles.photoPreview} />
+                    <PhotoImage photo={form.photo} style={styles.photoPreview} />
                   ) : (
                     <ThemedText type="smallBold" themeColor="inkSoft">
                       + Add a picture

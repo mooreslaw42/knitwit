@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { newPatternSection } from '@/lib/entity-id';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AutoGrowInput } from '@/components/auto-grow-input';
@@ -290,7 +291,7 @@ function multipleFrom(s: EditSection): PatternSection['stitchMultiple'] {
 }
 
 function sectionToPattern(s: EditSection): PatternSection {
-  return {
+  return newPatternSection({
     name: s.name.trim() || 'Section',
     totalRows: Math.max(1, parseInt(s.totalRows, 10) || 1),
     castOn: s.castOn,
@@ -307,7 +308,7 @@ function sectionToPattern(s: EditSection): PatternSection {
     markers: Array.from(
       new Set(s.markers.map((m) => parseInt(m, 10)).filter((m) => Number.isFinite(m) && m > 0)),
     ).sort((a, b) => a - b),
-  };
+  });
 }
 
 const BLANK_SECTION: EditSection = {

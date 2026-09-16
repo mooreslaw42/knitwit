@@ -1,8 +1,8 @@
 import { Picker } from '@react-native-picker/picker';
+import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   StyleSheet,
   TextInput,
@@ -229,7 +229,7 @@ export function Thumb({
         styles.thumb,
         { width: size, height: size, backgroundColor: color ?? Colors.creamDeep },
       ]}>
-      {photo ? <Image source={{ uri: photo }} style={styles.thumbPhoto} /> : children}
+      {photo ? <PhotoImage photo={photo} style={styles.thumbPhoto} /> : children}
     </View>
   );
 }

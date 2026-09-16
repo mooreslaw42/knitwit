@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { PhotoImage } from '@/components/photo';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
@@ -44,7 +45,7 @@ export default function ProjectDetailScreen() {
             {/* The background was already being cleared for a photo that nothing ever drew, so a
                 project with one showed an empty block. */}
             {project.photo ? (
-              <Image source={{ uri: project.photo }} style={styles.heroPhoto} />
+              <PhotoImage photo={project.photo} style={styles.heroPhoto} />
             ) : null}
             <ThemedText type="smallBold" themeColor="white" style={styles.heroLabel}>
               {pct >= 1 ? 'Complete' : 'In progress'}

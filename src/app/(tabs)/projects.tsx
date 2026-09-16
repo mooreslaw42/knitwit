@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
+import { PhotoImage } from '@/components/photo';
 import { useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, PillButton, ProgressBar, ProjectStatusBadge } from '@/components/knitwit-ui';
@@ -186,7 +187,7 @@ export default function ProjectsScreen() {
                         thing you made; a square of it says more than any line of text here. */}
                     <View style={[styles.projThumb, { backgroundColor: p.color }]}>
                       {p.photo ? (
-                        <Image source={{ uri: p.photo }} style={styles.projPhoto} />
+                        <PhotoImage photo={p.photo} style={styles.projPhoto} />
                       ) : null}
                       <ThemedText type="smallBold" themeColor="white" style={styles.projPct}>
                         {Math.round(pct * 100)}%
