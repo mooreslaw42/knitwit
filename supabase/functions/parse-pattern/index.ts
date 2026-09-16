@@ -302,19 +302,43 @@ const UNITS: Record<string, number> = {
   material: 1,
 };
 
-// Per caller per day, and for everyone per day. The per-IP number is generous for a real knitter —
-// fifteen whole-pattern imports in a day is far more than anyone does — while the global number is
-// the one that actually bounds the bill, at roughly €10 a day if every unit went on the dearest
-// task. Raise them when there are accounts to attach usage to.
-const DAILY_UNITS_PER_CALLER = 150;
-const DAILY_UNITS_TOTAL = 600;
+// Everyone, per day. The per-knitter number is not here: it depends on their plan, so it lives in
+// SQL beside `plan_for` rather than as a second definition that drifts from the first.
+//
+// This one stays, as the backstop the per-user limit cannot be. Accounts are free to make, so a
+// determined stranger can have as many allowances as they like; only a ceiling across all of them
+// actually bounds the bill.
+const DAILY_UNITS_TOTAL = 2_000;
 
-// The first address in x-forwarded-for is the client; the rest are proxies. Missing or unparseable
-// means everyone shares one bucket, which is the safe direction to fail.
-function callerBucket(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for') ?? '';
-  const first = forwarded.split(',')[0]?.trim();
-  return first && first.length <= 64 ? first : 'unknown';
+// Who is calling, if anybody.
+//
+// supabase-js sends the signed-in session's token, so this is a real user id for anyone using the
+// app. It falls back to null for a bare publishable key — a curl, or a client too old to have an
+// account — and the caller is then bucketed by address as before.
+//
+// `getUser` rather than reading the token's claims: the payload of a JWT is only as trustworthy as
+// its signature, and checking the signature is exactly what this does.
+async function callerIdentity(
+  request: Request,
+  url: string,
+  anonKey: string,
+): Promise<{ userId: string | null; anonymous: boolean }> {
+  const authorization = request.headers.get('Authorization') ?? '';
+  const token = authorization.replace(/^Bearer\s+/i, '');
+  // The publishable key is not a JWT and never identifies anyone; save the round trip.
+  if (!token || token.split('.').length !== 3) return { userId: null, anonymous: false };
+
+  try {
+    const response = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return { userId: null, anonymous: false };
+    const user = (await response.json()) as { id?: string; is_anonymous?: boolean };
+    return { userId: user.id ?? null, anonymous: user.is_anonymous === true };
+  } catch {
+    return { userId: null, anonymous: false };
+  }
 }
 
 // Claims budget for a call. Returns null to proceed, or a response to send instead.
@@ -327,45 +351,70 @@ async function claimBudget(request: Request, task: string): Promise<Response | n
   const units = UNITS[task] ?? 1;
   const url = Deno.env.get('SUPABASE_URL');
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   if (!url || !key) {
     console.warn('spend cap not configured; letting the call through');
     return null;
   }
 
-  let verdict: string;
+  const { userId, anonymous } = await callerIdentity(request, url, anonKey);
+
+  let verdict: { ok?: boolean; reason?: string; plan?: string; used?: number; limit?: number };
   try {
-    const response = await fetch(`${url}/rest/v1/rpc/claim_ai_units`, {
+    // A caller with an account is judged on their plan; one without is bucketed by address, which
+    // is what the whole endpoint used to do and is still the right answer for a caller who is not
+    // the app.
+    const [path, body] = userId
+      ? [
+          'claim_ai_units_for_user',
+          {
+            p_user: userId,
+            p_units: units,
+            p_anonymous: anonymous,
+            p_global_limit: DAILY_UNITS_TOTAL,
+          },
+        ]
+      : [
+          'claim_ai_units',
+          {
+            p_bucket: callerBucket(request),
+            p_units: units,
+            p_bucket_limit: 60,
+            p_global_limit: DAILY_UNITS_TOTAL,
+          },
+        ];
+
+    const response = await fetch(`${url}/rest/v1/rpc/${path}`, {
       method: 'POST',
       headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        p_bucket: callerBucket(request),
-        p_units: units,
-        p_bucket_limit: DAILY_UNITS_PER_CALLER,
-        p_global_limit: DAILY_UNITS_TOTAL,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(5_000),
     });
     if (!response.ok) {
       console.error('spend cap unavailable', response.status, await response.text().catch(() => ''));
       return null;
     }
-    verdict = (await response.json()) as string;
+    const answer = await response.json();
+    // The IP path answers with a word, the user path with an object. Normalised here so there is
+    // one thing to check below.
+    verdict = typeof answer === 'string' ? { ok: answer === 'ok', reason: answer } : answer;
   } catch (error) {
+    // Fails open. A knitter halfway up a sleeve should not be stopped by a database hiccup, and the
+    // ceilings inside this function still bound what any single call can cost.
     console.error('spend cap unreachable', error);
     return null;
   }
 
-  if (verdict === 'ok') return null;
+  if (verdict.ok) return null;
 
-  console.warn(`spend cap hit: ${verdict}, task ${task}`);
-  // 429 so the client shows it as "too many", and a Retry-After pointing at midnight UTC, which is
-  // when current_date rolls over and the counters start again.
+  console.warn(`spend cap hit: ${verdict.reason}, task ${task}, plan ${verdict.plan ?? 'unknown'}`);
+
   const midnight = new Date();
   midnight.setUTCHours(24, 0, 0, 0);
   return json(
     {
       error:
-        verdict === 'global'
+        verdict.reason === 'global'
           ? "Knitwit's daily allowance for reading patterns is used up. It resets tomorrow."
           : "You've read a lot of patterns today — the daily limit resets tomorrow.",
     },
