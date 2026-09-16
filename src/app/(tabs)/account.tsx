@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { AccountSection } from '@/components/account-section';
 import { allProgress, standing } from '@/lib/awards';
 import { backupFilename, buildBackup, readBackup, restoreMessage, writeBackup } from '@/lib/backup';
 import { openTextFile } from '@/lib/open-file';
@@ -24,8 +25,8 @@ const UNITS: { id: LengthUnit; label: string }[] = [
 
 export default function AccountScreen() {
   usePageTitle('Account');
-  const [name, setName] = useState('Pim');
-  const [savedName, setSavedName] = useState('Pim');
+  const displayName = useKnitwitStore((state) => state.settings.displayName ?? '');
+  const [name, setName] = useState(displayName);
   const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
   const level = standing(achievements);
@@ -84,13 +85,13 @@ export default function AccountScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scroll}>
         <ThemedText type="title" heading={1}>Account</ThemedText>
-        <ThemedText type="default" themeColor="inkSoft">
-          Currently saved as “{savedName}”. Sign-in isn&apos;t wired up yet — this just renames
-          you locally.
-        </ThemedText>
+        <AccountSection />
 
         <ThemedText type="smallBold" style={styles.label}>
           Name
+        </ThemedText>
+        <ThemedText type="small" themeColor="inkSoft">
+          What Knitwit calls you. Not what you sign in with.
         </ThemedText>
         <TextInput
           value={name}
@@ -100,7 +101,9 @@ export default function AccountScreen() {
           placeholderTextColor={Colors.inkSoft}
         />
 
-        <PillButton onPress={() => setSavedName(name.trim() || 'Knitter')} style={styles.saveBtn}>
+        <PillButton
+          onPress={() => updateSettings({ displayName: name.trim() })}
+          style={styles.saveBtn}>
           <ThemedText type="smallBold" themeColor="white">
             Save
           </ThemedText>

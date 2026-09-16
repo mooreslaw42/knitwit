@@ -1,0 +1,124 @@
+import type { Session, User } from '@supabase/supabase-js';
+
+import { currentSession, ensureSession } from '@/lib/session';
+import { getSupabase } from '@/lib/supabase';
+
+// Turning the account a knitter already has into one they can come back to.
+//
+// M6 of docs/plans/multi-user.md. Everyone already has an account — anonymous, made silently at
+// first launch, holding everything. What it does not have is a way back in. Lose the device and the
+// work is on a server nobody can reach, which is the opposite of the point.
+//
+// ## Upgrading, not signing up
+//
+// The common path attaches an email and password to the *existing* account, so the user id never
+// changes and nothing moves. Verified against production: an anonymous account given an email keeps
+// its id, flips `is_anonymous` to false, and signs back in later as the same person.
+//
+// Anything that creates a *new* user instead loses a knitter's whole stash at the exact moment they
+// were trying to make it safer, so every path here is explicit about which of the two it is.
+
+export type AccountState = {
+  signedIn: boolean;
+  // An account with no way back into it. True until an identity is attached.
+  anonymous: boolean;
+  email: string | null;
+  // Which providers are attached, for showing what a knitter signed in with.
+  providers: string[];
+  userId: string | null;
+};
+
+export function accountStateOf(session: Session | null): AccountState {
+  const user = session?.user;
+  return {
+    signedIn: Boolean(user),
+    anonymous: user?.is_anonymous === true,
+    email: user?.email ?? null,
+    providers: identitiesOf(user),
+    userId: user?.id ?? null,
+  };
+}
+
+function identitiesOf(user: User | undefined): string[] {
+  return (user?.identities ?? [])
+    .map((identity) => identity.provider)
+    .filter((provider) => provider !== 'anonymous');
+}
+
+export function currentAccount(): AccountState {
+  return accountStateOf(currentSession().session);
+}
+
+export type AuthResult = { ok: true } | { ok: false; message: string };
+
+// Attaches an email and password to the account already in hand.
+//
+// Same user id, so every project, pattern and photo stays exactly where it is. This is the path
+// almost everyone takes and the only one that cannot lose anything.
+export async function saveAccount(email: string, password: string): Promise<AuthResult> {
+  const session = await ensureSession();
+  if (!session) {
+    return { ok: false, message: 'Knitwit needs a connection to set that up. Try again in a moment.' };
+  }
+
+  const { error } = await getSupabase().auth.updateUser({ email: email.trim(), password });
+  if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
+// Signs into an account that already exists — a different one from the anonymous account on this
+// device.
+//
+// The caller is responsible for warning first and for clearing what is local: the user id changes,
+// so everything on this device belongs to the account being left behind. Doing that quietly would
+// show one account's knitting under another's name.
+export async function signInExisting(email: string, password: string): Promise<AuthResult> {
+  const { error } = await getSupabase().auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
+// Apple and Google.
+//
+// `linkIdentity` on an account worth keeping, so the id survives; `signInWithOAuth` only when there
+// is nothing to keep. Both need the provider configured in the Supabase dashboard with real
+// credentials — there is nothing in the code that can stand in for that, and until it is done these
+// return the provider's own complaint rather than pretending.
+export async function attachProvider(provider: 'apple' | 'google'): Promise<AuthResult> {
+  const account = currentAccount();
+  const supabase = getSupabase();
+
+  const { error } = account.anonymous
+    ? await supabase.auth.linkIdentity({ provider })
+    : await supabase.auth.signInWithOAuth({ provider });
+
+  if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
+export async function signOut(): Promise<AuthResult> {
+  const { error } = await getSupabase().auth.signOut();
+  if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
+// Supabase's messages are written for developers. These are the ones a knitter can actually meet.
+function readable(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes('already registered') || text.includes('already been registered')) {
+    return 'That email already has a Knitwit account. Sign in to it instead.';
+  }
+  if (text.includes('invalid login')) return "That email and password don't match an account.";
+  if (text.includes('password')) return 'That password is too short — six characters or more.';
+  if (text.includes('email')) return "That doesn't look like an email address.";
+  if (text.includes('identity is already linked') || text.includes('already linked')) {
+    return 'That account is already attached to a different Knitwit account.';
+  }
+  if (text.includes('manual linking')) {
+    return 'Signing in with Apple or Google is not switched on for Knitwit yet.';
+  }
+  return 'That did not work. Try again in a moment.';
+}

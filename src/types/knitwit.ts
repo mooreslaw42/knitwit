@@ -35,6 +35,10 @@ export type UserSettings = {
   // The unit new gauges default to, and the one stored gauges are shown in. Storage is unaffected:
   // a gauge is always kept as it was written, and converted at the point it is displayed.
   gaugeUnit: LengthUnit;
+  // What Knitwit calls the knitter. Deliberately not what they sign in with — Supabase Auth keys on
+  // an email address, and a name that also had to be unique would be a different thing entirely.
+  // Absent on a device that predates it, which reads as "not said" rather than empty.
+  displayName?: string;
 };
 
 // One entry per day the knitter actually knitted. Keyed by *local* date, because a streak is
