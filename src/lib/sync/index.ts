@@ -4,12 +4,13 @@ import { currentUserId, ensureSession } from '@/lib/session';
 import { markAllDirty, syncEntity } from '@/lib/sync/engine';
 import { ENTITIES } from '@/lib/sync/registry';
 import { watchAll } from '@/lib/sync/watch';
+import { onMissingPhoto, onPhotoStored } from '@/lib/photo-store';
+import { downloadPhoto, markAllPhotosForUpload, markPhotoForUpload, pushPhotos } from '@/lib/sync/photos';
 
 // Starting and pacing the sync.
 //
-// M2 of docs/plans/multi-user.md, wired for materials only. Everything here is background work: it
-// is started once, never awaited, and every failure is a warning. Knitwit works with no network and
-// that does not change.
+// M2-M4 of docs/plans/multi-user.md. Everything here is background work: started once, never
+// awaited, and every failure a warning. Knitwit works with no network and that does not change.
 
 // Which accounts have had their existing device data queued for upload, and against which set of
 // entities. Keyed by user id, because signing into a different account on the same device must not
@@ -20,7 +21,7 @@ import { watchAll } from '@/lib/sync/watch';
 // because only *changes* are marked and a stash that is not about to change is never marked at all.
 // Raise this whenever ENTITIES grows and everyone re-queues once.
 const SEEDED_KEY = 'knitwit-sync-seeded';
-const SEED_GENERATION = 2;
+const SEED_GENERATION = 3;
 
 // Long enough that a knitter editing a yarn does not fire a request per keystroke; short enough
 // that closing the laptop a few seconds later has still sent it.
@@ -73,6 +74,12 @@ export async function runSync(): Promise<void> {
         console.log(`sync: ${entity.table} +${result.pushed} sent, ${result.pulled} received`);
       }
     }
+
+    // Last, and on purpose. A record naming a photo is worth more than the photo: the yarn appears
+    // on the other device immediately and the picture fills in behind it, rather than nothing
+    // appearing until several megabytes have moved.
+    const photos = await pushPhotos();
+    if (photos) console.log(`sync: photos +${photos} sent`);
   } catch (error) {
     // Never rethrow. This runs unattended and an unhandled rejection here would surface as a crash
     // in an app that is otherwise working perfectly well offline.
@@ -84,6 +91,14 @@ export async function runSync(): Promise<void> {
 export function startSync(): () => void {
   if (started) return () => {};
   started = true;
+
+  // Photos are not in the store, so the watcher cannot see them. These two hooks are how the byte
+  // store and the network find each other without either importing the other.
+  onPhotoStored(async (id) => {
+    await markPhotoForUpload(id);
+    scheduleSync();
+  });
+  onMissingPhoto(downloadPhoto);
 
   const unwatch = watchAll(scheduleSync);
 
@@ -98,6 +113,7 @@ export function startSync(): () => void {
     if (!(await alreadySeeded(userId))) {
       let queued = 0;
       for (const entity of ENTITIES) queued += await markAllDirty(entity);
+      queued += await markAllPhotosForUpload();
       await markSeeded(userId);
       if (queued) console.log(`sync: queueing ${queued} existing records for first upload`);
     }

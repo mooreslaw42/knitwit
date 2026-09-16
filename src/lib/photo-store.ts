@@ -42,7 +42,43 @@ function keyFor(id: string): string {
 export async function putPhoto(dataUrl: string): Promise<string> {
   const id = entityId('photo');
   await AsyncStorage.setItem(keyFor(id), dataUrl);
+  // Queued here rather than by a watcher, because a photo is not part of the store and nothing
+  // would notice it otherwise. This is the only place one is made.
+  await onStored?.(id);
   return id;
+}
+
+// Told about a new photo. Set by the sync layer, absent when there is none.
+let onStored: ((id: string) => Promise<void>) | null = null;
+
+export function onPhotoStored(handler: (id: string) => Promise<void>): void {
+  onStored = handler;
+}
+
+// The bytes this device is holding for an id, or nothing. No network.
+export async function readCachedPhoto(id: string): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(keyFor(id));
+  } catch {
+    return null;
+  }
+}
+
+// Keeps a copy of bytes that came from somewhere else.
+export async function cachePhoto(id: string, dataUrl: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(keyFor(id), dataUrl);
+  } catch {
+    // Out of room. The picture still shows this once; it will be fetched again next time.
+  }
+}
+
+// Fills a gap from the server. Set by the sync layer so this module needs no knowledge of it —
+// photo-store is about bytes and where they sit, not about accounts.
+let fetchMissing: ((id: string) => Promise<string | null>) | null = null;
+
+export function onMissingPhoto(fetcher: (id: string) => Promise<string | null>): void {
+  fetchMissing = fetcher;
 }
 
 // Resolves whatever a record is holding into something an <Image> can use.
@@ -50,15 +86,18 @@ export async function putPhoto(dataUrl: string): Promise<string> {
 // Returns the value unchanged when it is already a data URL, so a record that has not been migrated
 // still renders. There is no version flag deciding which it is: the value says what it is, which
 // means a half-finished migration is merely half-finished rather than broken.
+//
+// A photo this device has never held — a yarn added on a phone, opened on a laptop — is fetched
+// once and kept. Everything after that is a cache hit, which is what makes a stash still scroll on
+// a train.
 export async function getPhoto(value: string | null | undefined): Promise<string | null> {
   if (!value) return null;
   if (isInlinePhoto(value)) return value;
   if (!isPhotoId(value)) return null;
-  try {
-    return await AsyncStorage.getItem(keyFor(value));
-  } catch {
-    return null;
-  }
+
+  const cached = await readCachedPhoto(value);
+  if (cached) return cached;
+  return fetchMissing ? fetchMissing(value) : null;
 }
 
 // Deleting the record that owns a photo should not leave the bytes behind for ever.
