@@ -1,195 +1,200 @@
-# Knitwit — accounts, sync, and subscriptions
+# Knitwit — accounts, sync, and signing in
 
-**Status: proposed, nothing built.** Written 2026-09-16 from measurements against the live project,
-not from memory. Decisions taken by survey are recorded where they bite.
+**Status: M1–M5 built and running against production. M6 is next. Everything after it is
+deferred — see the end.** Rewritten 2026-09-16 after the first five milestones, so that what is
+here describes what exists rather than what was once intended.
 
-Four choices frame everything below:
+Four choices frame the whole thing, all still holding:
 
 - **Local-first with row-level sync.** The app keeps working with no network; Postgres is the
   durable truth; reconciliation happens per entity, never per blob.
 - **Two devices from day one.** Conflict handling is real work, not a later retrofit.
 - **Patterns may become shareable one day.** Projects and stash never do.
-- **Nobody is asked to sign up.** Existing knitters get an account silently and keep their data.
+- **Nobody is asked to sign up.** Knitters get an account silently and keep their data.
 
-## What is true today
+## What is built
 
-Measured, so the plan starts from facts rather than impressions:
+### M1 — Accounts and a schema (`641623e`)
 
-| | |
+Twelve tables. Identity, ownership, timestamps and deletion are columns because the database has to
+reason about them; the payload is JSONB because only the app does — a column per field would mean a
+migration every time a yarn gains an attribute.
+
+The primary key is `(user_id, id)`. Ids come from the client, because a knitter makes a section on a
+train, and they are unique *per knitter* rather than globally: the seed ships the same `m1` and
+`proj1` to everybody, so a global key would have the second person to sync collide with the first.
+
+Verified against production, not assumed: a client sending `updated_at` of 2099 is stored as *now*;
+a second account sees `[]` where the first sees its rows; writing a row owned by somebody else is
+refused 403; signing up creates a profile and a free subscription by trigger.
+
+### M2 — The sync engine (`0800df7`)
+
+An outbox makes offline real: a write lands in the store *and* in a persisted set of what has not
+been sent. It records **which** things changed, never **how** — five edits on a train are one entry,
+and the push sends whatever the store says when it runs.
+
+Who wins is decided by the outbox, not by a clock. A row waiting to be sent is newer than anything
+the server has, because the server has not heard of it. Comparing timestamps across devices means
+trusting their clocks; **push order is a fact, wall time is a claim.**
+
+Deletes travel as tombstones. A row simply absent is indistinguishable from one this device has not
+seen yet, so a delete made offline would come straight back on the next pull.
+
+### M3 — Everything else, counter included (`ebc9b05`)
+
+Nine entities, in an order that is load-bearing: parents before children, because a section arriving
+for a project this device has never seen has nowhere to go. A section whose parent is still missing
+is **held aside rather than dropped** — the watermark moves on regardless, so dropping it would lose
+it for good.
+
+Sections are nested locally and flat on the server, with the parent and ordering as **real columns**:
+a foreign key cannot point inside JSONB and neither can a useful index.
+
+### M4 — Photos in Storage (`e57353a`)
+
+A private bucket keyed `{user_id}/{photo_id}.jpg`, owner-only on every verb. Not public: a public
+bucket means anyone holding a URL can read the object, and photo ids, while random, are not secrets.
+
+The device keeps its copy — Storage is where photos live, local is a cache that happens to be
+written first, which is what lets a stash scroll on a train. Gaps fill lazily, when something
+actually draws the photo.
+
+### M5 — The spend cap follows the account (`f440d07`)
+
+The Edge Function identifies the caller from their token — verified, not decoded, because a JWT's
+payload is only as trustworthy as its signature — and asks the database what they are entitled to.
+The limit lives in SQL beside `plan_for`, not as a number in the function: two definitions of what
+somebody may spend drift apart, and the one that drifts is the one nobody is looking at.
+
+| | daily units |
 |---|---|
-| Supabase region | **eu-west-1 (Ireland)** — already EU, so GDPR residency needs no migration |
-| Data per knitter | ~250KB: 133KB patterns, 88KB projects, 54KB for a *single* photo |
-| Storage | One JSON blob in `AsyncStorage`, ~5MB browser ceiling, no server copy |
-| Entity types | 23 in `src/types/knitwit.ts` |
-| Write frequency | Every row tap on the counter writes the whole store |
-| Auth | None. One shared publishable key; the AI spend cap is bucketed by IP |
+| anonymous | 60 |
+| signed in (free) | 150 |
+| pro | 1500 |
+| everyone, combined | 2000 |
 
-Two of these actively fight multi-user and have to change regardless of anything else.
+Anonymous gets less deliberately: those accounts cost nothing to make, so an allowance attached to
+one can be minted again by clearing storage.
 
-**Photos are base64 inside the store.** One is 54KB. A knitter with thirty yarns and a dozen
-projects is carrying tens of megabytes, which is fine in a browser blob and absurd in a Postgres
-row. They move to Supabase Storage.
+## The three merge rules
 
-**The counter writes constantly.** A knitter taps `+` every few seconds and expects it to work on a
-train. Any design where a row count needs a network is the wrong design.
+1. **Descriptions — last write wins.** Names, notes, colours, settings. Someone renamed it; the
+   rename stands.
 
-## The shape
-
-### One sync unit per thing a knitter thinks about
-
-Normalising all the way down — pattern → section → row → stitch group — would make every chart edit
-a five-table transaction. Storing each pattern as one row with `sections` as JSONB would make the
-counter fight the notes field. The split that matters is where the **hot writes** are:
-
-| Table | Written | Why its own row |
-|---|---|---|
-| `projects` | Rarely | Name, status, labels, notes, colours |
-| `project_sections` | **Constantly** | `row`, `complete`, `seconds` — the counter lives here |
-| `patterns` | Rarely | Plus `visibility`, see below |
-| `pattern_sections` | Occasionally | `rows` stays JSONB: the stitch editor saves a chart whole |
-| `materials`, `tools`, `techniques` | Occasionally | Small, independent |
-| `activity_days` | Daily | Additive, see merge rules |
-| `profiles`, `subscriptions` | Server | One row per user |
-
-Putting the counter in its own small row is the single most important structural decision here.
-It means counting rows on a phone touches one narrow record, and editing that project's notes on a
-laptop touches a different one, so the commonest two-device situation is not a conflict at all.
-
-Every table carries `user_id`, `updated_at` (set by a trigger, never by the client — a device with
-a wrong clock must not be able to win an argument), and `deleted_at`.
-
-### Tombstones, not deletes
-
-A row deleted on the phone and absent from the laptop's next push is indistinguishable from a row
-the laptop has not seen yet — so a hard delete comes back from the dead on the next sync. Deletes
-set `deleted_at`, queries filter it, and a scheduled job purges after 30 days.
-
-### The outbox is what makes offline real
-
-Local writes go to the Zustand store *and* an append-only outbox. Sync drains the outbox when there
-is a network and leaves it alone when there is not. The knitter never waits for a request, and a
-closed laptop lid is not a lost row.
-
-Pull is `where user_id = auth.uid() and updated_at > :since`, per table, with `since` kept locally.
-
-### Three merge rules, not one
-
-Last-write-wins everywhere is the usual shortcut and it is wrong for this app in two specific ways.
-
-1. **Descriptive fields — last write wins.** Names, notes, colours, settings. Someone renamed it;
-   the rename stands.
-2. **Accumulators — the larger, never the older.** `seconds` on a section, and everything in
+2. **Counters — the larger, never the older.** `seconds` on a section, and everything in
    `Achievements`, which says of itself that nothing there ever decreases.
 
-   **Built as max(), not as a sum — a correction to what this plan first said.** Adding is what a
-   knitter would expect and it cannot be done with two numbers: both devices started from the same
+   **Built as max(), not as a sum — a correction to what this plan first promised.** Adding is what
+   a knitter would expect and it cannot be done with two numbers: both devices started from the same
    total, and nothing in "500 here, 520 there" distinguishes shared history from new work. Twenty
    minutes on a phone and ten on a laptop with no sync between reads as twenty, not thirty.
 
-   Doing it properly needs a per-device counter — each device tracking its own contribution, the
-   total being their sum — which changes the stored shape of every counter in the app. Worth doing
-   when somebody actually knits on two devices in one day; not worth it before. What max() buys in
-   the meantime is real: a count never goes backwards, and the larger contribution is never lost.
+   Doing it properly needs a per-device counter, which changes the stored shape of every counter in
+   the app. Worth doing when somebody actually knits on two devices in a day. What max() buys
+   meanwhile is real: a count never goes backwards and the larger contribution is never lost.
    Last-write-wins fails both.
-3. **The row count — last write wins, deliberately and with eyes open.** Max() is tempting and
-   wrong: a knitter who frogs back to row 10 on the phone would have row 20 restored from the
-   laptop, which is the opposite of what they asked for. So the latest write stands.
 
-That third rule has a real failure case, and it is worth stating rather than hiding: counting the
-*same section* on *two devices at once* resolves to whichever synced last, and the other device's
-taps are lost. A full operation log — every tap an event, events merging commutatively — would fix
-it properly. It is not worth the machinery for a knitter who owns one pair of hands, and the escape
-hatch is documented instead.
+3. **The row count — last write wins, deliberately.** Max() is tempting and wrong: a knitter who
+   frogs back to row 10 on their phone would have row 40 restored from a stale laptop.
 
-### Photos move to Storage
+   The failure that remains, stated rather than hidden: counting the **same section on two devices
+   at once** resolves to whichever synced last, and the other device's taps are lost. An operation
+   log would fix it. Not worth the machinery for a knitter with one pair of hands.
 
-A bucket keyed `{user_id}/{entity}/{id}.jpg`, owner-only policies, and a path in the row rather
-than bytes. Existing base64 photos upload on first sync and are dropped from the blob. This is also
-what quietly fixes the 5MB browser ceiling we found earlier.
+## M6 — Signing in
 
-## Auth
+The next and, for now, last milestone. Anonymous accounts already exist and already hold everything;
+this is about attaching a real identity to one so it survives a lost phone.
 
-**Anonymous first.** `signInAnonymously()` on first launch. The knitter is not asked anything, their
-local data uploads under a real `user_id`, and everything below works immediately.
+**`linkIdentity()`, not a new account.** Apple and Google attach to the *same* `user_id`, so nothing
+moves and nothing is lost. Signing in is an upgrade, not a migration — which is the entire reason
+for going anonymous first.
 
-**Signing in is an upgrade, not a migration.** `linkIdentity()` attaches Apple or Google to the
-*same* user id, so nothing moves and nothing is lost. This is the whole reason for going anonymous
-first rather than putting a signup wall in front of an app that currently has none.
+### A thing to be straight about: there is no username
 
-Three caveats that need designing for, not discovering:
+Supabase Auth's password provider keys on **email or phone. There is no username sign-in**, and
+nothing in the platform to enable. Three ways to get one, none free:
 
-- Anonymous sign-in is rate-limited to **30 requests per hour per IP**.
-- Abandoned anonymous users are **never cleaned up automatically** — a scheduled purge of accounts
-  with no linked identity and no activity for 90 days.
-- Anonymous users hold the same `authenticated` role as everyone else. RLS must check the
-  `is_anonymous` JWT claim wherever a throwaway account should not have full run of the place.
+| Approach | What it costs |
+|---|---|
+| **Email + password** *(recommended)* | Nothing. It is the supported path, it gives password reset for free, and it is what most people mean by "username and password" anyway. |
+| **Username stored in `profiles`** | Also nothing, and worth doing regardless — it is a display name. But it is not what you sign in with. |
+| **True username login** | A lookup from username to email before calling `signIn`. That lookup has to be callable by someone who is *not* signed in, which tells any stranger whether a username exists — a slow leak of who has an account. Plus a uniqueness constraint and a reservation flow. |
 
-**Ravelry is not a provider and cannot be made into one.** It is plain OAuth 2.0 with a client
-secret and registered redirect URLs — no `id_token`, so it is not OIDC and `signInWithIdToken` will
-not take it. It needs an Edge Function doing the code exchange and minting a session through the
-Admin API. Entirely doable, meaningfully more work than Apple or Google, and the reason it is last
-in the order below rather than first.
+**Recommendation: email + password for signing in, username in `profiles` as a display name.** If a
+true username login matters, it is buildable, and the leak above is the thing to decide about rather
+than the code.
 
-## Subscriptions and entitlements
+### What M6 covers
 
-Stripe is not needed yet, but the *shape* is cheap now and expensive to retrofit into a live table.
+- **Apple** and **Google** through `linkIdentity()` on an existing anonymous account, and through
+  `signInWithOAuth()` on a device that has never had one.
+- **Email + password**, via `updateUser({ email, password })` to upgrade an anonymous account —
+  email verified before the password is accepted.
+- **Signing in on a second device**, which is the case that has never been exercised: a device that
+  already has an anonymous account with local data, signing into an account that also has data. Two
+  sets of rows, one winner to choose. Worth deciding before it happens rather than after.
+- Retiring the hardcoded `'Pim'` on the Account screen, finally, since `profiles` will have a real
+  name in it.
 
-- `profiles` — display name and the like. One row, readable and writable by its owner. (This also
-  retires the hardcoded `'Pim'` on the Account screen.)
-- `subscriptions` — `status`, `plan`, `current_period_end`, `stripe_customer_id`. **Writable only by
-  the service role.** A client that can write its own plan does not have a paywall.
-- `public.plan_for(uid)` — one SQL function both RLS policies and Edge Functions call, so there is
-  exactly one definition of what somebody is entitled to.
+### What M6 has to get right
 
-**Entitlements are enforced on the server or not at all.** The client may hide a button; only the
-Edge Function decides whether the model runs. Concretely, today's IP-bucketed spend cap becomes
-per-user and plan-aware, which is strictly better than what is there now — the current cap punishes
-a household sharing an address and cannot tell a paying knitter from a stranger.
+- **The anonymous account is not disposable.** It holds everything. Any path that creates a *new*
+  user instead of linking loses a knitter's whole stash, silently, at the moment they were trying to
+  make it safer.
+- **Apple sign-in is mandatory on iOS** if Google is offered, per App Store review.
+- **Email verification before the password sticks**, or an account is claimable by typing somebody
+  else's address.
 
-## Privacy
+## Deferred
 
-- **EU already.** `eu-west-1`, so nothing to move.
-- **`visibility` on patterns from day one**, defaulting to `private`. Adding a column to a live
-  table later is painful; adding it now is free. Projects and stash have no such column, because
-  the answer for them is never.
-- **Deletion means deletion.** Account delete cascades every table and purges the Storage prefix.
-  GDPR erasure, and the right default regardless.
-- **Export already exists.** The backup file becomes the portability answer; it learns to pull from
-  the server rather than only the device.
-- **Say what leaves the device.** Ball-band photos and pattern text go to GreenPT. Friends will not
-  care; it still needs writing down once, and a processor agreement before strangers do.
+Not planned, not scheduled, written down so the reasoning survives.
 
-## Order
+**Ravelry sign-in.** Plain OAuth 2.0 with a client secret and registered redirect URLs — no
+`id_token`, so it is not OIDC and `signInWithIdToken` will not take it. It needs an Edge Function
+doing the code exchange and minting a session through the Admin API. Entirely doable; its own
+project, and it should sit on foundations that are already boring.
 
-Each step ships on its own and leaves the app working.
+**Stripe.** The shape is already in place — `subscriptions` with a read policy and no write policy,
+so a plan can be granted by a webhook and by nothing else, and `plan_for` already decides
+entitlements. Nothing to build until there is something to sell.
 
-| | | Why here |
-|---|---|---|
-| **M1** | Schema, RLS, anonymous auth, `profiles` | Dark. Nothing user-visible; everything else needs it |
-| **M2** | Sync engine — outbox, pull/push, tombstones. **Materials first** | One small, low-risk entity proves the engine before projects trust it |
-| **M3** | The rest of the entities, counter last | The counter is the hot path; it goes last, when the engine is boring |
-| **M4** | Photos to Storage | Independent of sync; fixes the quota ceiling too |
-| **M5** | Per-user, plan-aware spend cap | Replaces the IP bucket. Better even with one plan |
-| **M6** | Apple and Google via `linkIdentity()` | The upgrade path, once there is something worth keeping |
-| **M7** | Ravelry via Edge Function | Hardest auth, least leverage, done when the rest is solid |
-| **M8** | Stripe | When there is something to sell |
+## Still open
+
+Small things that are known rather than forgotten.
+
+- **No pull on reconnect or foreground.** Sync runs at launch and 1.5s after a local change, so a
+  device left open will not see another's changes until something happens locally. The cheapest real
+  improvement available.
+- **Abandoned anonymous accounts are never cleaned up.** Supabase does not do it; a scheduled purge
+  of accounts with no linked identity and no activity for 90 days is needed before strangers use
+  this.
+- **Two devices used *before* accounts existed** each invented their own ids for what the knitter
+  thinks of as the same project. No backfill can know they are the same; they will sync as
+  duplicates, and the answer is to pick one device as the source of truth on first sign-in.
+- **`is_anonymous` is not checked in any policy yet.** Nothing today needs it — reading and writing
+  your own knitting is the whole surface — but publishing a pattern would.
+- **A processor note for GreenPT.** Ball-band photos and pattern text leave the device. Friends will
+  not care; strangers need telling, once.
 
 ## What would make this go wrong
 
-Worth writing down while it is still cheap to change course.
+Still true, and two of them already caught something.
 
-**Building sync before the schema settles.** Every entity that changes shape after M2 costs a
-migration on live data. M1 deserves more argument than it will seem to need.
+**Trusting the client's clock.** `updated_at` is set by a database trigger. Verified: a client
+sending 2099 is stored as now.
 
-**Trusting the client's clock.** `updated_at` is set by a database trigger. A device with a skewed
-clock that can set its own timestamps can win every conflict it should lose, and the symptom is
-data quietly reverting.
-
-**Testing sync with one device.** Every interesting bug here needs two. Two browsers, one offline,
-is the minimum harness, and it should exist before M3.
+**Testing sync with one device.** Every interesting bug here needs two. Both real bugs in M2 — the
+echo storm, and marks that were not durable — were found that way.
 
 **Letting the client decide entitlements.** The moment a paywall is a boolean in the store, it is
 not a paywall.
 
 **Forgetting the counter is the product.** If sync ever makes tapping `+` feel slow or lossy, the
 sync is wrong, not the counter. It stays local and instant; the network catches up afterwards.
+
+**Adding an entity and forgetting the seed generation.** Only *changes* are marked, and a stash that
+is not about to change is never marked at all — so a new entity uploads nothing, for ever, for every
+account that already ran. Caught twice now. `SEED_GENERATION` in `src/lib/sync/index.ts` goes up
+whenever `ENTITIES` grows.
