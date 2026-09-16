@@ -78,9 +78,19 @@ Last-write-wins everywhere is the usual shortcut and it is wrong for this app in
 
 1. **Descriptive fields — last write wins.** Names, notes, colours, settings. Someone renamed it;
    the rename stands.
-2. **Accumulators — add, never replace.** `seconds` on a section, and everything in
-   `activity_days`. Knitting twenty minutes on the phone and ten on the laptop is thirty minutes.
-   Last-write-wins would silently throw half of it away.
+2. **Accumulators — the larger, never the older.** `seconds` on a section, and everything in
+   `Achievements`, which says of itself that nothing there ever decreases.
+
+   **Built as max(), not as a sum — a correction to what this plan first said.** Adding is what a
+   knitter would expect and it cannot be done with two numbers: both devices started from the same
+   total, and nothing in "500 here, 520 there" distinguishes shared history from new work. Twenty
+   minutes on a phone and ten on a laptop with no sync between reads as twenty, not thirty.
+
+   Doing it properly needs a per-device counter — each device tracking its own contribution, the
+   total being their sum — which changes the stored shape of every counter in the app. Worth doing
+   when somebody actually knits on two devices in one day; not worth it before. What max() buys in
+   the meantime is real: a count never goes backwards, and the larger contribution is never lost.
+   Last-write-wins fails both.
 3. **The row count — last write wins, deliberately and with eyes open.** Max() is tempting and
    wrong: a knitter who frogs back to row 10 on the phone would have row 20 restored from the
    laptop, which is the opposite of what they asked for. So the latest write stands.

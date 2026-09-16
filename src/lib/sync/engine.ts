@@ -41,6 +41,8 @@ export type Row = {
   data: Record<string, unknown>;
   updated_at: string;
   deleted_at: string | null;
+  // Whatever a table keeps outside the payload — a parent id, an ordering — see `columns` below.
+  [column: string]: unknown;
 };
 
 // What a table needs to tell the engine about itself. Everything else is the same for all of them.
@@ -54,7 +56,22 @@ export type Entity<T> = {
   // The payload that goes in `data`. Kept separate from the local shape so a field that is purely
   // local — a cache, a draft — can be left behind rather than travelling.
   toRow: (value: T) => Record<string, unknown>;
-  fromRow: (data: Record<string, unknown>) => T;
+  // The whole row, so a binding can read columns that live outside `data`.
+  fromRow: (data: Record<string, unknown>, row: Row) => T;
+  // Real columns rather than payload, for the few things the database itself has to reason about:
+  // which project a section belongs to, and what order the sections go in. A foreign key cannot
+  // point into JSONB, and neither can an index worth having.
+  columns?: (value: T) => Record<string, unknown>;
+  // Those same column names, so a pull asks for them.
+  extraSelect?: string;
+  // Columns for a tombstone, where the value itself is already gone.
+  tombstoneColumns?: (id: string) => Record<string, unknown>;
+  // How to combine a row that arrived with the copy already here, when there is one.
+  //
+  // Absent means take what arrived, which is right for anything describing a thing: someone
+  // renamed a yarn, the rename stands. It is wrong for anything that counts, where the arriving
+  // row and the local one are both partly true — see mergeMonotonic.
+  merge?: (local: T | undefined, incoming: T) => T;
 };
 
 type Watermarks = Record<string, string>;
@@ -132,7 +149,17 @@ async function push<T>(
     if (item.kind === 'delete') {
       // A tombstone, not a delete. A row removed outright is indistinguishable from one the other
       // device has not seen yet, so it would come straight back on the next pull.
-      upserts.push({ user_id: userId, id: item.id, data: {}, deleted_at: new Date().toISOString() });
+      //
+      // `tombstoneColumns` fills whatever the table insists on. A section's parent id is NOT NULL,
+      // and the row being deleted is exactly the one whose parent can no longer be looked up, so
+      // the value has to come from somewhere that still remembers it.
+      upserts.push({
+        user_id: userId,
+        id: item.id,
+        data: {},
+        deleted_at: new Date().toISOString(),
+        ...(entity.tombstoneColumns ? entity.tombstoneColumns(item.id) : {}),
+      });
       sent.push(item);
       continue;
     }
@@ -141,14 +168,26 @@ async function push<T>(
     if (!value) {
       // Marked, then deleted through a path that did not mark the delete. Treat the absence as the
       // truth rather than pushing nothing and leaving the entry to retry for ever.
-      upserts.push({ user_id: userId, id: item.id, data: {}, deleted_at: new Date().toISOString() });
+      upserts.push({
+        user_id: userId,
+        id: item.id,
+        data: {},
+        deleted_at: new Date().toISOString(),
+        ...(entity.tombstoneColumns ? entity.tombstoneColumns(item.id) : {}),
+      });
       sent.push(item);
       continue;
     }
 
     // `updated_at` is never sent: the database sets it on insert and update, so whatever this
     // device believes the time to be does not enter into it.
-    upserts.push({ user_id: userId, id: item.id, data: entity.toRow(value), deleted_at: null });
+    upserts.push({
+      user_id: userId,
+      id: item.id,
+      data: entity.toRow(value),
+      deleted_at: null,
+      ...(entity.columns ? entity.columns(value) : {}),
+    });
     sent.push(item);
   }
 
@@ -172,7 +211,7 @@ async function pull<T>(
 
   const { data, error } = await supabase
     .from(entity.table)
-    .select('id, data, updated_at, deleted_at')
+    .select(`id, data, updated_at, deleted_at${entity.extraSelect ? `, ${entity.extraSelect}` : ''}`)
     .gt('updated_at', since)
     .order('updated_at', { ascending: true });
 
@@ -181,7 +220,7 @@ async function pull<T>(
     return 0;
   }
 
-  const rows = (data ?? []) as Row[];
+  const rows = (data ?? []) as unknown as Row[];
   if (rows.length === 0) return 0;
 
   // Anything still waiting to be sent is this device's business and must not be overwritten by the
@@ -196,7 +235,8 @@ async function pull<T>(
     if (row.deleted_at) {
       delete next[row.id];
     } else {
-      next[row.id] = entity.fromRow(row.data ?? {});
+      const incoming = entity.fromRow(row.data ?? {}, row);
+      next[row.id] = entity.merge ? entity.merge(next[row.id], incoming) : incoming;
     }
     applied++;
   }

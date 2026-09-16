@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { currentUserId, ensureSession } from '@/lib/session';
-import { syncMaterials, uploadAllMaterials, watchMaterials } from '@/lib/sync/materials';
+import { markAllDirty, syncEntity } from '@/lib/sync/engine';
+import { ENTITIES } from '@/lib/sync/registry';
+import { watchAll } from '@/lib/sync/watch';
 
 // Starting and pacing the sync.
 //
@@ -9,9 +11,16 @@ import { syncMaterials, uploadAllMaterials, watchMaterials } from '@/lib/sync/ma
 // is started once, never awaited, and every failure is a warning. Knitwit works with no network and
 // that does not change.
 
-// Which accounts have had their existing device data queued for upload. Keyed by user id, because
-// signing into a different account on the same device must not skip its own first upload.
+// Which accounts have had their existing device data queued for upload, and against which set of
+// entities. Keyed by user id, because signing into a different account on the same device must not
+// skip its own first upload.
+//
+// The number matters as much as the key. When sync covered only yarn, every account that ran it was
+// marked done — and adding projects would then have uploaded nothing for any of them, for ever,
+// because only *changes* are marked and a stash that is not about to change is never marked at all.
+// Raise this whenever ENTITIES grows and everyone re-queues once.
 const SEEDED_KEY = 'knitwit-sync-seeded';
+const SEED_GENERATION = 2;
 
 // Long enough that a knitter editing a yarn does not fire a request per keystroke; short enough
 // that closing the laptop a few seconds later has still sent it.
@@ -23,7 +32,12 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 async function alreadySeeded(userId: string): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(SEEDED_KEY);
-    return Boolean(raw && (JSON.parse(raw) as Record<string, boolean>)[userId]);
+    if (!raw) return false;
+    const all = JSON.parse(raw) as Record<string, number | boolean>;
+    const seen = all[userId];
+    // `true` is the old shape, written when only yarn synced — which is generation 1.
+    const generation = seen === true ? 1 : typeof seen === 'number' ? seen : 0;
+    return generation >= SEED_GENERATION;
   } catch {
     return false;
   }
@@ -32,8 +46,8 @@ async function alreadySeeded(userId: string): Promise<boolean> {
 async function markSeeded(userId: string): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(SEEDED_KEY);
-    const all = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-    all[userId] = true;
+    const all = raw ? (JSON.parse(raw) as Record<string, number | boolean>) : {};
+    all[userId] = SEED_GENERATION;
     await AsyncStorage.setItem(SEEDED_KEY, JSON.stringify(all));
   } catch {
     // Worst case it seeds twice, which queues rows the server already has. An upsert of the same
@@ -51,9 +65,13 @@ export function scheduleSync(): void {
 
 export async function runSync(): Promise<void> {
   try {
-    const result = await syncMaterials();
-    if (result.pushed || result.pulled) {
-      console.log(`sync: materials +${result.pushed} sent, ${result.pulled} received`);
+    // One at a time, in registry order. A section's project has to be here before the section is,
+    // and running them together would make that a race rather than a rule.
+    for (const entity of ENTITIES) {
+      const result = await syncEntity(entity);
+      if (result.pushed || result.pulled) {
+        console.log(`sync: ${entity.table} +${result.pushed} sent, ${result.pulled} received`);
+      }
     }
   } catch (error) {
     // Never rethrow. This runs unattended and an unhandled rejection here would surface as a crash
@@ -67,7 +85,7 @@ export function startSync(): () => void {
   if (started) return () => {};
   started = true;
 
-  const unwatch = watchMaterials(scheduleSync);
+  const unwatch = watchAll(scheduleSync);
 
   void (async () => {
     const session = await ensureSession();
@@ -78,9 +96,10 @@ export function startSync(): () => void {
     // the stash a knitter built up before accounts existed would sit there for ever, since only
     // *changes* are marked and none of it is about to change.
     if (!(await alreadySeeded(userId))) {
-      const queued = await uploadAllMaterials();
+      let queued = 0;
+      for (const entity of ENTITIES) queued += await markAllDirty(entity);
       await markSeeded(userId);
-      if (queued) console.log(`sync: queueing ${queued} existing materials for first upload`);
+      if (queued) console.log(`sync: queueing ${queued} existing records for first upload`);
     }
 
     await runSync();
