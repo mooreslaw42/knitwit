@@ -27,6 +27,7 @@ import { CrashScreen } from '@/components/crash-screen';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import { migratePhotos } from '@/lib/migrate-photos';
 import { ensureSession, watchSession } from '@/lib/session';
+import { startSync } from '@/lib/sync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -81,7 +82,13 @@ export default function RootLayout() {
   useEffect(() => {
     const stop = watchSession();
     void ensureSession();
-    return stop;
+    // Yarn only, for now. Background from end to end: started, never awaited, every failure a
+    // warning. See docs/plans/multi-user.md.
+    const stopSync = startSync();
+    return () => {
+      stop();
+      stopSync();
+    };
   }, []);
 
   // Photos saved before they had their own storage are moved out of the store, once, in the
