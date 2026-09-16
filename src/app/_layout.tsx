@@ -26,6 +26,7 @@ import { Colors } from '@/constants/theme';
 import { CrashScreen } from '@/components/crash-screen';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import { migratePhotos } from '@/lib/migrate-photos';
+import { ensureSession, watchSession } from '@/lib/session';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -71,6 +72,17 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [ready]);
+
+  // An account, established quietly in the background.
+  //
+  // Deliberately not awaited and deliberately not gating anything: the app is entirely local until
+  // sync arrives, and a knitter with no signal must still be able to count rows. A failure here is
+  // a warning in the console and nothing else.
+  useEffect(() => {
+    const stop = watchSession();
+    void ensureSession();
+    return stop;
+  }, []);
 
   // Photos saved before they had their own storage are moved out of the store, once, in the
   // background. After the splash is gone on purpose: it is housekeeping, and a knitter opening the
