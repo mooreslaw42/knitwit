@@ -334,7 +334,7 @@ enabled = true
 # be the bundle ID — Apple refuses to reuse one as the other. The bundle ID is listed alongside it
 # so that a future native `signInWithIdToken` is accepted too; an audience that never arrives costs
 # nothing.
-client_id = "com.pientr.knitwit.web,com.pientr.knitwit"
+client_id = "eu.knitwit.web,com.pientr.knitwit"
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
 secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
 # Overrides the default auth callback URL derived from auth.external_url.
