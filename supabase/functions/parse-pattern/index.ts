@@ -341,6 +341,18 @@ async function callerIdentity(
   }
 }
 
+// Who to bill, for a caller with no account to bill.
+//
+// Restored: the call site survived the move to per-account billing and the function did not, so
+// every such call threw inside claimBudget's try — which fails open. The cap was not merely wrong
+// for these callers, it was absent. They are exactly the callers it exists for: the app always
+// carries a session, so anyone arriving without one is not the app.
+function callerBucket(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for') ?? '';
+  const first = forwarded.split(',')[0]?.trim();
+  return first && first.length <= 64 ? first : 'unknown';
+}
+
 // Claims budget for a call. Returns null to proceed, or a response to send instead.
 //
 // Fails open. If the counter is unreachable the call goes through: a knitter halfway up a sleeve
