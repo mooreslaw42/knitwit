@@ -18,7 +18,7 @@ import { Colors } from '@/constants/theme';
 // after every render anyway, before the browser paints.
 export function AutoGrowInput({
   minHeight = 88,
-  maxHeight = 480,
+  maxHeight = Infinity,
   style,
   value,
   ...props
@@ -30,6 +30,9 @@ export function AutoGrowInput({
     if (!node) return;
     node.style.height = 'auto';
     node.style.height = `${Math.min(maxHeight, Math.max(minHeight, node.scrollHeight))}px`;
+    // A textarea sized to its content has nothing to scroll, but browsers will still hand it a
+    // wheel gesture that the page should have had. Turning overflow off settles who moves.
+    node.style.overflowY = 'hidden';
   }, [minHeight, maxHeight]);
 
   useLayoutEffect(resize, [resize, value]);
