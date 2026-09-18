@@ -52,6 +52,14 @@ const MAX_OUTPUT_TOKENS = 8_000;
 const MAX_IMAGE_CHARS = 1_800_000;
 // The answer is a dozen short strings. Room to think, not room to ramble.
 const MAX_MATERIAL_OUTPUT_TOKENS = 2_000;
+
+// Translation. A pattern is a lot of short strings rather than a few long ones, so the ceiling that
+// matters is the count as much as the size.
+const MAX_TRANSLATE_ENTRIES = 800;
+const MAX_TRANSLATE_CHARS = 80_000;
+const MAX_TRANSLATE_ID_CHARS = 40;
+const MAX_TRANSLATE_OUTPUT_TOKENS = 16_000;
+const MAX_LANGUAGE_CHARS = 40;
 // Five results is GreenPT's default and measured enough: the snippets alone carried composition,
 // ball weight and weight class for a real yarn, and the endpoint itself advises against fetching
 // whole pages. A scraped page is five to ten times the tokens for the same answer.
@@ -298,6 +306,7 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
 const UNITS: Record<string, number> = {
   document: 10,
   rows: 5,
+  translate: 4,
   enrich: 2,
   material: 1,
 };
@@ -558,6 +567,140 @@ async function handleEnrich(req: EnrichRequest, provider: ModelProvider): Promis
   });
 }
 
+// Translation runs on a small model on purpose.
+//
+// Not glm-5.3-flash, which is the obvious "small" choice here and has hung on us before — a
+// translation that never returns is worse than one that costs a fraction more. This is the same
+// model the ball-band reader uses, so it is a known quantity at this size and price.
+const TRANSLATE_MODEL = 'mistral-small-3.2-24b-instruct-2506';
+
+const TRANSLATE_SYSTEM_PROMPT = `You translate knitting and crochet patterns.
+
+You are given a list of {id, text} entries and a target language. Return the same list, with the
+same ids, with each text translated into the target language.
+
+Rules, in order of importance:
+
+1. NEVER change a number. Stitch counts, row numbers, sizes, measurements and needle sizes are
+   instructions, not language. "k2, p2" has two numbers and the translation has the same two.
+   If you are unsure how to translate a phrase, keep it — but keep its numbers exactly.
+2. Use the standard knitting abbreviations of the TARGET language, as a pattern published in that
+   language would write them. Do not carry English abbreviations across.
+3. Return every id you were given, spelled exactly as given. Do not invent ids, do not merge
+   entries, do not reorder them, do not add commentary.
+4. Keep the register of a written pattern: instructions in the imperative, short lines short.
+5. Preserve line breaks within a text.
+
+Also report the language the source was written in, as an English name (for example "English",
+"Dutch", "German"). If entries are in more than one language, name the dominant one.`;
+
+const TRANSLATE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['sourceLanguage', 'entries'],
+  properties: {
+    sourceLanguage: { type: 'string' },
+    entries: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'text'],
+        properties: { id: { type: 'string' }, text: { type: 'string' } },
+      },
+    },
+  },
+} as const;
+
+type TranslateRequest = {
+  task: 'translate';
+  language: string;
+  entries: { id: string; text: string }[];
+  model?: string;
+};
+
+function validateTranslateRequest(body: Record<string, unknown>): TranslateRequest {
+  const language = body.language;
+  if (typeof language !== 'string' || !language.trim()) {
+    throw new BadRequest('Say which language to translate into.');
+  }
+  if (language.length > MAX_LANGUAGE_CHARS) throw new BadRequest('That is not a language.');
+
+  const entries = body.entries;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new BadRequest('There is nothing to translate.');
+  }
+  if (entries.length > MAX_TRANSLATE_ENTRIES) throw new BadRequest('That pattern is too long.');
+
+  let total = 0;
+  const clean = entries.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) throw new BadRequest('Malformed request.');
+    const { id, text } = entry as { id?: unknown; text?: unknown };
+    if (typeof id !== 'string' || !id || id.length > MAX_TRANSLATE_ID_CHARS) {
+      throw new BadRequest('Malformed request.');
+    }
+    if (typeof text !== 'string') throw new BadRequest('Malformed request.');
+    total += text.length;
+    if (total > MAX_TRANSLATE_CHARS) throw new BadRequest('That pattern is too long.');
+    return { id, text };
+  });
+
+  return {
+    task: 'translate',
+    language: language.trim(),
+    entries: clean,
+    model: typeof body.model === 'string' ? body.model : undefined,
+  };
+}
+
+async function handleTranslate(req: TranslateRequest, provider: ModelProvider): Promise<Response> {
+  const result = await provider.complete({
+    system: TRANSLATE_SYSTEM_PROMPT,
+    user: JSON.stringify({ targetLanguage: req.language, entries: req.entries }),
+    schema: TRANSLATE_SCHEMA as unknown as Record<string, unknown>,
+    model: req.model ?? TRANSLATE_MODEL,
+    maxTokens: MAX_TRANSLATE_OUTPUT_TOKENS,
+  });
+
+  const read = JSON.parse(result.text);
+  if (typeof read !== 'object' || read === null || !Array.isArray(read.entries)) {
+    throw new Error('Model returned something that is not a translation.');
+  }
+
+  // Only entries that were actually asked for, and only in the shape promised. The caller falls
+  // back to the original words for anything missing, so dropping a malformed entry costs one
+  // untranslated line rather than a line of somebody else's output.
+  const asked = new Set(req.entries.map((entry) => entry.id));
+  const entries = (read.entries as unknown[])
+    .filter((entry): entry is { id: string; text: string } => {
+      if (typeof entry !== 'object' || entry === null) return false;
+      const { id, text } = entry as { id?: unknown; text?: unknown };
+      return typeof id === 'string' && typeof text === 'string' && asked.has(id);
+    })
+    .map((entry) => ({ id: entry.id, text: entry.text }));
+
+  // The pattern's words are never logged — only how much of it came back.
+  console.log(
+    JSON.stringify({
+      event: 'parse-pattern',
+      task: 'translate',
+      provider: provider.name,
+      model: result.model,
+      language: req.language,
+      asked: req.entries.length,
+      returned: entries.length,
+      usage: result.usage,
+    }),
+  );
+
+  return json({
+    model: result.model,
+    sourceLanguage: typeof read.sourceLanguage === 'string' ? read.sourceLanguage : '',
+    entries,
+    usage: result.usage,
+  });
+}
+
 async function handleMaterial(req: MaterialRequest, provider: ModelProvider): Promise<Response> {
   const result = await provider.complete({
     system: MATERIAL_SYSTEM_PROMPT,
@@ -661,6 +804,25 @@ Deno.serve(async (request: Request): Promise<Response> => {
       console.error('parse-pattern enrich failed', error);
       const message = error instanceof Error ? error.message : 'Unknown error.';
       return json({ error: `Couldn't look that yarn up: ${message}` }, statusOf(error));
+    }
+  }
+
+  if (task === 'translate') {
+    let req: TranslateRequest;
+    try {
+      req = validateTranslateRequest(body as Record<string, unknown>);
+    } catch (error) {
+      return json(
+        { error: error instanceof BadRequest ? error.message : 'Malformed request.' },
+        400,
+      );
+    }
+    try {
+      return await handleTranslate(req, provider);
+    } catch (error) {
+      console.error('parse-pattern translate failed', error);
+      const message = error instanceof Error ? error.message : 'Unknown error.';
+      return json({ error: `Couldn't translate that pattern: ${message}` }, statusOf(error));
     }
   }
 

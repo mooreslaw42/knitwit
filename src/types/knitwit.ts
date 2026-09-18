@@ -323,6 +323,11 @@ export type Pattern = {
   // both have to survive. A project will snapshot this when it's created.
   swatchGauge: Gauge | null;
   favorited: boolean;
+  // What language the pattern is written in, as an English name — "Dutch", "German". Optional
+  // because almost every pattern predates the question and nobody should be made to answer it:
+  // it is learned, not asked for, the first time the pattern is translated for sharing. Empty
+  // means unknown, which costs one needless translation and never a wrong one.
+  language?: string;
   // The knitter's own notes about the pattern as a whole — distinct from sourceText, which is the
   // document it came from. A project made from this pattern starts with a copy.
   notes: string;

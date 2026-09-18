@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
+import { SharePattern } from '@/components/share-pattern';
 import { GaugeField } from '@/components/gauge-field';
 import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
@@ -163,11 +164,16 @@ export default function PatternDetailScreen() {
               {view.name}
             </ThemedText>
             {!editing && (
-              <Pressable hitSlop={8} onPress={startEditing}>
-                <ThemedText type="smallBold" themeColor="blushDeep">
-                  Edit
-                </ThemedText>
-              </Pressable>
+              <View style={styles.titleActions}>
+                {/* Not offered mid-edit: what would be shared is the draft, and a knitter who has
+                    not saved does not think of it as the pattern yet. */}
+                <SharePattern patternId={id} pattern={pattern} />
+                <Pressable hitSlop={8} onPress={startEditing}>
+                  <ThemedText type="smallBold" themeColor="blushDeep">
+                    Edit
+                  </ThemedText>
+                </Pressable>
+              </View>
             )}
           </View>
 
@@ -450,6 +456,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: Spacing.one,
   },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
