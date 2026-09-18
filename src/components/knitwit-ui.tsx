@@ -176,6 +176,42 @@ export function FormField({
   );
 }
 
+// A value that is settled rather than waiting to be typed.
+//
+// Same frame and same label as the field it stands in for, so a form does not change shape around
+// it, but with nothing to edit and nothing to save — a Save button beside a value that is already
+// saved asks the knitter to confirm something that already happened.
+//
+// `action` is how it becomes a field again. Without one this is a one-way door: a name entered
+// wrongly, or an old one after a change of mind, would be kept for good.
+export function ReadOnlyField({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: string;
+  action?: { label: string; onPress: () => void };
+}) {
+  return (
+    <View style={styles.field}>
+      <FieldLabel label={label} />
+      <View style={styles.readOnly}>
+        <ThemedText numberOfLines={1} style={styles.readOnlyValue}>
+          {value}
+        </ThemedText>
+        {action ? (
+          <Pressable onPress={action.onPress} hitSlop={6}>
+            <ThemedText type="smallBold" themeColor="sageDeep">
+              {action.label}
+            </ThemedText>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export function SelectField<T extends string>({
   label,
   badge,
@@ -367,6 +403,17 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   input: InputStyle,
+  // The input's shape, in the cream that the rest of the app uses for something already decided,
+  // so it does not invite a tap that would do nothing.
+  readOnly: {
+    ...InputStyle,
+    backgroundColor: Colors.creamDeep,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  readOnlyValue: { flexShrink: 1 },
   selectBox: {
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,

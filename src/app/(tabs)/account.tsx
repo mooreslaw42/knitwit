@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PillButton } from '@/components/knitwit-ui';
+import { PillButton, ReadOnlyField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
@@ -27,6 +27,9 @@ export default function AccountScreen() {
   usePageTitle('Account');
   const displayName = useKnitwitStore((state) => state.settings.displayName ?? '');
   const [name, setName] = useState(displayName);
+  // A name already given is a settled thing, not a question still being asked. It goes back to
+  // being a field only when the knitter says so.
+  const [editingName, setEditingName] = useState(false);
   const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
   const level = standing(achievements);
@@ -87,27 +90,46 @@ export default function AccountScreen() {
         <ThemedText type="title" heading={1}>Account</ThemedText>
         <AccountSection />
 
-        <ThemedText type="smallBold" style={styles.label}>
-          Name
-        </ThemedText>
-        <ThemedText type="small" themeColor="inkSoft">
-          What Knitwit calls you. Not what you sign in with.
-        </ThemedText>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          style={styles.input}
-          placeholder="Your name"
-          placeholderTextColor={Colors.inkSoft}
-        />
+        {displayName && !editingName ? (
+          <ReadOnlyField
+            label="Name"
+            value={displayName}
+            action={{
+              label: 'Change →',
+              onPress: () => {
+                setName(displayName);
+                setEditingName(true);
+              },
+            }}
+          />
+        ) : (
+          <>
+            <ThemedText type="smallBold" style={styles.label}>
+              Name
+            </ThemedText>
+            <ThemedText type="small" themeColor="inkSoft">
+              What Knitwit calls you. Not what you sign in with.
+            </ThemedText>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={styles.input}
+              placeholder="Your name"
+              placeholderTextColor={Colors.inkSoft}
+            />
 
-        <PillButton
-          onPress={() => updateSettings({ displayName: name.trim() })}
-          style={styles.saveBtn}>
-          <ThemedText type="smallBold" themeColor="white">
-            Save
-          </ThemedText>
-        </PillButton>
+            <PillButton
+              onPress={() => {
+                updateSettings({ displayName: name.trim() });
+                setEditingName(false);
+              }}
+              style={styles.saveBtn}>
+              <ThemedText type="smallBold" themeColor="white">
+                Save
+              </ThemedText>
+            </PillButton>
+          </>
+        )}
 
         <ThemedText type="smallBold" style={styles.label}>
           Awards

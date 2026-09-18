@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { PillButton } from '@/components/knitwit-ui';
+import { PillButton, ReadOnlyField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import {
@@ -125,54 +125,35 @@ export function AccountSection() {
           get it back if this one is lost.
         </ThemedText>
       ) : (
-        <ThemedText type="small" themeColor="inkSoft">
-          Signed in as {account.email ?? (account.providers.join(', ') || 'your account')}. Your
-          knitting follows you to any device you sign in on.
-        </ThemedText>
+        <>
+          <ThemedText type="small" themeColor="inkSoft">
+            Your knitting follows you to any device you sign in on.
+          </ThemedText>
+          {/* Apple will hand back a relay address rather than a real one if the knitter asked it
+              to, and a provider account may carry no address at all — so what this is labelled
+              follows what is actually known. */}
+          <ReadOnlyField
+            label={account.email ? 'Email' : 'Signed in with'}
+            value={account.email ?? (account.providers.join(', ') || 'your account')}
+          />
+        </>
       )}
 
       {mode === 'idle' ? (
-        <View style={styles.actions}>
-          {account.anonymous || !account.signedIn ? (
-            <>
-              <PillButton style={styles.btn} onPress={() => setMode('save')}>
-                <ThemedText type="smallBold" themeColor="white">
-                  Save my work to an account
-                </ThemedText>
-              </PillButton>
-              <Pressable onPress={() => setMode('signin')} hitSlop={6} style={styles.link}>
-                <ThemedText type="smallBold" themeColor="sageDeep">
-                  I already have an account →
-                </ThemedText>
-              </Pressable>
-            </>
-          ) : confirmingSignOut ? (
-            <View style={styles.confirm}>
-              <ThemedText type="small" themeColor="coralDeep">
-                Signing out clears {local} from this device. It stays in your account and comes back
-                when you sign in again.
+        account.anonymous || !account.signedIn ? (
+          <View style={styles.actions}>
+            <PillButton style={styles.btn} onPress={() => setMode('save')}>
+              <ThemedText type="smallBold" themeColor="white">
+                Save my work to an account
               </ThemedText>
-              <View style={styles.row}>
-                <Pressable onPress={() => setConfirmingSignOut(false)} style={styles.cancel}>
-                  <ThemedText type="smallBold" themeColor="ink">
-                    Cancel
-                  </ThemedText>
-                </Pressable>
-                <PillButton style={styles.btn} onPress={() => void handleSignOut()}>
-                  <ThemedText type="smallBold" themeColor="white">
-                    Sign out
-                  </ThemedText>
-                </PillButton>
-              </View>
-            </View>
-          ) : (
-            <Pressable onPress={() => setConfirmingSignOut(true)} hitSlop={6} style={styles.link}>
+            </PillButton>
+            <Pressable onPress={() => setMode('signin')} hitSlop={6} style={styles.link}>
               <ThemedText type="smallBold" themeColor="sageDeep">
-                Sign out
+                I already have an account →
               </ThemedText>
             </Pressable>
-          )}
-        </View>
+          </View>
+        ) : null
       ) : (
         <View style={styles.form}>
           {mode === 'signin' ? (
@@ -242,6 +223,40 @@ export function AccountSection() {
           {note}
         </ThemedText>
       ) : null}
+
+      {/* Last, and secondary. Everything above this is a way into an account; leaving one is not,
+          and putting it first offers it to a knitter who came here to do something else. */}
+      {account.signedIn && !account.anonymous ? (
+        confirmingSignOut ? (
+          <View style={styles.confirm}>
+            <ThemedText type="small" themeColor="coralDeep">
+              Signing out clears {local} from this device. It stays in your account and comes back
+              when you sign in again.
+            </ThemedText>
+            <View style={styles.row}>
+              <Pressable onPress={() => setConfirmingSignOut(false)} style={styles.cancel}>
+                <ThemedText type="smallBold" themeColor="ink">
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <PillButton style={styles.btn} onPress={() => void handleSignOut()}>
+                <ThemedText type="smallBold" themeColor="white">
+                  {busy ? 'Signing out…' : 'Sign out'}
+                </ThemedText>
+              </PillButton>
+            </View>
+          </View>
+        ) : (
+          <PillButton
+            variant="secondary"
+            style={styles.signOut}
+            onPress={() => setConfirmingSignOut(true)}>
+            <ThemedText type="smallBold" themeColor="ink">
+              Sign out
+            </ThemedText>
+          </PillButton>
+        )
+      ) : null}
     </View>
   );
 }
@@ -253,6 +268,7 @@ const styles = StyleSheet.create({
   form: { gap: Spacing.two },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   confirm: { gap: Spacing.two },
+  signOut: { marginTop: Spacing.two, alignSelf: 'flex-start', paddingHorizontal: Spacing.five },
   btn: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   cancel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   link: { paddingVertical: Spacing.one },
