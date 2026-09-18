@@ -307,7 +307,9 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
 const UNITS: Record<string, number> = {
   document: 10,
   rows: 5,
-  translate: 4,
+  // Per batch, and a pattern is tens of batches — this is the price of forty strings, not of a
+  // whole pattern. It was 4 when a translation was a single call.
+  translate: 1,
   enrich: 2,
   material: 1,
 };

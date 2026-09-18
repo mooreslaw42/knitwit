@@ -92,9 +92,21 @@ export function SharePattern({ patternId, pattern }: { patternId: string; patter
         // Already right.
       } else if (wanted !== 'English' || (pattern.language && pattern.language !== 'English')) {
         setBusy('Translating…');
-        const result = await translatePattern(pattern, EN, wanted);
+        const result = await translatePattern(pattern, EN, wanted, {
+          // A long pattern is tens of batches. A spinner with no number on it, for a minute, is
+          // indistinguishable from one that has hung.
+          onProgress: ({ done: n, total }) =>
+            setBusy(`Translating… ${Math.round((n / total) * 100)}%`),
+        });
         document = result.pattern;
         strings = result.strings;
+        // Some of it kept its original words. Said plainly rather than handed over as a document
+        // that is quietly half in English.
+        if (result.missing > 0) {
+          setProblem(
+            `${result.missing} line${result.missing === 1 ? '' : 's'} could not be translated and stayed as you wrote them.`,
+          );
+        }
         // Learned, so the next share into this language knows it has nothing to do.
         if (result.sourceLanguage && result.sourceLanguage !== pattern.language) {
           savePattern(patternId, { ...pattern, language: result.sourceLanguage });
