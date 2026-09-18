@@ -1,6 +1,7 @@
-import { TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { STITCHES, TOOL_TYPE_LABELS } from '@/constants/catalogs';
+import { resolveRowGroups, sectionRowCounts } from '@/lib/knitwit-helpers';
 import { stitchGroupLabel } from '@/lib/stitch-group-label';
-import type { Pattern, PatternSection, SizedNumber } from '@/types/knitwit';
+import type { Pattern, PatternRow, PatternSection, SizedNumber } from '@/types/knitwit';
 
 // A pattern as a printable document.
 //
@@ -117,6 +118,85 @@ function rowText(row: Pattern['sections'][number]['rows'][number]): string {
     .join(', ');
 }
 
+// The chart, which on paper is the point.
+//
+// A knitter reading from a printed pattern reads the picture, not a list of sentences — the grid is
+// how a cable or a lace repeat is *seen*, and turning it back into "k2, p2 to end" throws away the
+// one representation that shows shape.
+//
+// Drawn the way a chart is read: bottom row first, stitches right to left, row numbers down the
+// right edge, wrong-side rows shaded so the alternation is visible without counting. Same cells and
+// symbols as the chart on screen, from the same expansion — two drawings of one thing that disagree
+// would be worse than one.
+
+// A printed page has an edge, and a chart that runs off it is not a chart. The cell shrinks to fit
+// the width available rather than the page gaining a scrollbar it cannot have.
+const CHART_WIDTH_MM = 168;
+const MAX_CELL_MM = 5.5;
+// Generous next to the screen's caps: paper has more room than a phone, and someone who printed
+// this wants the whole thing.
+const MAX_CHART_CELLS = 80;
+const MAX_CHART_ROWS = 200;
+
+type ChartCell = { symbol: string; type: string };
+
+function rowCells(row: PatternRow, stitchesBefore: number): ChartCell[] {
+  const cells: ChartCell[] = [];
+  for (const resolved of resolveRowGroups(row, stitchesBefore)) {
+    const def = STITCHES[resolved.group.type];
+    for (let i = 0; i < resolved.units; i++) {
+      if (cells.length >= MAX_CHART_CELLS) return cells;
+      cells.push({ symbol: def ? def.symbol : '?', type: resolved.group.type });
+    }
+  }
+  return cells;
+}
+
+function chartHtml(section: PatternSection): string {
+  const rows = section.rows.slice(0, MAX_CHART_ROWS);
+  const before = sectionRowCounts(rows, section.castOn);
+  const drawn = rows
+    .map((row, index) => ({ row, index, cells: rowCells(row, before[index]) }))
+    .filter((entry) => entry.cells.length > 0);
+
+  if (drawn.length === 0) return '';
+
+  const width = Math.max(...drawn.map((entry) => entry.cells.length));
+  const cell = Math.min(MAX_CELL_MM, CHART_WIDTH_MM / width);
+
+  // Bottom row first: row 1 is the row nearest the knitter's hands, so it belongs at the bottom.
+  const lines = [...drawn].reverse().map((entry) => {
+    const pad = width - entry.cells.length;
+    // Padded on the left so the chart's right edge — where the row numbers are, and where a
+    // right-to-left row begins — stays flush.
+    const blanks = Array.from({ length: pad }, () => '<td class="pad"></td>').join('');
+    const cells = entry.cells
+      .map((c) => `<td>${esc(c.symbol)}</td>`)
+      // Right to left, as a chart is worked.
+      .reverse()
+      .join('');
+    const ws = entry.row.side === 'WS' ? ' class="ws"' : '';
+    return `<tr${ws}>${blanks}${cells}<th scope="row">${esc(entry.row.label || String(entry.index + 1))}</th></tr>`;
+  });
+
+  // Only the symbols that actually appear. A full catalogue would be a page of stitches this
+  // pattern does not use.
+  const used = Array.from(new Set(drawn.flatMap((entry) => entry.cells.map((c) => c.type))));
+  const legend = used
+    .map((type) => STITCHES[type])
+    .filter(Boolean)
+    .map(
+      (def) =>
+        `<li><span class="key">${esc(def.symbol)}</span> ${esc(def.label)} <em>(${esc(def.abbr)})</em></li>`,
+    )
+    .join('');
+
+  return `<div class="chart" style="--cell:${cell.toFixed(2)}mm">
+  <table class="grid">${lines.join('')}</table>
+  ${legend ? `<ul class="legend">${legend}</ul>` : ''}
+</div>`;
+}
+
 function sectionHtml(section: PatternSection, s: PatternStrings): string {
   const total = sized(section.totalRows);
   const castOn = sized(section.castOn);
@@ -128,10 +208,14 @@ function sectionHtml(section: PatternSection, s: PatternStrings): string {
     .join(' · ');
 
   const written = section.description.trim() ? paragraphs(section.description) : '';
-  const rows = section.rows.filter((row) => rowText(row));
+  const chart = chartHtml(section);
 
-  const rowList = rows.length
-    ? `<table class="rows">${rows
+  // Only the rows the chart could not draw. A row with no stitch groups was never charted — it is
+  // words and nothing else — and dropping it to avoid repeating the chart in prose would lose the
+  // instruction entirely.
+  const unchartable = section.rows.filter((row) => row.stitches.length === 0 && rowText(row));
+  const rowList = unchartable.length
+    ? `<table class="rows">${unchartable
         .map(
           (row) =>
             `<tr><th scope="row">${esc(row.label || s.row)}</th><td>${esc(rowText(row))}</td></tr>`,
@@ -143,7 +227,10 @@ function sectionHtml(section: PatternSection, s: PatternStrings): string {
     ? `<div class="note"><h3>${esc(s.notes)}</h3>${paragraphs(section.notes)}</div>`
     : '';
 
-  const body = written || rowList ? `${written}${rowList}` : `<p class="empty">${esc(s.noInstructions)}</p>`;
+  const body =
+    written || chart || rowList
+      ? `${written}${chart}${rowList}`
+      : `<p class="empty">${esc(s.noInstructions)}</p>`;
 
   return `<section class="part">
   <h2>${esc(section.name)}</h2>
@@ -338,6 +425,54 @@ p { margin: 0 0 4mm; }
   border-top: 0.5pt solid #EFE6DC;
 }
 .rows td { padding: 1.8mm 0; border-top: 0.5pt solid #EFE6DC; }
+
+/* The chart. Cells are square by construction — one stitch is one square, and a grid of
+   rectangles reads as a different gauge than the one written above it. */
+.chart { margin: 5mm 0 6mm; page-break-inside: avoid; }
+/* Centred. The stitches are read right to left *within* the grid, but the grid itself sitting
+   against the right margin leaves a lopsided page — a ten-stitch repeat is narrow, and most are. */
+.grid { border-collapse: collapse; margin: 0 auto; }
+.grid td, .grid th {
+  width: var(--cell);
+  height: var(--cell);
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: calc(var(--cell) * 0.62);
+  line-height: 1;
+}
+.grid td { border: 0.4pt solid #B9ABA4; }
+.grid td.pad { border: 0; }
+/* Wrong-side rows shaded, so the alternation is visible without counting down the edge. */
+.grid tr.ws td { background: #F4EDE6; }
+.grid th {
+  width: auto;
+  border: 0;
+  padding-left: 2mm;
+  text-align: left;
+  white-space: nowrap;
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 7.5pt;
+  font-weight: 600;
+  color: #8A7873;
+}
+
+.legend { list-style: none; margin: 4mm 0 0; padding: 0; columns: 2; font-size: 9pt; }
+.legend li { margin-bottom: 1.2mm; break-inside: avoid; }
+.legend em { color: #8A7873; font-style: normal; }
+.key {
+  display: inline-block;
+  width: 4.5mm;
+  height: 4.5mm;
+  margin-right: 1.5mm;
+  border: 0.4pt solid #B9ABA4;
+  text-align: center;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 8pt;
+  line-height: 4.3mm;
+  vertical-align: middle;
+}
 
 .kits { display: flex; flex-wrap: wrap; gap: 8mm; margin-bottom: 6mm; }
 .kit { min-width: 55mm; flex: 1; }
