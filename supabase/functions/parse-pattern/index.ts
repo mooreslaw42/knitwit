@@ -1,3 +1,4 @@
+import { glossaryFor } from './glossary.ts';
 import {
   buildDocumentUserMessage,
   buildUserMessage,
@@ -584,8 +585,10 @@ Rules, in order of importance:
 1. NEVER change a number. Stitch counts, row numbers, sizes, measurements and needle sizes are
    instructions, not language. "k2, p2" has two numbers and the translation has the same two.
    If you are unsure how to translate a phrase, keep it — but keep its numbers exactly.
-2. Use the standard knitting abbreviations of the TARGET language, as a pattern published in that
-   language would write them. Do not carry English abbreviations across.
+2. Use the standard knitting vocabulary and abbreviations of the TARGET language, as a pattern
+   published in that language would write them. Do not carry English abbreviations across, and do
+   not reach for a word from a neighbouring language because it looks close enough. If a glossary
+   is given below, it is the published vocabulary and it overrides your own preference.
 3. Return every id you were given, spelled exactly as given. Do not invent ids, do not merge
    entries, do not reorder them, do not add commentary.
 4. Keep the register of a written pattern: instructions in the imperative, short lines short.
@@ -654,8 +657,10 @@ function validateTranslateRequest(body: Record<string, unknown>): TranslateReque
 }
 
 async function handleTranslate(req: TranslateRequest, provider: ModelProvider): Promise<Response> {
+  // Only the target language's terms. Sending all of them would be most of the prompt, and the
+  // model does not need to be told what Danish for "purl" is while translating into Dutch.
   const result = await provider.complete({
-    system: TRANSLATE_SYSTEM_PROMPT,
+    system: TRANSLATE_SYSTEM_PROMPT + glossaryFor(req.language),
     user: JSON.stringify({ targetLanguage: req.language, entries: req.entries }),
     schema: TRANSLATE_SCHEMA as unknown as Record<string, unknown>,
     model: req.model ?? TRANSLATE_MODEL,
