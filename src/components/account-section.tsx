@@ -4,7 +4,14 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
-import { accountStateOf, attachProvider, saveAccount, signOut, type AccountState } from '@/lib/auth';
+import {
+  accountStateOf,
+  attachProvider,
+  describeProviderReturn,
+  saveAccount,
+  signOut,
+  type AccountState,
+} from '@/lib/auth';
 import { currentSession, onSessionChange } from '@/lib/session';
 import { clearLocalAccountData, describeLocalWork, switchToExistingAccount } from '@/lib/switch-account';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -30,7 +37,11 @@ export function AccountSection() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  // Coming back from Apple or Google having been refused is the state this screen opens in, not
+  // something that happens to it later: the page navigated away and returned, so there is no call
+  // left to report through. The screen would otherwise look untouched — same buttons, still signed
+  // out — with the only evidence in the address bar.
+  const [note, setNote] = useState<string | null>(describeProviderReturn);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   const projects = useKnitwitStore((s) => s.projects);
@@ -43,6 +54,7 @@ export function AccountSection() {
   });
 
   useEffect(() => onSessionChange((s) => setAccount(accountStateOf(s.session))), []);
+
 
   const reset = () => {
     setMode('idle');

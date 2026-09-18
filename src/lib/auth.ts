@@ -1,6 +1,11 @@
 import type { Session, User } from '@supabase/supabase-js';
 
-import { authReturnUrl, finishProviderFlow, skipBrowserRedirect } from '@/lib/auth-return';
+import {
+  authReturnUrl,
+  finishProviderFlow,
+  providerReturnError,
+  skipBrowserRedirect,
+} from '@/lib/auth-return';
 import { currentSession, ensureSession } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
 
@@ -115,6 +120,16 @@ export async function attachProvider(provider: 'apple' | 'google'): Promise<Auth
   return { ok: true };
 }
 
+// What to say about a provider sign-in that came back refused.
+//
+// Called on arrival rather than awaited, because the failure outlived the call that caused it: the
+// page navigated to Apple and back, so there is no promise left to reject. Returns null on the
+// ordinary case of simply being on this screen.
+export function describeProviderReturn(): string | null {
+  const problem = providerReturnError();
+  return problem === null ? null : readable(problem);
+}
+
 export async function signOut(): Promise<AuthResult> {
   const { error } = await getSupabase().auth.signOut();
   if (error) return { ok: false, message: readable(error.message) };
@@ -141,6 +156,12 @@ function readable(message: string): string {
   }
   if (text.includes('provider is not enabled') || text.includes('unsupported provider')) {
     return 'That way of signing in is not set up for Knitwit yet.';
+  }
+  // Apple said yes to the knitter and no to Knitwit: the code came back, and the key Supabase signs
+  // its request with was refused. Nothing the knitter did, and nothing they can fix, so it says so
+  // rather than inviting them to try again into the same wall.
+  if (text.includes('unable to exchange external code')) {
+    return 'Apple let you in, but would not finish. This is a setting on Knitwit’s side, not anything you did.';
   }
   if (text === 'no-url' || text === 'no-code') {
     return 'Apple sent Knitwit back without an answer. Try again in a moment.';

@@ -1,4 +1,4 @@
-import { accountStateOf, attachProvider } from '@/lib/auth';
+import { accountStateOf, attachProvider, describeProviderReturn } from '@/lib/auth';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -8,6 +8,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 const mockLinkIdentity = jest.fn();
 const mockSignInWithOAuth = jest.fn();
 const mockFinishProviderFlow = jest.fn();
+const mockProviderReturnError = jest.fn();
 let mockAnonymous = true;
 
 jest.mock('@/lib/supabase', () => ({
@@ -26,6 +27,7 @@ jest.mock('@/lib/auth-return', () => ({
   authReturnUrl: () => 'https://knitwit.eu/account',
   skipBrowserRedirect: false,
   finishProviderFlow: (url: string | null) => mockFinishProviderFlow(url),
+  providerReturnError: () => mockProviderReturnError(),
 }));
 
 // What the Account screen decides from: whether there is a way back into this account at all.
@@ -152,5 +154,23 @@ describe('attaching a provider', () => {
     const result = await attachProvider('apple');
     expect(result.ok).toBe(false);
     expect(result).toHaveProperty('message', expect.stringContaining('without an answer'));
+  });
+});
+
+// A provider refusal arrives as a redirect, so nothing is awaiting it. Read on arrival or not at
+// all — and "not at all" looks exactly like never having pressed the button.
+describe('coming back refused', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('says what Apple said', () => {
+    mockProviderReturnError.mockReturnValue('Unable to exchange external code: c959');
+    expect(describeProviderReturn()).toBe(
+      'Apple let you in, but would not finish. This is a setting on Knitwit’s side, not anything you did.',
+    );
+  });
+
+  it('says nothing when the knitter simply opened the screen', () => {
+    mockProviderReturnError.mockReturnValue(null);
+    expect(describeProviderReturn()).toBeNull();
   });
 });

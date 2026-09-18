@@ -36,3 +36,9 @@ export async function finishProviderFlow(url: string | null): Promise<void> {
   const { error } = await getSupabase().auth.exchangeCodeForSession(code);
   if (error) throw new Error(error.message);
 }
+
+// Nothing to read: a phone never navigates away, so a refusal comes back through the sheet and is
+// thrown by finishProviderFlow above rather than left on a URL.
+export function providerReturnError(): string | null {
+  return null;
+}
