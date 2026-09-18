@@ -9,6 +9,7 @@ import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { AccountSection } from '@/components/account-section';
+import { SignOutSection } from '@/components/sign-out-section';
 import { allProgress, standing } from '@/lib/awards';
 import { backupFilename, buildBackup, readBackup, restoreMessage, writeBackup } from '@/lib/backup';
 import { openTextFile } from '@/lib/open-file';
@@ -210,6 +211,8 @@ export default function AccountScreen() {
             {backupNote}
           </ThemedText>
         ) : null}
+
+        <SignOutSection />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

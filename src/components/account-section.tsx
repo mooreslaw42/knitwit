@@ -9,11 +9,10 @@ import {
   attachProvider,
   describeProviderReturn,
   saveAccount,
-  signOut,
   type AccountState,
 } from '@/lib/auth';
 import { currentSession, onSessionChange } from '@/lib/session';
-import { clearLocalAccountData, describeLocalWork, switchToExistingAccount } from '@/lib/switch-account';
+import { describeLocalWork, switchToExistingAccount } from '@/lib/switch-account';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // The only part of accounts a knitter ever sees.
@@ -22,12 +21,9 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 // it already holds their work, it already syncs. What it has never had is a way back into it, which
 // is the one thing this is for.
 //
-// ## Why there is no "Log out" until there is a way back in
-//
-// An anonymous account cannot be signed into again — no email, no password, no provider. The button
-// would not end a session, it would abandon an identity, and every project behind it becomes
-// unreachable on a server the knitter cannot name. So it is offered only once there is something to
-// sign back in with, and until then the same place says what would be lost instead.
+// Signing out is deliberately not here — it is the foot of the page, in sign-out-section.tsx.
+// Everything in this component is a way *into* an account, and leaving one is not; offering it
+// alongside them puts it in front of a knitter who came to do something else entirely.
 
 type Mode = 'idle' | 'save' | 'signin';
 
@@ -42,7 +38,6 @@ export function AccountSection() {
   // left to report through. The screen would otherwise look untouched — same buttons, still signed
   // out — with the only evidence in the address bar.
   const [note, setNote] = useState<string | null>(describeProviderReturn);
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   const projects = useKnitwitStore((s) => s.projects);
   const patterns = useKnitwitStore((s) => s.patterns);
@@ -93,15 +88,6 @@ export function AccountSection() {
     }
     reset();
     setNote('Signed in. Reload Knitwit to see that account.');
-  };
-
-  const handleSignOut = async () => {
-    setBusy(true);
-    const result = await signOut();
-    if (result.ok) await clearLocalAccountData();
-    setBusy(false);
-    setConfirmingSignOut(false);
-    setNote(result.ok ? 'Signed out. Reload Knitwit to start again.' : result.message);
   };
 
   const handleProvider = async (provider: 'apple' | 'google') => {
@@ -224,39 +210,6 @@ export function AccountSection() {
         </ThemedText>
       ) : null}
 
-      {/* Last, and secondary. Everything above this is a way into an account; leaving one is not,
-          and putting it first offers it to a knitter who came here to do something else. */}
-      {account.signedIn && !account.anonymous ? (
-        confirmingSignOut ? (
-          <View style={styles.confirm}>
-            <ThemedText type="small" themeColor="coralDeep">
-              Signing out clears {local} from this device. It stays in your account and comes back
-              when you sign in again.
-            </ThemedText>
-            <View style={styles.row}>
-              <Pressable onPress={() => setConfirmingSignOut(false)} style={styles.cancel}>
-                <ThemedText type="smallBold" themeColor="ink">
-                  Cancel
-                </ThemedText>
-              </Pressable>
-              <PillButton style={styles.btn} onPress={() => void handleSignOut()}>
-                <ThemedText type="smallBold" themeColor="white">
-                  {busy ? 'Signing out…' : 'Sign out'}
-                </ThemedText>
-              </PillButton>
-            </View>
-          </View>
-        ) : (
-          <PillButton
-            variant="secondary"
-            style={styles.signOut}
-            onPress={() => setConfirmingSignOut(true)}>
-            <ThemedText type="smallBold" themeColor="ink">
-              Sign out
-            </ThemedText>
-          </PillButton>
-        )
-      ) : null}
     </View>
   );
 }
@@ -268,7 +221,6 @@ const styles = StyleSheet.create({
   form: { gap: Spacing.two },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   confirm: { gap: Spacing.two },
-  signOut: { marginTop: Spacing.two, alignSelf: 'flex-start', paddingHorizontal: Spacing.five },
   btn: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   cancel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   link: { paddingVertical: Spacing.one },
