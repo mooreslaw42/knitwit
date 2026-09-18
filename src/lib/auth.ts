@@ -1,5 +1,6 @@
 import type { Session, User } from '@supabase/supabase-js';
 
+import { authReturnUrl, finishProviderFlow, skipBrowserRedirect } from '@/lib/auth-return';
 import { currentSession, ensureSession } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
 
@@ -87,15 +88,30 @@ export async function signInExisting(email: string, password: string): Promise<A
 // is nothing to keep. Both need the provider configured in the Supabase dashboard with real
 // credentials — there is nothing in the code that can stand in for that, and until it is done these
 // return the provider's own complaint rather than pretending.
+//
+// `linkIdentity` also needs manual linking switched on for the project. It is off by default, and
+// with it off this is not a partial success: the knitter signs in at Apple, comes back, and has a
+// *second* account holding none of their knitting. `readable()` names that case specifically
+// because the provider's own wording for it says nothing a knitter could act on.
 export async function attachProvider(provider: 'apple' | 'google'): Promise<AuthResult> {
   const account = currentAccount();
   const supabase = getSupabase();
+  const options = { redirectTo: authReturnUrl(), skipBrowserRedirect };
 
-  const { error } = account.anonymous
-    ? await supabase.auth.linkIdentity({ provider })
-    : await supabase.auth.signInWithOAuth({ provider });
+  const { data, error } = account.anonymous
+    ? await supabase.auth.linkIdentity({ provider, options })
+    : await supabase.auth.signInWithOAuth({ provider, options });
 
   if (error) return { ok: false, message: readable(error.message) };
+
+  // On the web this returns having already left the page. On a phone it opens the sheet and waits.
+  try {
+    await finishProviderFlow(data?.url ?? null);
+  } catch (problem) {
+    const reason = problem instanceof Error ? problem.message : '';
+    if (reason === 'cancelled') return { ok: false, message: '' };
+    return { ok: false, message: readable(reason) };
+  }
   return { ok: true };
 }
 
@@ -118,7 +134,16 @@ function readable(message: string): string {
     return 'That account is already attached to a different Knitwit account.';
   }
   if (text.includes('manual linking')) {
+    // The dangerous one, and the reason it is called out rather than folded into the fallback:
+    // without manual linking a provider sign-in quietly makes a *second* account, and the knitting
+    // stays behind on the first. Better to stop here than to succeed into the wrong account.
     return 'Signing in with Apple or Google is not switched on for Knitwit yet.';
+  }
+  if (text.includes('provider is not enabled') || text.includes('unsupported provider')) {
+    return 'That way of signing in is not set up for Knitwit yet.';
+  }
+  if (text === 'no-url' || text === 'no-code') {
+    return 'Apple sent Knitwit back without an answer. Try again in a moment.';
   }
   return 'That did not work. Try again in a moment.';
 }
