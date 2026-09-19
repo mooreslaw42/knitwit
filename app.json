@@ -10,7 +10,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pientr.knitwit",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.pientr.knitwit",
@@ -37,6 +40,13 @@
         }
       ],
       "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Knitwit needs your photo library so you can put a picture on a project, a pattern or a yarn in your stash.",
+          "cameraPermission": "Knitwit needs the camera so you can photograph a yarn's ball band and have its details read for you."
+        }
+      ],
       "expo-sharing"
     ],
     "experiments": {
