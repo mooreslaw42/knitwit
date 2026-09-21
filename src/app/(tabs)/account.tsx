@@ -169,9 +169,10 @@ export default function AccountScreen() {
           Your data
         </ThemedText>
         <ThemedText type="small" themeColor="inkSoft">
-          Everything — projects, patterns, stash, row counts, awards — is saved in this browser and
-          nowhere else. There is no account behind it, so this file is the only copy that survives
-          clearing your site data or changing device.
+          Everything — projects, patterns, stash, row counts, awards — is kept on this device and
+          in your Knitwit account, so it follows you to any device you sign in on. A backup is a
+          copy you hold yourself: worth taking before you restore, and the only one that is not in
+          Knitwit&apos;s hands.
         </ThemedText>
 
         <PillButton variant="secondary" onPress={() => void exportBackup()} style={styles.saveBtn}>
