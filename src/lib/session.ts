@@ -95,9 +95,27 @@ export async function ensureSession(): Promise<Session | null> {
 
 // Keeps the local view in step with supabase-js, which refreshes tokens on its own schedule and can
 // end a session without anybody asking it to.
+//
+// Guarded, because the promise at the top of this file — that none of it can stop the app — was
+// only half kept. `ensureSession` caught everything; this did not, and `getSupabase()` throws
+// outright when the project is not configured. An iOS build that shipped without its Supabase
+// credentials therefore did not fall back to working locally, it crashed on launch, before a
+// knitter had seen a single row.
+//
+// A knitter with no account and no signal must still be able to count. That is the whole point,
+// and it has to hold on the path where the backend is missing entirely, not only on the path where
+// it is reachable and says no.
 export function watchSession(): () => void {
-  const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
-    publish({ session, settled: true });
-  });
-  return () => data.subscription.unsubscribe();
+  try {
+    const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
+      publish({ session, settled: true });
+    });
+    return () => data.subscription.unsubscribe();
+  } catch (error) {
+    // Settled with no session: the difference between "not asked yet" and "asked, no account" is
+    // what sync reads to decide whether to wait, and it must not wait for one that cannot come.
+    console.warn('sessions unavailable', error);
+    publish({ session: null, settled: true });
+    return () => {};
+  }
 }

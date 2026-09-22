@@ -91,3 +91,25 @@ describe('establishing a session', () => {
     expect(typeof ensureSession).toBe('function');
   });
 });
+
+// The promise this module makes about itself: nothing in it can stop the app. It was only half
+// kept — ensureSession caught everything, watchSession caught nothing — and a build that shipped
+// without Supabase credentials crashed on launch rather than working locally.
+describe('when the project is not configured at all', () => {
+  it('does not take the app down with it', () => {
+    jest.isolateModules(() => {
+      jest.doMock('@/lib/supabase', () => ({
+        getSupabase: () => {
+          throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY');
+        },
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { watchSession, currentSession } = require('@/lib/session');
+
+      expect(() => watchSession()()).not.toThrow();
+      // Settled, with no session — sync reads this to tell "no account" from "not asked yet", and
+      // must not wait for one that can never arrive.
+      expect(currentSession()).toEqual({ session: null, settled: true });
+    });
+  });
+});
