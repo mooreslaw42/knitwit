@@ -18,7 +18,7 @@ import {
   usePathname,
 } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
@@ -26,7 +26,9 @@ import { Colors } from '@/constants/theme';
 import { CrashScreen } from '@/components/crash-screen';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import { migratePhotos } from '@/lib/migrate-photos';
-import { ensureSession, watchSession } from '@/lib/session';
+import { currentSession, ensureSession, onSessionChange, watchSession } from '@/lib/session';
+import { accountStateOf } from '@/lib/auth';
+import { SignInGate } from '@/components/sign-in-gate';
 import { startSync } from '@/lib/sync';
 
 SplashScreen.preventAutoHideAsync();
@@ -66,7 +68,16 @@ export default function RootLayout() {
   });
 
   const pathname = usePathname();
-  const ready = fontsLoaded && hasHydrated;
+
+  // Who is signed in, watched here because the whole app is behind it.
+  const [session, setSession] = useState(() => currentSession());
+  useEffect(() => onSessionChange(setSession), []);
+  const account = accountStateOf(session.session);
+
+  // `settled` and not merely `session` — until the first attempt has finished, "no session" and
+  // "not asked yet" look identical, and showing the gate on the second would flash a sign-in form
+  // at somebody who is already signed in, on every single launch.
+  const ready = fontsLoaded && hasHydrated && session.settled;
 
   useEffect(() => {
     if (ready) {
@@ -74,11 +85,11 @@ export default function RootLayout() {
     }
   }, [ready]);
 
-  // An account, established quietly in the background.
+  // Who is signed in, and everything that follows from it.
   //
-  // Deliberately not awaited and deliberately not gating anything: the app is entirely local until
-  // sync arrives, and a knitter with no signal must still be able to count rows. A failure here is
-  // a warning in the console and nothing else.
+  // This used to be deliberately non-blocking, because an account was made silently and the app was
+  // entirely usable without one. It gates the app now — see sign-in-gate.tsx — so the restore has
+  // to finish before anything renders, which is what `settled` above is waiting on.
   useEffect(() => {
     const stop = watchSession();
     void ensureSession();
@@ -109,6 +120,16 @@ export default function RootLayout() {
     return (
       <ThemeProvider value={DefaultTheme}>
         <CrashScreen title="Knitwit couldn’t read your saved data" detail={hydrationError} />
+      </ThemeProvider>
+    );
+  }
+
+  // The wall. An anonymous session counts as signed out: it is an account nobody can return to,
+  // which is the thing this screen exists to stop happening.
+  if (!account.signedIn || account.anonymous) {
+    return (
+      <ThemeProvider value={DefaultTheme}>
+        <SignInGate />
       </ThemeProvider>
     );
   }

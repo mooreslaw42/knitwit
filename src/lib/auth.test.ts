@@ -1,4 +1,4 @@
-import { accountStateOf, attachProvider, describeProviderReturn } from '@/lib/auth';
+import { accountStateOf, attachProvider, createAccount, describeProviderReturn } from '@/lib/auth';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -9,11 +9,19 @@ const mockLinkIdentity = jest.fn();
 const mockSignInWithOAuth = jest.fn();
 const mockFinishProviderFlow = jest.fn();
 const mockProviderReturnError = jest.fn();
+const mockUpdateUser = jest.fn();
+const mockSignUp = jest.fn();
+let mockSession: unknown = null;
 let mockAnonymous = true;
 
 jest.mock('@/lib/supabase', () => ({
   getSupabase: () => ({
-    auth: { linkIdentity: mockLinkIdentity, signInWithOAuth: mockSignInWithOAuth },
+    auth: {
+      linkIdentity: mockLinkIdentity,
+      signInWithOAuth: mockSignInWithOAuth,
+      updateUser: (a: unknown) => mockUpdateUser(a),
+      signUp: (a: unknown) => mockSignUp(a),
+    },
   }),
 }));
 jest.mock('@/lib/session', () => ({
@@ -21,7 +29,7 @@ jest.mock('@/lib/session', () => ({
     session: { user: { id: 'u1', is_anonymous: mockAnonymous, identities: [] } },
     settled: true,
   }),
-  ensureSession: async () => null,
+  ensureSession: async () => mockSession,
 }));
 jest.mock('@/lib/auth-return', () => ({
   authReturnUrl: () => 'https://knitwit.eu/account',
@@ -172,5 +180,52 @@ describe('coming back refused', () => {
   it('says nothing when the knitter simply opened the screen', () => {
     mockProviderReturnError.mockReturnValue(null);
     expect(describeProviderReturn()).toBeNull();
+  });
+});
+
+
+// Creating an account, which on some devices is a rescue rather than a sign-up.
+//
+// Knitwit gave everybody an anonymous account for its first five milestones, and those devices
+// still hold one with a whole stash behind it. Calling signUp there makes a *second* user and
+// leaves the first unreachable for ever — there is nothing to sign back into an anonymous account
+// with. This is the branch that decides which, so it is the branch that can lose a year of work.
+describe('creating an account', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSession = null;
+    mockUpdateUser.mockResolvedValue({ error: null });
+    mockSignUp.mockResolvedValue({ error: null });
+  });
+
+  it('signs a new knitter up', async () => {
+    expect(await createAccount('new@example.com', 'hunter22')).toEqual({ ok: true });
+    expect(mockSignUp).toHaveBeenCalled();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  // The one that matters: same account, same id, same knitting.
+  it('upgrades an anonymous account instead of making a second one', async () => {
+    mockSession = { user: { id: 'u1', is_anonymous: true } };
+
+    expect(await createAccount('mine@example.com', 'hunter22')).toEqual({ ok: true });
+    expect(mockUpdateUser).toHaveBeenCalledWith({ email: 'mine@example.com', password: 'hunter22' });
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
+  it('does not upgrade a session that is already somebody', async () => {
+    mockSession = { user: { id: 'u1', is_anonymous: false } };
+
+    await createAccount('other@example.com', 'hunter22');
+    expect(mockSignUp).toHaveBeenCalled();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it('reports an address that is already taken rather than failing silently', async () => {
+    mockSignUp.mockResolvedValue({ error: { message: 'User already registered' } });
+    expect(await createAccount('taken@example.com', 'hunter22')).toEqual({
+      ok: false,
+      message: 'That email already has a Knitwit account. Sign in to it instead.',
+    });
   });
 });

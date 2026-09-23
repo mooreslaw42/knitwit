@@ -57,20 +57,39 @@ export function currentAccount(): AccountState {
 
 export type AuthResult = { ok: true } | { ok: false; message: string };
 
-// Attaches an email and password to the account already in hand.
+// Making an account, by whichever of the two routes applies.
 //
-// Same user id, so every project, pattern and photo stays exactly where it is. This is the path
-// almost everyone takes and the only one that cannot lose anything.
-export async function saveAccount(email: string, password: string): Promise<AuthResult> {
-  const session = await ensureSession();
-  if (!session) {
-    return { ok: false, message: 'Knitwit needs a connection to set that up. Try again in a moment.' };
+// ## Why this is not simply signUp
+//
+// Knitwit used to give everybody an anonymous account on first launch, and some devices still hold
+// one with a knitter's whole stash inside it. For those, `signUp` would be the wrong call twice
+// over: it makes a *second* user, and the first — holding every project — becomes unreachable,
+// because an anonymous account has nothing to sign back in with.
+//
+// `updateUser` on the session already in hand keeps the same user id, so the work does not move.
+// Verified against production: an anonymous account given an email keeps its id, flips
+// `is_anonymous` to false, and signs back in later as the same person.
+//
+// So the branch is on what is actually here, not on what the screen asked for.
+export async function createAccount(email: string, password: string): Promise<AuthResult> {
+  const supabase = getSupabase();
+  const existing = await ensureSession();
+
+  // An anonymous session with somebody's knitting behind it. Upgrade it.
+  if (existing && existing.user.is_anonymous) {
+    const { error } = await supabase.auth.updateUser({ email: email.trim(), password });
+    if (error) return { ok: false, message: readable(error.message) };
+    return { ok: true };
   }
 
-  const { error } = await getSupabase().auth.updateUser({ email: email.trim(), password });
+  const { error } = await supabase.auth.signUp({ email: email.trim(), password });
   if (error) return { ok: false, message: readable(error.message) };
   return { ok: true };
 }
+
+// The old name, kept because the Account screen still offers this to anyone who arrived on an
+// anonymous session from before the wall.
+export const saveAccount = createAccount;
 
 // Signs into an account that already exists — a different one from the anonymous account on this
 // device.

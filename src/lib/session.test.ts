@@ -26,8 +26,9 @@ function freshModule() {
   return mod;
 }
 
-// The whole point of M1 is that this is invisible and cannot hurt anyone. So: it must never throw,
-// never block, and never make two accounts for one knitter.
+// This restores a session and never creates one. It used to mint an anonymous account on first
+// launch; the app is behind a sign-in wall now, so a signed-out device must stay signed out — a
+// session conjured here would let somebody past the door without ever having gone through it.
 describe('establishing a session', () => {
   beforeEach(() => {
     jest.resetModules();
@@ -35,15 +36,18 @@ describe('establishing a session', () => {
     mockSignInAnonymously.mockReset();
   });
 
-  it('signs in anonymously when there is nothing stored', async () => {
+  it('leaves a signed-out device signed out', async () => {
     mockGetSession.mockResolvedValue({ data: { session: null } });
-    mockSignInAnonymously.mockResolvedValue({ data: { session: SESSION }, error: null });
 
-    const { ensureSession: fresh, currentUserId: id } = freshModule();
-    await fresh();
+    const { ensureSession: fresh, currentUserId: id, currentSession: now } = freshModule();
+    await expect(fresh()).resolves.toBeNull();
 
-    expect(mockSignInAnonymously).toHaveBeenCalledTimes(1);
-    expect(id()).toBe('user-1');
+    // The account this used to make silently is the thing the gate exists to prevent.
+    expect(mockSignInAnonymously).not.toHaveBeenCalled();
+    expect(id()).toBeNull();
+    // Settled all the same: the layout waits on this before deciding whether to show the wall, and
+    // "not asked yet" would flash a sign-in form at somebody already signed in.
+    expect(now().settled).toBe(true);
   });
 
   it('reuses a stored session rather than making a second account', async () => {
@@ -55,27 +59,14 @@ describe('establishing a session', () => {
     expect(mockSignInAnonymously).not.toHaveBeenCalled();
   });
 
-  // Two screens mounting together must not produce two knitters.
-  it('makes one account when called many times at once', async () => {
-    mockGetSession.mockResolvedValue({ data: { session: null } });
-    mockSignInAnonymously.mockResolvedValue({ data: { session: SESSION }, error: null });
+  // Four screens mounting together must ask storage once, not four times.
+  it('joins one attempt when called many times at once', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: SESSION } });
 
     const { ensureSession: fresh } = freshModule();
     await Promise.all([fresh(), fresh(), fresh(), fresh()]);
 
-    expect(mockSignInAnonymously).toHaveBeenCalledTimes(1);
-  });
-
-  // Offline, rate-limited, or the feature turned off. All of them mean: carry on locally.
-  it('carries on with no session when signing in fails', async () => {
-    mockGetSession.mockResolvedValue({ data: { session: null } });
-    mockSignInAnonymously.mockResolvedValue({ data: { session: null }, error: { message: 'offline' } });
-
-    const { ensureSession: fresh, currentSession: now } = freshModule();
-    await expect(fresh()).resolves.toBeNull();
-    // Settled matters: it is how sync tells "no account" from "not asked yet".
-    expect(now().settled).toBe(true);
-    expect(now().session).toBeNull();
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
   });
 
   it('does not throw when the client itself blows up', async () => {

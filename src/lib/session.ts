@@ -2,23 +2,24 @@ import type { Session } from '@supabase/supabase-js';
 
 import { getSupabase } from '@/lib/supabase';
 
-// Having an account, without being asked for one.
+// Who is signed in.
 //
-// M1 of docs/plans/multi-user.md. Nothing syncs yet — this establishes the identity that syncing
-// will hang off, and does it quietly. A knitter opening Knitwit to count a row should not meet a
-// sign-up form, and today they do not have to: Supabase's anonymous sign-in makes a real account
-// with a real user id and no personal information in it at all.
+// ## This used to make an account for you, and no longer does
 //
-// The important consequence is that signing in later is an *upgrade*, not a migration.
-// `linkIdentity()` attaches Apple or Google to the same account, so the id does not change and
-// nothing has to be moved. Putting a wall up first and asking people to carry their data across it
-// would be the alternative, and it is much worse.
+// M1 established an identity silently: Supabase's anonymous sign-in, on first launch, so a knitter
+// counting a row never met a form. That was a deliberate choice and it has been reversed just as
+// deliberately — Knitwit now asks people to sign in before they reach the app. See
+// sign-in-gate.tsx for the wall and what it costs.
 //
-// ## This must never block the app
+// What survives is the upgrade path. An anonymous account made before the wall went up still holds
+// somebody's knitting, and `updateUser` turns it into a real one without changing the user id, so
+// nothing moves and nothing is lost. That path is reached from the gate, not from here.
 //
-// Knitwit works with no network and that does not change. A failed sign-in means no session, and no
-// session means the app behaves exactly as it did before any of this existed: entirely local. The
-// counter does not wait for a token.
+// ## Restoring, not creating
+//
+// This only ever brings back a session that already exists — from storage, refreshed if stale. It
+// never mints one. Everything that calls it (sync, photos, the engine) is asking "is anybody signed
+// in", and behind a wall the honest answer for a signed-out device is no.
 
 type SessionState = {
   session: Session | null;
@@ -50,7 +51,7 @@ export function onSessionChange(listener: (s: SessionState) => void): () => void
   return () => listeners.delete(listener);
 }
 
-// Returns the session, creating an anonymous account if there is not one yet.
+// The session, if there is one. Never creates one.
 //
 // Safe to call repeatedly and from anywhere: a stored session is reused, a request in flight is
 // joined rather than duplicated.
@@ -62,27 +63,15 @@ export async function ensureSession(): Promise<Session | null> {
     try {
       const supabase = getSupabase();
 
-      // Restored from storage first. supabase-js refreshes an expired token itself, so this is the
-      // common path on every launch after the first and it costs no round trip when valid.
+      // supabase-js refreshes an expired token itself, so this is the common path on every launch
+      // after signing in, and it costs no round trip while the token is still good. Offline it
+      // returns the stored session unrefreshed, which is what keeps the app usable on a train.
       const { data: existing } = await supabase.auth.getSession();
-      if (existing.session) {
-        publish({ session: existing.session, settled: true });
-        return existing.session;
-      }
-
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) {
-        // Offline, rate-limited (30 an hour per address), or anonymous sign-in turned off. All of
-        // them mean the same thing here: carry on locally and try again next launch.
-        console.warn('anonymous sign-in unavailable', error.message);
-        publish({ session: null, settled: true });
-        return null;
-      }
-
-      publish({ session: data.session, settled: true });
-      return data.session;
+      publish({ session: existing.session ?? null, settled: true });
+      return existing.session ?? null;
     } catch (error) {
-      console.warn('anonymous sign-in failed', error);
+      // Unconfigured, unreachable, or storage unreadable. All the same answer: nobody is signed in.
+      console.warn('no session available', error);
       publish({ session: null, settled: true });
       return null;
     } finally {
