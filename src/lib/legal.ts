@@ -11,11 +11,13 @@
 // Kept as data rather than markup so the three documents cannot drift apart in how they look, and
 // so the wording is diffable when it changes.
 //
-// ## One thing in here is still a placeholder
+// ## No postal address, deliberately
 //
-// The registered address. Everything else about the operator is filled in below; the address is not
-// guessed at, because Pientr Holding B.V. is a different company from the one these documents were
-// adapted from and there is no reason to assume they share a door. Search for OPERATOR.
+// Pientr Holding is registered at a home address and it is not published here. The company is still
+// identifiable: the Chamber of Commerce number is given, and the register resolves it to an address
+// for anyone with standing to need one. If Knitwit ever needs to print a street — a PO box or a
+// registered office would be the way to do it — it goes in OPERATOR below and appears in all three
+// documents at once.
 
 export type LegalSection = {
   heading: string;
@@ -38,7 +40,6 @@ export const OPERATOR = {
   // wherever the operator is identified, because a knitter who wants to exercise a right, or a
   // regulator who wants to find somebody, needs the registered entity and not the product.
   tradingAs: 'Knitwit',
-  address: '[to be completed: registered address]',
   chamberOfCommerce: '93543212',
   vat: 'NL866443769B01',
   email: 'hello@knitwit.eu',
@@ -47,9 +48,8 @@ export const OPERATOR = {
 const WHO_WE_ARE: LegalSection = {
   heading: 'Who we are',
   body: [
-    `Knitwit is a trading name of ${OPERATOR.legalEntity}, a company registered in the Netherlands.`,
-    `${OPERATOR.legalEntity}, ${OPERATOR.address}. Chamber of Commerce ${OPERATOR.chamberOfCommerce}, VAT ${OPERATOR.vat}.`,
-    `Write to us at ${OPERATOR.email}.`,
+    `Knitwit is a trading name of ${OPERATOR.legalEntity}, a company registered in the Netherlands. Chamber of Commerce ${OPERATOR.chamberOfCommerce}, VAT ${OPERATOR.vat}.`,
+    `Write to us at ${OPERATOR.email}. That address reaches a person, and it is the right one for anything in this document — questions, corrections, or a request about your own data.`,
   ],
 };
 
