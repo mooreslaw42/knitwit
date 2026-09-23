@@ -38,6 +38,14 @@ SplashScreen.preventAutoHideAsync();
 // and needs the shared header so navigation stays reachable while editing.
 const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/calculator', '/account'];
 
+// Readable without an account, and deliberately so.
+//
+// Somebody being asked to create an account has to be able to read what they are agreeing to
+// first — offering terms you can only see after accepting them is not offering them. It also keeps
+// knitwit.eu/privacy reachable by anyone, which is what the App Store asks for and what a
+// regulator would expect.
+const PUBLIC_ROUTES = ['/privacy', '/terms', '/accessibility'];
+
 // Anything a screen throws while rendering lands here instead of taking the app down with it.
 //
 // Expo Router looks for this export by name. Without one, a render error unmounts the tree and
@@ -138,7 +146,7 @@ export default function RootLayout() {
 
   // The wall. An anonymous session counts as signed out: it is an account nobody can return to,
   // which is the thing this screen exists to stop happening.
-  if (!account.signedIn || account.anonymous) {
+  if ((!account.signedIn || account.anonymous) && !PUBLIC_ROUTES.includes(pathname)) {
     return (
       <ThemeProvider value={DefaultTheme}>
         <SignInGate />
@@ -176,6 +184,9 @@ export default function RootLayout() {
         <Stack.Screen name="material/[id]" options={{ headerShown: true, headerTitle: () => null }} />
         <Stack.Screen name="tool/[id]" options={{ headerShown: true, headerTitle: () => null }} />
         <Stack.Screen name="technique/[id]" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="privacy" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="terms" options={{ headerShown: true, headerTitle: () => null }} />
+        <Stack.Screen name="accessibility" options={{ headerShown: true, headerTitle: () => null }} />
         </Stack>
       </View>
     </ThemeProvider>

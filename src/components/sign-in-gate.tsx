@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -194,6 +195,22 @@ export function SignInGate() {
             </ThemedText>
           </Pressable>
 
+          {/* Reachable before agreeing to them, which is the only way offering them means anything.
+              These three routes are allow-listed past the wall in _layout.tsx. */}
+          {mode === 'create' ? (
+            <ThemedText type="small" themeColor="inkSoft" style={styles.legal}>
+              By creating an account you agree to our{' '}
+              <Link href="/terms" style={styles.legalLink}>
+                terms
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" style={styles.legalLink}>
+                privacy statement
+              </Link>
+              .
+            </ThemedText>
+          ) : null}
+
           {/* Only when signing in. Offering it beside "create an account" would be answering a
               question nobody has asked yet. */}
           {mode === 'signin' ? (
@@ -232,4 +249,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   swap: { alignSelf: 'center', paddingVertical: Spacing.two },
+  legal: { textAlign: 'center' },
+  legalLink: { color: Colors.sageDeep, textDecorationLine: 'underline' },
 });

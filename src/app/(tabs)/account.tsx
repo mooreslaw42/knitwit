@@ -213,6 +213,23 @@ export default function AccountScreen() {
           </ThemedText>
         ) : null}
 
+        <ThemedText type="smallBold" style={styles.label}>
+          The small print
+        </ThemedText>
+        <View style={styles.legalRow}>
+          {[
+            { href: '/privacy' as const, label: 'Privacy' },
+            { href: '/terms' as const, label: 'Terms' },
+            { href: '/accessibility' as const, label: 'Accessibility' },
+          ].map((page) => (
+            <Pressable key={page.href} onPress={() => router.push(page.href)} hitSlop={6}>
+              <ThemedText type="smallBold" themeColor="sageDeep">
+                {page.label}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+
         <SignOutSection />
         </ScrollView>
       </SafeAreaView>
@@ -255,6 +272,7 @@ const styles = StyleSheet.create({
   label: {
     marginTop: Spacing.three,
   },
+  legalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.four, marginTop: Spacing.one },
   unitRow: {
     flexDirection: 'row',
     gap: Spacing.two,
