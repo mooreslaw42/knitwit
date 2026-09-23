@@ -269,7 +269,7 @@ host = "env(SMTP_HOST)"
 port = 587
 user = "env(SMTP_USER)"
 pass = "env(SMTP_PASS)"
-admin_email = "hello@knitwit.eu"
+admin_email = "knitwit@pientr.com"
 sender_name = "Knitwit"
 
 # Uncomment to customize email template

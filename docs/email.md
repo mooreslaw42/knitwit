@@ -25,16 +25,21 @@ time — Resend, Postmark and Brevo are all reasonable, and all want a domain ve
 
 Whichever you pick, you will end up with a host, a port, a username and a password.
 
-**1. Verify `knitwit.eu` with the provider.** They give you DNS records — SPF, DKIM, usually a
-return-path CNAME — to add wherever knitwit.eu's DNS lives. Without these the mail is sent but
-lands in spam, which looks exactly like not being sent.
+**1. Verify the sending domain with the provider.** Knitwit sends as `knitwit@pientr.com`, so it is
+**pientr.com** that needs verifying, not knitwit.eu — the provider gives you DNS records (SPF,
+DKIM, usually a return-path CNAME) and they go wherever pientr.com's DNS lives. Without them the
+mail is sent but lands in spam, which looks exactly like not being sent.
+
+If you would rather send from knitwit.eu later, change `OPERATOR.email` in `src/lib/legal.ts` and
+`admin_email` in `supabase/config.toml` together, and verify that domain instead. Sending from a
+domain the provider has not verified is the usual reason reset emails silently never arrive.
 
 **2. Put the credentials into Supabase**, at
 **Project Settings → Authentication → SMTP Settings**:
 
 | field | value |
 |---|---|
-| Sender email | `hello@knitwit.eu` |
+| Sender email | `knitwit@pientr.com` |
 | Sender name | `Knitwit` |
 | Host / Port / Username / Password | from the provider |
 

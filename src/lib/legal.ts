@@ -42,7 +42,9 @@ export const OPERATOR = {
   tradingAs: 'Knitwit',
   chamberOfCommerce: '93543212',
   vat: 'NL866443769B01',
-  email: 'hello@knitwit.eu',
+  // On pientr.com rather than knitwit.eu, because this one has a mailbox behind it today. Every
+  // promise the three documents make about being reachable rests on that being true.
+  email: 'knitwit@pientr.com',
 };
 
 const WHO_WE_ARE: LegalSection = {
