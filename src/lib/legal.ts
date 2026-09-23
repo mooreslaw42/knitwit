@@ -11,11 +11,11 @@
 // Kept as data rather than markup so the three documents cannot drift apart in how they look, and
 // so the wording is diffable when it changes.
 //
-// ## Two things in here are placeholders
+// ## One thing in here is still a placeholder
 //
-// The legal entity and its registration numbers. They belong to whoever actually operates Knitwit,
-// and that is not something to guess at: copying Digitaal Toegankelijk’s KVK and BTW numbers onto a
-// different service would be stating something untrue to a regulator. Search for OPERATOR below.
+// The registered address. Everything else about the operator is filled in below; the address is not
+// guessed at, because Pientr Holding B.V. is a different company from the one these documents were
+// adapted from and there is no reason to assume they share a door. Search for OPERATOR.
 
 export type LegalSection = {
   heading: string;
@@ -33,17 +33,23 @@ export type LegalDocument = {
 // Fill these in and the placeholder disappears from all three documents at once.
 export const OPERATOR = {
   name: 'Knitwit',
-  legalEntity: '[to be completed: registered name]',
-  address: '[to be completed: address]',
-  chamberOfCommerce: '[to be completed: KVK]',
-  vat: '[to be completed: BTW]',
+  legalEntity: 'Pientr Holding B.V.',
+  // Knitwit is the name on the app; Pientr Holding B.V. is the company behind it. Both are named
+  // wherever the operator is identified, because a knitter who wants to exercise a right, or a
+  // regulator who wants to find somebody, needs the registered entity and not the product.
+  tradingAs: 'Knitwit',
+  address: '[to be completed: registered address]',
+  chamberOfCommerce: '93543212',
+  vat: 'NL866443769B01',
   email: 'hello@knitwit.eu',
 };
 
 const WHO_WE_ARE: LegalSection = {
   heading: 'Who we are',
   body: [
-    `Knitwit is operated by ${OPERATOR.legalEntity}, ${OPERATOR.address}. Chamber of Commerce ${OPERATOR.chamberOfCommerce}, VAT ${OPERATOR.vat}. You can reach us at ${OPERATOR.email}.`,
+    `Knitwit is a trading name of ${OPERATOR.legalEntity}, a company registered in the Netherlands.`,
+    `${OPERATOR.legalEntity}, ${OPERATOR.address}. Chamber of Commerce ${OPERATOR.chamberOfCommerce}, VAT ${OPERATOR.vat}.`,
+    `Write to us at ${OPERATOR.email}.`,
   ],
 };
 
@@ -206,7 +212,7 @@ export const TERMS: LegalDocument = {
     {
       heading: 'What belongs to us',
       body: [
-        'Knitwit itself — the app, its design and the software behind it — stays ours. You may use it; you may not copy it, reverse-engineer it, resell it, or scrape data out of it.',
+        `Knitwit itself — the app, its design and the software behind it — remains the property of ${OPERATOR.legalEntity}. You may use it; you may not copy it, reverse-engineer it, resell it, or scrape data out of it.`,
       ],
     },
     {
