@@ -26,9 +26,17 @@ type SessionState = {
   // False until the first attempt has finished, successfully or not. Sync uses this to know the
   // difference between "no account" and "not yet asked".
   settled: boolean;
+  // Arrived here by following a password-reset link.
+  //
+  // Supabase turns that link into a real session before the app sees it, which is what makes
+  // setting the new password possible at all — and also means that without this flag the knitter
+  // would sail straight through the sign-in wall into the app and never be asked for one. They
+  // would appear to be back, until the session expired and the forgotten password was all that was
+  // left again.
+  recovering: boolean;
 };
 
-let state: SessionState = { session: null, settled: false };
+let state: SessionState = { session: null, settled: false, recovering: false };
 const listeners = new Set<(s: SessionState) => void>();
 // One in-flight attempt at a time. Two screens mounting at once must not create two accounts.
 let attempt: Promise<Session | null> | null = null;
@@ -67,12 +75,12 @@ export async function ensureSession(): Promise<Session | null> {
       // after signing in, and it costs no round trip while the token is still good. Offline it
       // returns the stored session unrefreshed, which is what keeps the app usable on a train.
       const { data: existing } = await supabase.auth.getSession();
-      publish({ session: existing.session ?? null, settled: true });
+      publish({ ...state, session: existing.session ?? null, settled: true });
       return existing.session ?? null;
     } catch (error) {
       // Unconfigured, unreachable, or storage unreadable. All the same answer: nobody is signed in.
       console.warn('no session available', error);
-      publish({ session: null, settled: true });
+      publish({ ...state, session: null, settled: true });
       return null;
     } finally {
       attempt = null;
@@ -96,15 +104,24 @@ export async function ensureSession(): Promise<Session | null> {
 // it is reachable and says no.
 export function watchSession(): () => void {
   try {
-    const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
-      publish({ session, settled: true });
+    const { data } = getSupabase().auth.onAuthStateChange((event, session) => {
+      // Sticky until the new password is actually set: supabase-js follows PASSWORD_RECOVERY with
+      // ordinary SIGNED_IN events, and reading only the latest would clear the flag a moment after
+      // raising it and let the knitter through with nothing changed.
+      const recovering = event === 'PASSWORD_RECOVERY' || (state.recovering && Boolean(session));
+      publish({ session, settled: true, recovering });
     });
     return () => data.subscription.unsubscribe();
   } catch (error) {
     // Settled with no session: the difference between "not asked yet" and "asked, no account" is
     // what sync reads to decide whether to wait, and it must not wait for one that cannot come.
     console.warn('sessions unavailable', error);
-    publish({ session: null, settled: true });
+    publish({ session: null, settled: true, recovering: false });
     return () => {};
   }
+}
+
+// The new password has been set; this is an ordinary session again.
+export function finishRecovery(): void {
+  publish({ ...state, recovering: false });
 }

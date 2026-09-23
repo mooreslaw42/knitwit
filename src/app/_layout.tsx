@@ -29,6 +29,7 @@ import { migratePhotos } from '@/lib/migrate-photos';
 import { currentSession, ensureSession, onSessionChange, watchSession } from '@/lib/session';
 import { accountStateOf } from '@/lib/auth';
 import { SignInGate } from '@/components/sign-in-gate';
+import { SetNewPassword } from '@/components/set-new-password';
 import { startSync } from '@/lib/sync';
 
 SplashScreen.preventAutoHideAsync();
@@ -120,6 +121,17 @@ export default function RootLayout() {
     return (
       <ThemeProvider value={DefaultTheme}>
         <CrashScreen title="Knitwit couldn’t read your saved data" detail={hydrationError} />
+      </ThemeProvider>
+    );
+  }
+
+  // Before the wall, because a recovery link has already let them past it. They hold a real session
+  // and would otherwise walk straight into the app without ever setting the password they came here
+  // to set — rescued in appearance only, locked out again when it expires.
+  if (session.recovering) {
+    return (
+      <ThemeProvider value={DefaultTheme}>
+        <SetNewPassword />
       </ThemeProvider>
     );
   }

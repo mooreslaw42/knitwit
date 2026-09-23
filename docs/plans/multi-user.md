@@ -1,16 +1,38 @@
 # Knitwit — accounts, sync, and signing in
 
-**Status: M1–M5 built and running against production. M6 is next. Everything after it is
-deferred — see the end.** Rewritten 2026-09-16 after the first five milestones, so that what is
-here describes what exists rather than what was once intended.
+**Status: M1–M6 built and running against production, on the web and on iOS.** Rewritten
+2026-09-16 after the first five milestones; amended 2026-09-23, when the fourth founding choice was
+reversed.
 
-Four choices frame the whole thing, all still holding:
+Three of the four choices still frame the whole thing:
 
 - **Local-first with row-level sync.** The app keeps working with no network; Postgres is the
   durable truth; reconciliation happens per entity, never per blob.
 - **Two devices from day one.** Conflict handling is real work, not a later retrofit.
 - **Patterns may become shareable one day.** Projects and stash never do.
-- **Nobody is asked to sign up.** Knitters get an account silently and keep their data.
+
+### The fourth choice, reversed
+
+> ~~**Nobody is asked to sign up.** Knitters get an account silently and keep their data.~~
+
+**Knitters now sign in before they reach the app** (`e7b3bc3`). Anonymous sign-in is no longer
+called; `src/components/sign-in-gate.tsx` is the door.
+
+This was a deliberate reversal of a deliberate choice, so both halves are worth keeping. The
+original reasoning was that somebody opening a knitting app to count a row should not meet a form,
+and that signing in later could then be an *upgrade* rather than a migration. That reasoning was
+sound and the machinery it produced is still here and still load-bearing.
+
+What it cost: a new knitter cannot use Knitwit without a network at all — there is no local-only
+mode behind the door, and the counter really does wait for a token now. Somebody already signed in
+is unaffected, because the session is restored from storage and only refreshed when there is
+something to refresh against.
+
+What survives, and must: **an anonymous account made before the door went up still holds somebody's
+knitting.** Creating an account from the gate calls `updateUser` when such a session is present, not
+`signUp` — same user id, nothing moves. `signUp` there would mint a second user and strand the
+first for ever, since an anonymous account has nothing to sign back in with. That branch is in
+`createAccount` and it is the one with tests on it.
 
 ## What is built
 
@@ -102,10 +124,23 @@ one can be minted again by clearing storage.
    at once** resolves to whichever synced last, and the other device's taps are lost. An operation
    log would fix it. Not worth the machinery for a knitter with one pair of hands.
 
-## M6 — Signing in
+### M6 — Signing in (`d64b1f7`, `c7b45ee`, `e7b3bc3`)
 
-The next and, for now, last milestone. Anonymous accounts already exist and already hold everything;
-this is about attaching a real identity to one so it survives a lost phone.
+Built. Anonymous accounts already existed and already held everything; this attached a real identity
+to one so it survives a lost phone, and then — see above — became the only way in.
+
+**Apple works end to end on the web**, through the Services ID `com.pientr.knitwit.web` and the web
+OAuth flow. Deliberately not `expo-apple-authentication`: that path signs in with an identity token,
+and there is no id-token form of `linkIdentity()`, so it cannot attach Apple to an account somebody
+already has. On a phone the same web flow runs inside a browser sheet and returns by app scheme.
+
+Three things cost an afternoon each and are worth not rediscovering: `detectSessionInUrl` was off,
+so the browser came back from Apple with a code nothing read; **manual linking is off by default**,
+and with it off a provider sign-in does not fail, it succeeds into a second account; and Apple's
+capability sync in EAS will try to *disable* Sign in with Apple on the App ID, because the Expo
+config declares no such entitlement — hence `EXPO_NO_CAPABILITY_SYNC=1` on every credential command.
+
+## M6 — what it was going to be
 
 **`linkIdentity()`, not a new account.** Apple and Google attach to the *same* `user_id`, so nothing
 moves and nothing is lost. Signing in is an upgrade, not a migration — which is the entire reason
@@ -131,7 +166,7 @@ than the code.
 - **Apple** and **Google** through `linkIdentity()` on an existing anonymous account, and through
   `signInWithOAuth()` on a device that has never had one.
 - **Email + password**, via `updateUser({ email, password })` to upgrade an anonymous account —
-  email verified before the password is accepted.
+  email verified before the password is accepted. **Not done: see Still open.**
 - **Signing in on a second device**, which is the case that has never been exercised: a device that
   already has an anonymous account with local data, signing into an account that also has data. Two
   sets of rows, one winner to choose. Worth deciding before it happens rather than after.
@@ -162,7 +197,17 @@ entitlements. Nothing to build until there is something to sell.
 
 ## Still open
 
-Small things that are known rather than forgotten.
+Small things that are known rather than forgotten. The first two are no longer small: the door made
+them load-bearing.
+
+- **No password reset, and no email verification.** `mailer_autoconfirm` is on, so an address is
+  never proved — anybody can register one that is not theirs — and a forgotten password is an
+  account nobody can enter, with the work still inside it. Both were rough edges while anonymous
+  accounts existed as a fallback. With the door up they are the front of the house, and both need
+  SMTP on the project before either can be turned on.
+- **Anonymous accounts are no longer created, but the tier remains.** `plan_for` still grants them
+  60 AI units a day and the gate still upgrades the ones that exist. The server setting stays
+  enabled so those upgrades keep working; it can be turned off once none are left.
 
 - **No pull on reconnect or foreground.** Sync runs at launch and 1.5s after a local change, so a
   device left open will not see another's changes until something happens locally. The cheapest real

@@ -149,6 +149,36 @@ export function describeProviderReturn(): string | null {
   return problem === null ? null : readable(problem);
 }
 
+// Getting back into an account whose password is gone.
+//
+// This is not a convenience. With the sign-in wall up there is no anonymous fallback and no other
+// door: a forgotten password is an account nobody can enter, with a knitter's whole stash still
+// inside it. The only thing standing between them and that is this email.
+//
+// Deliberately says the same thing whether or not the address is registered. The alternative —
+// "no account with that email" — is a free membership check for anybody who wants to know which of
+// their guesses is somebody's real address, and it helps the knitter not at all, since the useful
+// answer is the same either way: go and look in your inbox.
+export async function requestPasswordReset(email: string): Promise<AuthResult> {
+  const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: authReturnUrl(),
+  });
+  // Logged rather than shown, for the reason above.
+  if (error) console.warn('password reset request failed', error.message);
+  return { ok: true };
+}
+
+// Setting the new one, once the link in the email has signed them in.
+//
+// Supabase turns a recovery link into a real session before this is reachable, which is what makes
+// the plain `updateUser` enough — and also why the recovery screen must never be reachable any
+// other way, since a session is a session and this would change the password of whoever holds one.
+export async function setNewPassword(password: string): Promise<AuthResult> {
+  const { error } = await getSupabase().auth.updateUser({ password });
+  if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
 export async function signOut(): Promise<AuthResult> {
   const { error } = await getSupabase().auth.signOut();
   if (error) return { ok: false, message: readable(error.message) };
@@ -162,6 +192,9 @@ function readable(message: string): string {
     return 'That email already has a Knitwit account. Sign in to it instead.';
   }
   if (text.includes('invalid login')) return "That email and password don't match an account.";
+  if (text.includes('new password should be different')) {
+    return 'That is the password you already had. Choose a different one.';
+  }
   if (text.includes('password')) return 'That password is too short — six characters or more.';
   if (text.includes('email')) return "That doesn't look like an email address.";
   if (text.includes('identity is already linked') || text.includes('already linked')) {

@@ -1,4 +1,11 @@
-import { accountStateOf, attachProvider, createAccount, describeProviderReturn } from '@/lib/auth';
+import {
+  accountStateOf,
+  attachProvider,
+  createAccount,
+  describeProviderReturn,
+  requestPasswordReset,
+  setNewPassword,
+} from '@/lib/auth';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -11,6 +18,7 @@ const mockFinishProviderFlow = jest.fn();
 const mockProviderReturnError = jest.fn();
 const mockUpdateUser = jest.fn();
 const mockSignUp = jest.fn();
+const mockResetPasswordForEmail = jest.fn();
 let mockSession: unknown = null;
 let mockAnonymous = true;
 
@@ -21,6 +29,7 @@ jest.mock('@/lib/supabase', () => ({
       signInWithOAuth: mockSignInWithOAuth,
       updateUser: (a: unknown) => mockUpdateUser(a),
       signUp: (a: unknown) => mockSignUp(a),
+      resetPasswordForEmail: (a: unknown, b: unknown) => mockResetPasswordForEmail(a, b),
     },
   }),
 }));
@@ -226,6 +235,49 @@ describe('creating an account', () => {
     expect(await createAccount('taken@example.com', 'hunter22')).toEqual({
       ok: false,
       message: 'That email already has a Knitwit account. Sign in to it instead.',
+    });
+  });
+});
+
+
+// Getting back in. With no anonymous fallback and no second door, this email is the only thing
+// between a forgotten password and an account nobody can open.
+describe('resetting a password', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockResetPasswordForEmail.mockResolvedValue({ error: null });
+    mockUpdateUser.mockResolvedValue({ error: null });
+  });
+
+  it('asks for a link back to where the knitter is', async () => {
+    await requestPasswordReset('  knitter@example.com  ');
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
+      'knitter@example.com',
+      expect.objectContaining({ redirectTo: 'https://knitwit.eu/account' }),
+    );
+  });
+
+  // Saying "no account with that email" would be a free membership check for anybody working
+  // through a list of guesses, and tells the knitter nothing they can act on — the useful answer is
+  // the same either way: go and look in your inbox.
+  it('says the same thing whether or not the address is registered', async () => {
+    mockResetPasswordForEmail.mockResolvedValue({ error: { message: 'User not found' } });
+    expect(await requestPasswordReset('stranger@example.com')).toEqual({ ok: true });
+  });
+
+  it('sets the new password', async () => {
+    expect(await setNewPassword('a-better-one')).toEqual({ ok: true });
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'a-better-one' });
+  });
+
+  it('says so when the new password is the old one', async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'New password should be different from the old password.' },
+    });
+    const result = await setNewPassword('same-as-before');
+    expect(result).toEqual({
+      ok: false,
+      message: 'That is the password you already had. Choose a different one.',
     });
   });
 });

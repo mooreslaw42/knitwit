@@ -231,8 +231,16 @@ enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
-# If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Proof that an address belongs to whoever typed it.
+#
+# Off, `signUp` accepts any address at all — somebody can register one that is not theirs, and the
+# real owner then finds their email taken by an account they cannot enter. That was a rough edge
+# while anonymous accounts existed as a fallback; the sign-in wall made it the front door.
+#
+# Requires SMTP below. Supabase's built-in sender is capped at a handful of messages an hour and is
+# explicitly not for production, so turning this on without SMTP locks new knitters out at the
+# moment they sign up.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -242,15 +250,27 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# Who actually sends Knitwit's email.
+#
+# Two messages matter and both are load-bearing: the address confirmation above, and the
+# password-reset link. With no anonymous account to fall back on, that second one is the only thing
+# between a forgotten password and a stash nobody can reach — so this is not optional plumbing.
+#
+# Supabase's built-in sender exists for local development. It is rate-limited to a few messages an
+# hour and Supabase say plainly it is not for production; a knitter who signs up during the wrong
+# hour simply never receives anything.
+#
+# The password is read from the environment and never written here. Filling it in would put a
+# working credential in the repository, where it would be in every clone and every fork for ever.
+# See docs/email.md for what to set, on the hosted project as well as here.
+[auth.email.smtp]
+enabled = false
+host = "env(SMTP_HOST)"
+port = 587
+user = "env(SMTP_USER)"
+pass = "env(SMTP_PASS)"
+admin_email = "hello@knitwit.eu"
+sender_name = "Knitwit"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

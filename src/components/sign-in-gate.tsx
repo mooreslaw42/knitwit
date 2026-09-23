@@ -11,6 +11,7 @@ import {
   attachProvider,
   createAccount,
   describeProviderReturn,
+  requestPasswordReset,
   signInExisting,
 } from '@/lib/auth';
 import { currentSession, onSessionChange } from '@/lib/session';
@@ -78,6 +79,23 @@ export function SignInGate() {
     }
     // Nothing else to do: the session change propagates and this screen unmounts itself.
     setPassword('');
+  };
+
+  const forgotten = async () => {
+    if (!email.trim()) {
+      setNote('Type your email address first, then ask again.');
+      return;
+    }
+    setBusy(true);
+    const result = await requestPasswordReset(email);
+    setBusy(false);
+    // Says the same thing either way, on purpose — see requestPasswordReset. A knitter whose
+    // address is not registered learns nothing here, and neither does anybody guessing.
+    setNote(
+      result.ok
+        ? `If ${email.trim()} has a Knitwit account, a link to set a new password is on its way.`
+        : result.message,
+    );
   };
 
   const provider = async (which: 'apple' | 'google') => {
@@ -175,6 +193,16 @@ export function SignInGate() {
               {mode === 'create' ? 'I already have an account →' : 'I need an account →'}
             </ThemedText>
           </Pressable>
+
+          {/* Only when signing in. Offering it beside "create an account" would be answering a
+              question nobody has asked yet. */}
+          {mode === 'signin' ? (
+            <Pressable onPress={() => void forgotten()} hitSlop={6} style={styles.swap} disabled={busy}>
+              <ThemedText type="small" themeColor="inkSoft">
+                I have forgotten my password
+              </ThemedText>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
