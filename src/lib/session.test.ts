@@ -100,7 +100,7 @@ describe('when the project is not configured at all', () => {
       expect(() => watchSession()()).not.toThrow();
       // Settled, with no session — sync reads this to tell "no account" from "not asked yet", and
       // must not wait for one that can never arrive.
-      expect(currentSession()).toEqual({ session: null, settled: true });
+      expect(currentSession()).toEqual({ session: null, settled: true, recovering: false });
     });
   });
 });
