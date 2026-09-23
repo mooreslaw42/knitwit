@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { AccountSection } from '@/components/account-section';
 import { SignOutSection } from '@/components/sign-out-section';
+import { DeleteAccountSection } from '@/components/delete-account-section';
 import { allProgress, standing } from '@/lib/awards';
 import { backupFilename, buildBackup, readBackup, restoreMessage, writeBackup } from '@/lib/backup';
 import { openTextFile } from '@/lib/open-file';
@@ -231,6 +232,7 @@ export default function AccountScreen() {
         </View>
 
         <SignOutSection />
+        <DeleteAccountSection />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

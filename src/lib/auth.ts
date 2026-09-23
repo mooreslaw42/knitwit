@@ -6,6 +6,7 @@ import {
   providerReturnError,
   skipBrowserRedirect,
 } from '@/lib/auth-return';
+import { invokeEdgeFunction } from '@/lib/edge-function';
 import { currentSession, ensureSession } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
 
@@ -176,6 +177,35 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
 export async function setNewPassword(password: string): Promise<AuthResult> {
   const { error } = await getSupabase().auth.updateUser({ password });
   if (error) return { ok: false, message: readable(error.message) };
+  return { ok: true };
+}
+
+// Deleting the account, for good.
+//
+// Through an Edge Function because it cannot be done from here: a knitter may delete their own rows
+// but not their own auth user, and an account with no rows is still an account — the email stays
+// registered and the sign-in still works. Only the service role can remove the user, and the
+// service role must never reach a client bundle.
+//
+// The caller is responsible for clearing what is on the device afterwards. The server no longer
+// knows this person, so a local copy left behind would sync nowhere and simply sit there looking
+// like an account.
+export async function deleteAccount(): Promise<AuthResult> {
+  try {
+    await invokeEdgeFunction(
+      'delete-account',
+      {},
+      {
+        timeoutMs: 60_000,
+        timeoutMessage: 'That took too long. Nothing was deleted — try again in a moment.',
+      },
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'Your account could not be deleted.',
+    };
+  }
   return { ok: true };
 }
 

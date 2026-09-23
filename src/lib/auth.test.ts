@@ -2,6 +2,7 @@ import {
   accountStateOf,
   attachProvider,
   createAccount,
+  deleteAccount,
   describeProviderReturn,
   requestPasswordReset,
   setNewPassword,
@@ -19,6 +20,7 @@ const mockProviderReturnError = jest.fn();
 const mockUpdateUser = jest.fn();
 const mockSignUp = jest.fn();
 const mockResetPasswordForEmail = jest.fn();
+const mockInvoke = jest.fn();
 let mockSession: unknown = null;
 let mockAnonymous = true;
 
@@ -39,6 +41,9 @@ jest.mock('@/lib/session', () => ({
     settled: true,
   }),
   ensureSession: async () => mockSession,
+}));
+jest.mock('@/lib/edge-function', () => ({
+  invokeEdgeFunction: (name: string, body: unknown, opts: unknown) => mockInvoke(name, body, opts),
 }));
 jest.mock('@/lib/auth-return', () => ({
   authReturnUrl: () => 'https://knitwit.eu/account',
@@ -278,6 +283,29 @@ describe('resetting a password', () => {
     expect(result).toEqual({
       ok: false,
       message: 'That is the password you already had. Choose a different one.',
+    });
+  });
+});
+
+
+// The one action with no undo.
+describe('deleting an account', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('asks the function that holds the service role', async () => {
+    mockInvoke.mockResolvedValue({ ok: true });
+    expect(await deleteAccount()).toEqual({ ok: true });
+    expect(mockInvoke).toHaveBeenCalledWith('delete-account', {}, expect.anything());
+  });
+
+  // The function refuses to half-delete, so a failure means the account is still whole. Reporting
+  // it as gone would be the worst possible lie: the knitter stops looking for work that is still
+  // there, or grieves work that was never lost.
+  it('reports failure rather than assuming it worked', async () => {
+    mockInvoke.mockRejectedValue(new Error('Some of your pictures could not be removed.'));
+    expect(await deleteAccount()).toEqual({
+      ok: false,
+      message: 'Some of your pictures could not be removed.',
     });
   });
 });
