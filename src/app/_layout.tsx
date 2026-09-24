@@ -35,9 +35,14 @@ import {
 import { accountStateOf } from "@/lib/auth";
 import { SignInGate } from "@/components/sign-in-gate";
 import { SetNewPassword } from "@/components/set-new-password";
+import { monitorAccount, reportProblem, startMonitoring } from "@/lib/monitoring";
 import { startSync } from "@/lib/sync";
 
 SplashScreen.preventAutoHideAsync();
+
+// Before the first render, deliberately: the crash worth catching most is the one that happens on
+// the way up, and a reporter started inside a component is not listening yet when that fires.
+startMonitoring();
 
 // The tab screens already render their own navigation; everything else is pushed onto this stack
 // and needs the shared header so navigation stays reachable while editing.
@@ -84,6 +89,9 @@ const DETAIL_SCREEN = {
 // leaves a knitter staring at nothing, with no way to reach their data and every reason to start
 // deleting things.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // Sent as well as shown. The screen tells the knitter their work is safe; this is the half that
+  // tells somebody it happened at all, which for a week was a job done by the knitter themselves.
+  reportProblem(error, { where: 'render' });
   return (
     <CrashScreen
       title="Knitwit hit a snag"
@@ -113,6 +121,8 @@ export default function RootLayout() {
   // Who is signed in, watched here because the whole app is behind it.
   const [session, setSession] = useState(() => currentSession());
   useEffect(() => onSessionChange(setSession), []);
+  // The account id on reports, so five from one knitter do not read as five knitters.
+  useEffect(() => monitorAccount(session.session?.user.id ?? null), [session]);
   const account = accountStateOf(session.session);
 
   // `settled` and not merely `session` — until the first attempt has finished, "no session" and
@@ -158,6 +168,7 @@ export default function RootLayout() {
   // The saved data could not be read. The app is running and empty, which looks exactly like a
   // fresh install — so say plainly that it is not one, before anyone tidies up.
   if (hydrationError) {
+    reportProblem(new Error(hydrationError), { where: 'hydration' });
     return (
       <ThemeProvider value={DefaultTheme}>
         <CrashScreen

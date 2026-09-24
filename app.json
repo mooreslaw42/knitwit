@@ -54,7 +54,8 @@
           "cameraPermission": "Knitwit needs the camera so you can photograph a yarn's ball band and have its details read for you."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

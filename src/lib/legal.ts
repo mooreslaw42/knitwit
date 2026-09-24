@@ -94,6 +94,7 @@ export const PRIVACY: LegalDocument = {
       heading: 'Who processes data for us',
       list: [
         'Supabase — the database, file storage and sign-in behind Knitwit. Your data lives in their EU region (Ireland).',
+        'Bugsink — a Dutch error tracker. When Knitwit breaks it sends a report: what went wrong, where in the code, which version, and an account id so that five reports from one knitter are not read as five knitters. Not your email address, not your location, and none of your knitting — a crash report says where the code was, not what it was holding.',
         'TransIP — the Dutch provider that sends Knitwit’s email. The only messages Knitwit sends are the ones you ask for: confirming your address, and resetting your password. There is no newsletter and nothing to unsubscribe from.',
         'GreenPT — the EU-based AI service that reads patterns and ball bands, as described above.',
         'Vercel — hosts knitwit.eu.',
