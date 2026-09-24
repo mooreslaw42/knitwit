@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PillButton } from '@/components/knitwit-ui';
@@ -65,7 +65,8 @@ export function SignInGate() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState<'apple' | 'google' | null>(null);
+  // Which provider is waiting on an answer about the knitting already on this device.
+  const [asking, setAsking] = useState<'apple' | 'google' | null>(null);
   const [note, setNote] = useState<string | null>(() => describeProviderReturn());
 
   const projects = useKnitwitStore((s) => s.projects);
@@ -126,18 +127,15 @@ export function SignInGate() {
   // purpose is getting in. Attaching a provider to the account already on the device is a different
   // act with a different consequence, and it lives on the Account screen where it belongs.
   const provider = async (which: 'apple' | 'google') => {
-    // Work on this device belongs to the anonymous account being left behind. Named, and asked
-    // about once, before anything happens — a mis-tap on a sign-in screen should not cost anybody
-    // their stash.
-    if (stranded && confirming !== which) {
-      setConfirming(which);
-      setNote(
-        `Signing in takes you to the account that ${which === 'apple' ? 'Apple' : 'Google'} belongs to. The ${local} on this device belongs to the one you have now — Knitwit will save a copy first, and then this device shows the account you sign in to. Press again to go ahead.`,
-      );
+    // Work on this device belongs to the anonymous account being left behind, and signing in
+    // abandons it. That is a question with two real answers, so it is asked as one — a note and a
+    // second press is not a choice, it is a guess about what the second press means.
+    if (stranded) {
+      setNote(null);
+      setAsking(which);
       return;
     }
-
-    await runProviderSwitch(which, stranded);
+    await runProviderSwitch(which, false);
   };
 
   // Offered, not imposed. The copy exists because the knitting on this device is about to become
@@ -149,13 +147,13 @@ export function SignInGate() {
     setNote(null);
     const outcome = await switchToProviderAccount(which, { downloadBackupFirst: withBackup });
     setBusy(false);
-    setConfirming(null);
 
     if (outcome.status === 'backup-refused') {
-      setNote('The copy was not saved, so nothing was changed. You can sign in without one below.');
-      setConfirming(which);
+      // The sheet was dismissed. Left open, with the other answer still on it.
+      setNote('The copy was not saved, so nothing has changed yet.');
       return;
     }
+    setAsking(null);
     if (outcome.status === 'failed' && outcome.message) setNote(outcome.message);
   };
 
@@ -235,17 +233,59 @@ export function SignInGate() {
             </ThemedText>
           ) : null}
 
-          {confirming ? (
-            <Pressable
-              onPress={() => void runProviderSwitch(confirming, false)}
-              hitSlop={6}
-              style={styles.swap}
-              disabled={busy}>
-              <ThemedText type="small" themeColor="inkSoft">
-                Sign in without saving a copy
-              </ThemedText>
-            </Pressable>
-          ) : null}
+
+          <Modal
+            visible={asking !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={() => (busy ? null : setAsking(null))}>
+            <View style={styles.backdrop}>
+              <View style={styles.dialog}>
+                <ThemedText type="subtitle" heading={2}>
+                  Keep a copy first?
+                </ThemedText>
+                <ThemedText type="default">
+                  The {local} on this device belongs to the account you have now. Signing in with{' '}
+                  {asking === 'apple' ? 'Apple' : 'Google'} takes you to a different one, and leaves
+                  this behind.
+                </ThemedText>
+                <ThemedText type="small" themeColor="coralDeep">
+                  That account has no email and no password, so nothing can sign back into it. A
+                  copy is the only way this knitting survives.
+                </ThemedText>
+
+                {note ? (
+                  <ThemedText type="small" themeColor="coralDeep">
+                    {note}
+                  </ThemedText>
+                ) : null}
+
+                <PillButton
+                  style={styles.dialogPrimary}
+                  onPress={() => asking && void runProviderSwitch(asking, true)}
+                  disabled={busy}>
+                  <ThemedText type="smallBold" themeColor="white">
+                    {busy ? 'One moment…' : 'Save a copy, then sign in'}
+                  </ThemedText>
+                </PillButton>
+
+                <Pressable
+                  onPress={() => asking && void runProviderSwitch(asking, false)}
+                  disabled={busy}
+                  style={styles.dialogSkip}>
+                  <ThemedText type="smallBold" themeColor="ink">
+                    Sign in without saving
+                  </ThemedText>
+                </Pressable>
+
+                <Pressable onPress={() => setAsking(null)} disabled={busy} style={styles.dialogSkip}>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    Cancel
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
 
           <Pressable
             onPress={() => {
@@ -314,5 +354,19 @@ const styles = StyleSheet.create({
   },
   swap: { alignSelf: 'center', paddingVertical: Spacing.two },
   legal: { textAlign: 'center' },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(74,59,56,0.45)',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  dialog: {
+    backgroundColor: Colors.cream,
+    borderRadius: Radii.large,
+    padding: Spacing.five,
+    gap: Spacing.three,
+  },
+  dialogPrimary: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: Spacing.three },
+  dialogSkip: { alignSelf: 'center', paddingVertical: Spacing.two },
   legalLink: { color: Colors.sageDeep, textDecorationLine: 'underline' },
 });
