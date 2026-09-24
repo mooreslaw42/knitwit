@@ -2,41 +2,53 @@ import {
   Quicksand_500Medium,
   Quicksand_600SemiBold,
   Quicksand_700Bold,
-} from '@expo-google-fonts/quicksand';
+} from "@expo-google-fonts/quicksand";
 import {
   Nunito_400Regular,
   Nunito_600SemiBold,
   Nunito_700Bold,
   Nunito_800ExtraBold,
   useFonts,
-} from '@expo-google-fonts/nunito';
+} from "@expo-google-fonts/nunito";
 import {
   DefaultTheme,
   type ErrorBoundaryProps,
   Stack,
   ThemeProvider,
   usePathname,
-} from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+} from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
 
-import AppHeader from '@/components/app-header';
-import { Colors } from '@/constants/theme';
-import { CrashScreen } from '@/components/crash-screen';
-import { useKnitwitStore } from '@/store/useKnitwitStore';
-import { migratePhotos } from '@/lib/migrate-photos';
-import { currentSession, ensureSession, onSessionChange, watchSession } from '@/lib/session';
-import { accountStateOf } from '@/lib/auth';
-import { SignInGate } from '@/components/sign-in-gate';
-import { SetNewPassword } from '@/components/set-new-password';
-import { startSync } from '@/lib/sync';
+import AppHeader from "@/components/app-header";
+import { Colors } from "@/constants/theme";
+import { CrashScreen } from "@/components/crash-screen";
+import { useKnitwitStore } from "@/store/useKnitwitStore";
+import { migratePhotos } from "@/lib/migrate-photos";
+import {
+  currentSession,
+  ensureSession,
+  onSessionChange,
+  watchSession,
+} from "@/lib/session";
+import { accountStateOf } from "@/lib/auth";
+import { SignInGate } from "@/components/sign-in-gate";
+import { SetNewPassword } from "@/components/set-new-password";
+import { startSync } from "@/lib/sync";
 
 SplashScreen.preventAutoHideAsync();
 
 // The tab screens already render their own navigation; everything else is pushed onto this stack
 // and needs the shared header so navigation stays reachable while editing.
-const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/calculator', '/account'];
+const TAB_ROUTES = [
+  "/",
+  "/projects",
+  "/library",
+  "/counter",
+  "/calculator",
+  "/account",
+];
 
 // Readable without an account, and deliberately so.
 //
@@ -44,7 +56,27 @@ const TAB_ROUTES = ['/', '/projects', '/library', '/counter', '/calculator', '/a
 // first — offering terms you can only see after accepting them is not offering them. It also keeps
 // knitwit.eu/privacy reachable by anyone, which is what the App Store asks for and what a
 // regulator would expect.
-const PUBLIC_ROUTES = ['/privacy', '/terms', '/accessibility'];
+const PUBLIC_ROUTES = ["/privacy", "/terms", "/accessibility"];
+
+// How every pushed screen wears the native header.
+//
+// One object rather than fifteen copies, and written out because the previous spelling did not
+// work. `headerTitle: () => null` left the route name sitting in the title bar — a knitter editing
+// a needle was shown "tool/[id]", and above the back arrow, "(tabs)". An empty string is not open
+// to interpretation the way a component returning null apparently is.
+//
+// No title at all is the right answer here: every one of these screens already says what it is in
+// its own first line, and a header repeating it would be the same words twice. iOS labels the back
+// button with the previous screen's title, which for all of these is the tab group, so the chevron
+// goes alone rather than carrying its name.
+const DETAIL_SCREEN = {
+  headerShown: true,
+  headerTitle: "",
+  headerBackButtonDisplayMode: "minimal",
+  headerTintColor: Colors.ink,
+  headerStyle: { backgroundColor: Colors.cream },
+  headerShadowVisible: false,
+} as const;
 
 // Anything a screen throws while rendering lands here instead of taking the app down with it.
 //
@@ -55,7 +87,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
     <CrashScreen
       title="Knitwit hit a snag"
-      detail={`${error.name}: ${error.message}\n\n${error.stack ?? ''}`}
+      detail={`${error.name}: ${error.message}\n\n${error.stack ?? ""}`}
       onRetry={() => void retry()}
     />
   );
@@ -128,7 +160,10 @@ export default function RootLayout() {
   if (hydrationError) {
     return (
       <ThemeProvider value={DefaultTheme}>
-        <CrashScreen title="Knitwit couldn’t read your saved data" detail={hydrationError} />
+        <CrashScreen
+          title="Knitwit couldn’t read your saved data"
+          detail={hydrationError}
+        />
       </ThemeProvider>
     );
   }
@@ -146,7 +181,10 @@ export default function RootLayout() {
 
   // The wall. An anonymous session counts as signed out: it is an account nobody can return to,
   // which is the thing this screen exists to stop happening.
-  if ((!account.signedIn || account.anonymous) && !PUBLIC_ROUTES.includes(pathname)) {
+  if (
+    (!account.signedIn || account.anonymous) &&
+    !PUBLIC_ROUTES.includes(pathname)
+  ) {
     return (
       <ThemeProvider value={DefaultTheme}>
         <SignInGate />
@@ -162,31 +200,32 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: Colors.cream },
-          }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="project/new" options={{ headerShown: false }} />
-        <Stack.Screen name="pattern/new" options={{ headerShown: false }} />
-        <Stack.Screen name="pattern/[id]/index" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen
-          name="pattern/[id]/section/[index]"
-          options={{ headerShown: true, headerTitle: () => null }}
-        />
-        <Stack.Screen name="project/[key]/index" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="project/[key]/edit" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen
-          name="project/[key]/section/new"
-          options={{ headerShown: true, headerTitle: () => null }}
-        />
-        <Stack.Screen
-          name="project/[key]/section/[index]"
-          options={{ headerShown: true, headerTitle: () => null }}
-        />
-        <Stack.Screen name="material/[id]" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="tool/[id]" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="technique/[id]" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="privacy" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="terms" options={{ headerShown: true, headerTitle: () => null }} />
-        <Stack.Screen name="accessibility" options={{ headerShown: true, headerTitle: () => null }} />
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="project/new" options={{ headerShown: false }} />
+          <Stack.Screen name="pattern/new" options={{ headerShown: false }} />
+          <Stack.Screen name="pattern/[id]/index" options={DETAIL_SCREEN} />
+          <Stack.Screen
+            name="pattern/[id]/section/[index]"
+            options={DETAIL_SCREEN}
+          />
+          <Stack.Screen name="project/[key]/index" options={DETAIL_SCREEN} />
+          <Stack.Screen name="project/[key]/edit" options={DETAIL_SCREEN} />
+          <Stack.Screen
+            name="project/[key]/section/new"
+            options={DETAIL_SCREEN}
+          />
+          <Stack.Screen
+            name="project/[key]/section/[index]"
+            options={DETAIL_SCREEN}
+          />
+          <Stack.Screen name="material/[id]" options={DETAIL_SCREEN} />
+          <Stack.Screen name="tool/[id]" options={DETAIL_SCREEN} />
+          <Stack.Screen name="technique/[id]" options={DETAIL_SCREEN} />
+          <Stack.Screen name="privacy" options={DETAIL_SCREEN} />
+          <Stack.Screen name="terms" options={DETAIL_SCREEN} />
+          <Stack.Screen name="accessibility" options={DETAIL_SCREEN} />
         </Stack>
       </View>
     </ThemeProvider>
