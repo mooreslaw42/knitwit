@@ -6,20 +6,37 @@
 import { Platform } from 'react-native';
 
 export const Colors = {
+  // ## The four -Deep shades and inkSoft carry text, and until now none of them could be read
+  //
+  // WCAG AA asks 4.5:1 of ordinary text. The palette managed 9.9:1 for body copy on cream and then
+  // fell over everywhere else: white on the primary button was 2.5:1, link green 2.7:1, the warning
+  // orange 2.8:1. Not marginal — roughly half of what is needed, on the button every knitter
+  // presses and the colour reserved for telling somebody something has gone wrong.
+  //
+  // Each of these does two jobs: a background with white text on it, and text on cream. Both want
+  // the same thing, which is darker, so one shade satisfies both and every call site is unchanged.
+  // Hue and saturation are held; only lightness moved, so they are the same colours, further down.
+  //
+  //   blushDeep  #E58AA0 -> #D23259   white 2.48 -> 4.84   on cream 2.31 -> 4.52
+  //   sageDeep   #7FA06D -> #5E794F   white 2.94 -> 4.86   on cream 2.74 -> 4.53
+  //   coralDeep  #DE7C46 -> #B65621   white 2.97 -> 4.84   on cream 2.77 -> 4.52
+  //   inkSoft    #8A7873 -> #7F6E6A   text only            on cream 3.91 -> 4.52
+  //
+  // If a shade is ever changed again, check it both ways before it ships.
   cream: '#FDF6EF',
   creamDeep: '#F7EBDD',
   blush: '#F4C6D3',
-  blushDeep: '#E58AA0',
+  blushDeep: '#D23259',
   sage: '#B9CFAD',
-  sageDeep: '#7FA06D',
+  sageDeep: '#5E794F',
   lavender: '#D9C9EA',
   lavenderDeep: '#A985CC',
   coral: '#F0A67E',
-  coralDeep: '#DE7C46',
+  coralDeep: '#B65621',
   butter: '#F6E2A6',
   butterDeep: '#E2B84A',
   ink: '#4A3B38',
-  inkSoft: '#8A7873',
+  inkSoft: '#7F6E6A',
   white: '#FFFFFF',
 } as const;
 

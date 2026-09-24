@@ -297,7 +297,6 @@ export const ACCESSIBILITY: LegalDocument = {
       heading: 'Known failures',
       body: ['These are measured, not estimated, and they are the reason this statement says “partially”.'],
       list: [
-        'Colour contrast. WCAG AA asks for 4.5:1 for ordinary text. Knitwit’s main body text on its background measures 9.9:1 and is comfortable. Several other combinations are not: white text on the primary button is 2.5:1, link green on the background is 2.7:1, and the warning orange is 2.8:1. These fail, they appear throughout the app, and they are the most significant accessibility problem Knitwit has.',
         'Screen reader labelling is thin. Roughly a dozen controls carry an explicit label or role; many more rely on their visible text, and some icon-only controls carry nothing at all.',
         'No control announces its state — whether it is selected, expanded or busy — so a screen reader user cannot always tell what has happened after they act.',
         'Knitwit has not been tested with VoiceOver, TalkBack, or with disabled users. Until it has, this list is what we have found rather than what there is to find.',
@@ -306,16 +305,16 @@ export const ACCESSIBILITY: LegalDocument = {
     {
       heading: 'What already works',
       list: [
+        'Colour contrast. Every text and background pairing in Knitwit now meets or exceeds the 4.5:1 that WCAG AA asks for ordinary text — measured, not estimated. This was the app’s largest accessibility failure until September 2026: white on the primary button measured 2.5:1, link green 2.7:1 and the warning orange 2.8:1, all roughly half of what is needed. The colours were darkened, keeping their hue, and now measure between 4.5:1 and 4.9:1.',
         'Headings are marked as headings, so a screen reader can navigate by structure.',
         'Touch targets are enlarged beyond their visible size throughout, which helps anyone with limited dexterity.',
-        'Body text sits well above the required contrast.',
+        'Body text sits well above the required contrast, at 9.9:1.',
         'The app respects the text size set on your device.',
       ],
     },
     {
       heading: 'What we are doing about it',
       list: [
-        'Correcting the failing colour combinations. This is the first thing, because it affects everybody and it is measurable.',
         'Labelling every control that a screen reader would otherwise announce as nothing.',
         'Testing with VoiceOver and TalkBack, and then with people who use them daily.',
         'Commissioning an independent WCAG-EM evaluation once the known failures are fixed, rather than paying to be told about them.',
