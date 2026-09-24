@@ -1,19 +1,28 @@
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
-import { PillButton, ReadOnlyField } from '@/components/knitwit-ui';
-import { ThemedText } from '@/components/themed-text';
-import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
+import { PillButton, ReadOnlyField } from "@/components/knitwit-ui";
+import { ThemedText } from "@/components/themed-text";
+import {
+  Colors,
+  Fonts,
+  MaxNameLength,
+  Radii,
+  Spacing,
+} from "@/constants/theme";
 import {
   accountStateOf,
   attachProvider,
   describeProviderReturn,
   saveAccount,
   type AccountState,
-} from '@/lib/auth';
-import { currentSession, onSessionChange } from '@/lib/session';
-import { describeLocalWork, switchToExistingAccount } from '@/lib/switch-account';
-import { useKnitwitStore } from '@/store/useKnitwitStore';
+} from "@/lib/auth";
+import { currentSession, onSessionChange } from "@/lib/session";
+import {
+  describeLocalWork,
+  switchToExistingAccount,
+} from "@/lib/switch-account";
+import { useKnitwitStore } from "@/store/useKnitwitStore";
 
 // The only part of accounts a knitter ever sees.
 //
@@ -25,13 +34,15 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 // Everything in this component is a way *into* an account, and leaving one is not; offering it
 // alongside them puts it in front of a knitter who came to do something else entirely.
 
-type Mode = 'idle' | 'save' | 'signin';
+type Mode = "idle" | "save" | "signin";
 
 export function AccountSection() {
-  const [account, setAccount] = useState<AccountState>(() => accountStateOf(currentSession().session));
-  const [mode, setMode] = useState<Mode>('idle');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [account, setAccount] = useState<AccountState>(() =>
+    accountStateOf(currentSession().session),
+  );
+  const [mode, setMode] = useState<Mode>("idle");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   // Coming back from Apple or Google having been refused is the state this screen opens in, not
   // something that happens to it later: the page navigated away and returned, so there is no call
@@ -48,13 +59,15 @@ export function AccountSection() {
     materials: Object.keys(materials).length,
   });
 
-  useEffect(() => onSessionChange((s) => setAccount(accountStateOf(s.session))), []);
-
+  useEffect(
+    () => onSessionChange((s) => setAccount(accountStateOf(s.session))),
+    [],
+  );
 
   const reset = () => {
-    setMode('idle');
-    setEmail('');
-    setPassword('');
+    setMode("idle");
+    setEmail("");
+    setPassword("");
   };
 
   const handleSave = async () => {
@@ -67,7 +80,7 @@ export function AccountSection() {
       return;
     }
     reset();
-    setNote('Saved. You can sign back in with that email on any device.');
+    setNote("Saved. You can sign back in with that email on any device.");
   };
 
   // The account being signed into is not the one on this device, so what is here belongs to the one
@@ -75,28 +88,32 @@ export function AccountSection() {
   const handleSignIn = async () => {
     setBusy(true);
     setNote(null);
-    const outcome = await switchToExistingAccount(email, password, { downloadBackupFirst: true });
+    const outcome = await switchToExistingAccount(email, password, {
+      downloadBackupFirst: true,
+    });
     setBusy(false);
 
-    if (outcome.status === 'backup-refused') {
-      setNote('Nothing was changed — the backup was not saved, so signing in was stopped.');
+    if (outcome.status === "backup-refused") {
+      setNote(
+        "Nothing was changed — the backup was not saved, so signing in was stopped.",
+      );
       return;
     }
-    if (outcome.status === 'failed') {
+    if (outcome.status === "failed") {
       setNote(outcome.message);
       return;
     }
     reset();
-    setNote('Signed in. Reload Knitwit to see that account.');
+    setNote("Signed in. Reload Knitwit to see that account.");
   };
 
-  const handleProvider = async (provider: 'apple' | 'google') => {
+  const handleProvider = async (provider: "apple" | "google") => {
     setBusy(true);
     setNote(null);
     // 'keep-this-account', unlike the sign-in gate. Somebody reaching this from inside the app is
     // already looking at their own knitting and wants Apple or Google to become a way back into
     // *it* — not a way into some other account, which would leave what they are looking at behind.
-    const result = await attachProvider(provider, 'keep-this-account');
+    const result = await attachProvider(provider, "keep-this-account");
     setBusy(false);
     if (!result.ok) setNote(result.message);
   };
@@ -109,9 +126,10 @@ export function AccountSection() {
 
       {account.anonymous || !account.signedIn ? (
         <ThemedText type="small" themeColor="inkSoft">
-          Your knitting is saved to this device and backed up to Knitwit, but there is no way to sign
-          back in to it. Add an email and password and you can reach {local} from any device — and
-          get it back if this one is lost.
+          Your knitting is saved to this device and backed up to Knitwit, but
+          there is no way to sign back in to it. Add an email and password and
+          you can reach {local} from any device — and get it back if this one is
+          lost.
         </ThemedText>
       ) : (
         <>
@@ -122,21 +140,27 @@ export function AccountSection() {
               to, and a provider account may carry no address at all — so what this is labelled
               follows what is actually known. */}
           <ReadOnlyField
-            label={account.email ? 'Email' : 'Signed in with'}
-            value={account.email ?? (account.providers.join(', ') || 'your account')}
+            label={account.email ? "Email" : "Signed in with"}
+            value={
+              account.email ?? (account.providers.join(", ") || "your account")
+            }
           />
         </>
       )}
 
-      {mode === 'idle' ? (
+      {mode === "idle" ? (
         account.anonymous || !account.signedIn ? (
           <View style={styles.actions}>
-            <PillButton style={styles.btn} onPress={() => setMode('save')}>
+            <PillButton style={styles.btn} onPress={() => setMode("save")}>
               <ThemedText type="smallBold" themeColor="white">
                 Save my work to an account
               </ThemedText>
             </PillButton>
-            <Pressable onPress={() => setMode('signin')} hitSlop={6} style={styles.link}>
+            <Pressable
+              onPress={() => setMode("signin")}
+              hitSlop={6}
+              style={styles.link}
+            >
               <ThemedText type="smallBold" themeColor="sageDeep">
                 I already have an account →
               </ThemedText>
@@ -145,9 +169,12 @@ export function AccountSection() {
         ) : null
       ) : (
         <View style={styles.form}>
-          {mode === 'signin' ? (
+          {mode === "signin" ? (
             <ThemedText type="small" themeColor="coralDeep">
-              This signs into a different account. {local === 'nothing yet' ? '' : `The ${local} on this device belongs to the one you have now — a backup downloads first, and then this device shows the account you sign into.`}
+              This signs into a different account.{" "}
+              {local === "nothing yet"
+                ? ""
+                : `What is on this device — ${local} — stays with the account you have now. A backup downloads first, and then this device shows the account you sign into.`}
             </ThemedText>
           ) : null}
 
@@ -181,9 +208,16 @@ export function AccountSection() {
             </Pressable>
             <PillButton
               style={styles.btn}
-              onPress={() => void (mode === 'save' ? handleSave() : handleSignIn())}>
+              onPress={() =>
+                void (mode === "save" ? handleSave() : handleSignIn())
+              }
+            >
               <ThemedText type="smallBold" themeColor="white">
-                {busy ? 'Working…' : mode === 'save' ? 'Save account' : 'Sign in'}
+                {busy
+                  ? "Working…"
+                  : mode === "save"
+                    ? "Save account"
+                    : "Sign in"}
               </ThemedText>
             </PillButton>
           </View>
@@ -194,12 +228,18 @@ export function AccountSection() {
           they do anything; until then they say so rather than failing silently. */}
       {account.anonymous || !account.signedIn ? (
         <View style={styles.row}>
-          <Pressable onPress={() => void handleProvider('apple')} style={styles.provider}>
+          <Pressable
+            onPress={() => void handleProvider("apple")}
+            style={styles.provider}
+          >
             <ThemedText type="smallBold" themeColor="ink">
-               Apple
+              Apple
             </ThemedText>
           </Pressable>
-          <Pressable onPress={() => void handleProvider('google')} style={styles.provider}>
+          <Pressable
+            onPress={() => void handleProvider("google")}
+            style={styles.provider}
+          >
             <ThemedText type="smallBold" themeColor="ink">
               Google
             </ThemedText>
@@ -212,7 +252,6 @@ export function AccountSection() {
           {note}
         </ThemedText>
       ) : null}
-
     </View>
   );
 }
@@ -220,9 +259,9 @@ export function AccountSection() {
 const styles = StyleSheet.create({
   wrap: { gap: Spacing.two },
   label: { marginTop: Spacing.four },
-  actions: { gap: Spacing.two, alignItems: 'flex-start' },
+  actions: { gap: Spacing.two, alignItems: "flex-start" },
   form: { gap: Spacing.two },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  row: { flexDirection: "row", alignItems: "center", gap: Spacing.two },
   confirm: { gap: Spacing.two },
   btn: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   cancel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },

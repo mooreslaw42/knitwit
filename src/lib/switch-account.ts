@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildBackup, backupFilename } from '@/lib/backup';
 import { saveTextFile } from '@/lib/save-file';
 import { attachProvider, signInExisting, type AuthResult } from '@/lib/auth';
+import { skipBrowserRedirect } from '@/lib/auth-return';
 
 // Signing into an account that is not the one on this device.
 //
@@ -119,9 +120,24 @@ export async function switchToProviderAccount(
     }
   }
 
+  // On the web there is no "after" to clean up in.
+  //
+  // `signInWithOAuth` navigates the page away, so every line below it is unreachable — the clear
+  // simply never ran, and a browser came back from Apple still holding the previous account's
+  // records. `skipBrowserRedirect` already says which platforms leave: false means the page goes.
+  //
+  // Clearing first is a real trade and worth naming. Somebody who starts this and then backs out at
+  // Apple loses what was on the device without having signed in anywhere. What makes it acceptable
+  // is that they have already been asked: the copy was offered by name and count, and either taken
+  // or declined, before this function was called at all. The alternative — records from two
+  // accounts in one store, the older ones unable to sync anywhere because the outbox is keyed per
+  // account — is not recoverable by anybody, including us.
+  const leavingThePage = !skipBrowserRedirect;
+  if (leavingThePage) await clearLocalAccountData();
+
   const result: AuthResult = await attachProvider(provider, 'sign-in');
   if (!result.ok) return { status: 'failed', message: result.message };
 
-  await clearLocalAccountData();
+  if (!leavingThePage) await clearLocalAccountData();
   return { status: 'switched' };
 }

@@ -350,10 +350,9 @@ export function SignInGate() {
                       Keep a copy first?
                     </ThemedText>
                     <ThemedText type="default">
-                      The {local} on this device belongs to the account you have
-                      now. Signing in with{" "}
-                      {asking === "apple" ? "Apple" : "Google"} takes you to a
-                      different one, and leaves this behind.
+                      Signing in with {asking === "apple" ? "Apple" : "Google"}{" "}
+                      takes you to a different account. What is on this device —{" "}
+                      {local} — stays with the one you have now.
                     </ThemedText>
                     <ThemedText type="small" themeColor="coralDeep">
                       That account has no email and no password, so nothing can
