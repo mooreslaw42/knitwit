@@ -15,7 +15,11 @@ import {
   signInExisting,
 } from '@/lib/auth';
 import { currentSession, onSessionChange } from '@/lib/session';
-import { describeLocalWork, switchToProviderAccount } from '@/lib/switch-account';
+import {
+  describeLocalWork,
+  switchToExistingAccount,
+  switchToProviderAccount,
+} from '@/lib/switch-account';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // The door. Nobody reaches the app without coming through it.
@@ -41,6 +45,19 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 // because "Create an account" on top of a year of knitting reads like a threat otherwise.
 
 type Mode = 'create' | 'signin';
+
+// SwitchOutcome carries a third state that the gate has its own handling for; this flattens the
+// other two so the submit path reads as one thing.
+function asAuthResult(outcome: { status: string; message?: string }): {
+  ok: boolean;
+  message: string;
+} {
+  if (outcome.status === 'switched') return { ok: true, message: '' };
+  if (outcome.status === 'backup-refused') {
+    return { ok: false, message: 'Nothing was changed. Try again.' };
+  }
+  return { ok: false, message: outcome.message ?? 'That did not work.' };
+}
 
 export function SignInGate() {
   const [account, setAccount] = useState(() => accountStateOf(currentSession().session));
@@ -69,10 +86,16 @@ export function SignInGate() {
   const submit = async () => {
     setBusy(true);
     setNote(null);
+    // Signing in to a different account has to clear this one, whichever door it came through.
+    // Leaving it produces a union: one account's projects under another's name, with no way to
+    // tell which is which and — the outbox being per account — no way for the old ones to sync
+    // anywhere ever again. The copy is offered on the way past, not demanded.
     const result =
       mode === 'create'
         ? await createAccount(email, password)
-        : await signInExisting(email, password);
+        : stranded
+          ? asAuthResult(await switchToExistingAccount(email, password, { downloadBackupFirst: false }))
+          : await signInExisting(email, password);
     setBusy(false);
     if (!result.ok) {
       setNote(result.message);
@@ -114,14 +137,23 @@ export function SignInGate() {
       return;
     }
 
+    await runProviderSwitch(which, stranded);
+  };
+
+  // Offered, not imposed. The copy exists because the knitting on this device is about to become
+  // unreachable, and that is worth one deliberate question — but it is the knitter's work and
+  // theirs to walk away from. Requiring the file turned "I want to sign in" into a door that only
+  // opened for people willing to save something they had already decided they did not want.
+  const runProviderSwitch = async (which: 'apple' | 'google', withBackup: boolean) => {
     setBusy(true);
     setNote(null);
-    const outcome = await switchToProviderAccount(which, { downloadBackupFirst: stranded });
+    const outcome = await switchToProviderAccount(which, { downloadBackupFirst: withBackup });
     setBusy(false);
     setConfirming(null);
 
     if (outcome.status === 'backup-refused') {
-      setNote('Nothing was changed — the backup was not saved, so signing in was stopped.');
+      setNote('The copy was not saved, so nothing was changed. You can sign in without one below.');
+      setConfirming(which);
       return;
     }
     if (outcome.status === 'failed' && outcome.message) setNote(outcome.message);
@@ -201,6 +233,18 @@ export function SignInGate() {
             <ThemedText type="small" themeColor="coralDeep">
               {note}
             </ThemedText>
+          ) : null}
+
+          {confirming ? (
+            <Pressable
+              onPress={() => void runProviderSwitch(confirming, false)}
+              hitSlop={6}
+              style={styles.swap}
+              disabled={busy}>
+              <ThemedText type="small" themeColor="inkSoft">
+                Sign in without saving a copy
+              </ThemedText>
+            </Pressable>
           ) : null}
 
           <Pressable
