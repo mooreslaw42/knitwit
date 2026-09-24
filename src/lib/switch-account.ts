@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { buildBackup, backupFilename } from '@/lib/backup';
 import { saveTextFile } from '@/lib/save-file';
-import { signInExisting, type AuthResult } from '@/lib/auth';
+import { attachProvider, signInExisting, type AuthResult } from '@/lib/auth';
 
 // Signing into an account that is not the one on this device.
 //
@@ -92,4 +92,36 @@ export async function clearLocalAccountData(): Promise<void> {
     // A device that cannot clear its own storage is one where the next launch shows a mixture.
     // Nothing better to do here than let the caller reload, which is what it does.
   }
+}
+
+// The same switch, by way of Apple or Google.
+//
+// Signing in with a provider from the sign-in screen means going to whichever account that provider
+// belongs to — which is not the anonymous one sitting on this device. So it gets the same treatment
+// as switching by email: a backup first, abandoned if that cannot be written, and local cleared
+// only once the sign-in has actually happened.
+//
+// The web never reaches the end of this function. `signInWithOAuth` navigates the page away, so
+// clearing happens on the way out rather than on the way back; there is no "after" to run in.
+export async function switchToProviderAccount(
+  provider: 'apple' | 'google',
+  options: { downloadBackupFirst: boolean },
+): Promise<SwitchOutcome> {
+  if (options.downloadBackupFirst) {
+    try {
+      const text = await buildBackup();
+      if (text) {
+        const saved = await saveTextFile(backupFilename(), text);
+        if (!saved) return { status: 'backup-refused' };
+      }
+    } catch {
+      return { status: 'backup-refused' };
+    }
+  }
+
+  const result: AuthResult = await attachProvider(provider, 'sign-in');
+  if (!result.ok) return { status: 'failed', message: result.message };
+
+  await clearLocalAccountData();
+  return { status: 'switched' };
 }

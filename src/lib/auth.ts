@@ -118,12 +118,29 @@ export async function signInExisting(email: string, password: string): Promise<A
 // with it off this is not a partial success: the knitter signs in at Apple, comes back, and has a
 // *second* account holding none of their knitting. `readable()` names that case specifically
 // because the provider's own wording for it says nothing a knitter could act on.
-export async function attachProvider(provider: 'apple' | 'google'): Promise<AuthResult> {
+export type ProviderIntent =
+  // Attach this provider to the account already on the device, keeping its knitting. Only possible
+  // on an anonymous account, and only if the provider is not already somebody else's way in.
+  | 'keep-this-account'
+  // Sign in to whichever account the provider belongs to. Anything on the device belongs to a
+  // different account and is the caller's problem to deal with first.
+  | 'sign-in';
+
+export async function attachProvider(
+  provider: 'apple' | 'google',
+  intent: ProviderIntent = 'sign-in',
+): Promise<AuthResult> {
   const account = currentAccount();
   const supabase = getSupabase();
   const options = { redirectTo: authReturnUrl(), skipBrowserRedirect };
 
-  const { data, error } = account.anonymous
+  // Linking only when asked for it *and* possible. It used to be chosen purely on the session being
+  // anonymous, which quietly turned a sign-in screen into an attach-to-this-device screen: pressing
+  // Apple to get into an account you already have was answered with "that is already linked to a
+  // different account", which is true, unhelpful, and not what the button said it would do.
+  const link = intent === 'keep-this-account' && account.anonymous;
+
+  const { data, error } = link
     ? await supabase.auth.linkIdentity({ provider, options })
     : await supabase.auth.signInWithOAuth({ provider, options });
 
@@ -228,7 +245,7 @@ function readable(message: string): string {
   if (text.includes('password')) return 'That password is too short — six characters or more.';
   if (text.includes('email')) return "That doesn't look like an email address.";
   if (text.includes('identity is already linked') || text.includes('already linked')) {
-    return 'That account is already attached to a different Knitwit account.';
+    return 'That Apple or Google account is already the way into a different Knitwit account. Sign in to that one instead.';
   }
   if (text.includes('manual linking')) {
     // The dangerous one, and the reason it is called out rather than folded into the fallback:

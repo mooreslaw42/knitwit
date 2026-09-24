@@ -126,17 +126,29 @@ describe('attaching a provider', () => {
     mockSignInWithOAuth.mockResolvedValue(started);
   });
 
-  // The whole point of going anonymous first: the id has to survive, so an account worth keeping is
-  // linked to rather than replaced.
-  it('links to the account already in hand rather than making another', async () => {
+  // The bug this default exists to prevent. Pressing Apple on a sign-in screen used to *link*
+  // whenever the device held an anonymous session, so somebody signing in to an account they
+  // already had was told their Apple ID "is already attached to a different Knitwit account" —
+  // true, useless, and not what the button offered to do.
+  it('signs in by default, even when the device holds an anonymous account', async () => {
+    mockAnonymous = true;
     await attachProvider('apple');
+    expect(mockSignInWithOAuth).toHaveBeenCalled();
+    expect(mockLinkIdentity).not.toHaveBeenCalled();
+  });
+
+  // The other intent, which is the whole point of having gone anonymous first: the id survives, so
+  // the knitting does.
+  it('links when asked to keep the account already in hand', async () => {
+    await attachProvider('apple', 'keep-this-account');
     expect(mockLinkIdentity).toHaveBeenCalledWith(expect.objectContaining({ provider: 'apple' }));
     expect(mockSignInWithOAuth).not.toHaveBeenCalled();
   });
 
-  it('signs in normally when there is no anonymous account to keep', async () => {
+  // There is nothing to keep, so there is nothing to link to.
+  it('signs in even when asked to keep an account that is not anonymous', async () => {
     mockAnonymous = false;
-    await attachProvider('apple');
+    await attachProvider('apple', 'keep-this-account');
     expect(mockSignInWithOAuth).toHaveBeenCalled();
     expect(mockLinkIdentity).not.toHaveBeenCalled();
   });
@@ -146,7 +158,7 @@ describe('attaching a provider', () => {
   // lands somewhere else entirely.
   it('asks to be sent back to where the knitter was', async () => {
     await attachProvider('apple');
-    expect(mockLinkIdentity).toHaveBeenCalledWith(
+    expect(mockSignInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({ redirectTo: 'https://knitwit.eu/account' }),
       }),
@@ -157,7 +169,7 @@ describe('attaching a provider', () => {
   // the first. The message has to say that rather than "try again".
   it('says so plainly when linking is not switched on for the project', async () => {
     mockLinkIdentity.mockResolvedValue({ data: null, error: { message: 'Manual linking is disabled' } });
-    expect(await attachProvider('apple')).toEqual({
+    expect(await attachProvider('apple', 'keep-this-account')).toEqual({
       ok: false,
       message: 'Signing in with Apple or Google is not switched on for Knitwit yet.',
     });

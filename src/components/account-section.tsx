@@ -93,7 +93,10 @@ export function AccountSection() {
   const handleProvider = async (provider: 'apple' | 'google') => {
     setBusy(true);
     setNote(null);
-    const result = await attachProvider(provider);
+    // 'keep-this-account', unlike the sign-in gate. Somebody reaching this from inside the app is
+    // already looking at their own knitting and wants Apple or Google to become a way back into
+    // *it* — not a way into some other account, which would leave what they are looking at behind.
+    const result = await attachProvider(provider, 'keep-this-account');
     setBusy(false);
     if (!result.ok) setNote(result.message);
   };

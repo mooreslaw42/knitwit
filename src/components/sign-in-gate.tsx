@@ -9,14 +9,13 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   accountStateOf,
-  attachProvider,
   createAccount,
   describeProviderReturn,
   requestPasswordReset,
   signInExisting,
 } from '@/lib/auth';
 import { currentSession, onSessionChange } from '@/lib/session';
-import { describeLocalWork } from '@/lib/switch-account';
+import { describeLocalWork, switchToProviderAccount } from '@/lib/switch-account';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // The door. Nobody reaches the app without coming through it.
@@ -49,6 +48,7 @@ export function SignInGate() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<'apple' | 'google' | null>(null);
   const [note, setNote] = useState<string | null>(() => describeProviderReturn());
 
   const projects = useKnitwitStore((s) => s.projects);
@@ -99,12 +99,32 @@ export function SignInGate() {
     );
   };
 
+  // Apple and Google mean *sign in*, because that is what the button says on a screen whose whole
+  // purpose is getting in. Attaching a provider to the account already on the device is a different
+  // act with a different consequence, and it lives on the Account screen where it belongs.
   const provider = async (which: 'apple' | 'google') => {
+    // Work on this device belongs to the anonymous account being left behind. Named, and asked
+    // about once, before anything happens — a mis-tap on a sign-in screen should not cost anybody
+    // their stash.
+    if (stranded && confirming !== which) {
+      setConfirming(which);
+      setNote(
+        `Signing in takes you to the account that ${which === 'apple' ? 'Apple' : 'Google'} belongs to. The ${local} on this device belongs to the one you have now — Knitwit will save a copy first, and then this device shows the account you sign in to. Press again to go ahead.`,
+      );
+      return;
+    }
+
     setBusy(true);
     setNote(null);
-    const result = await attachProvider(which);
+    const outcome = await switchToProviderAccount(which, { downloadBackupFirst: stranded });
     setBusy(false);
-    if (!result.ok && result.message) setNote(result.message);
+    setConfirming(null);
+
+    if (outcome.status === 'backup-refused') {
+      setNote('Nothing was changed — the backup was not saved, so signing in was stopped.');
+      return;
+    }
+    if (outcome.status === 'failed' && outcome.message) setNote(outcome.message);
   };
 
   return (
