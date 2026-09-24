@@ -1,5 +1,5 @@
-import { Picker } from '@react-native-picker/picker';
 import { PhotoImage } from '@/components/photo';
+import { SelectControl } from '@/components/select-control';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -228,17 +228,8 @@ export function SelectField<T extends string>({
   return (
     <View style={styles.field}>
       <FieldLabel label={label} badge={badge} />
-      <View style={styles.selectBox}>
-        <Picker<T>
-          selectedValue={value}
-          onValueChange={onChange}
-          style={styles.select}
-          itemStyle={styles.selectItem}>
-          {options.map((opt) => (
-            <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-          ))}
-        </Picker>
-      </View>
+      {/* Platform-split: a <select> on the web, a sheet on a phone. See select-control.tsx. */}
+      <SelectControl label={label} options={options} value={value} onChange={onChange} />
     </View>
   );
 }
@@ -414,26 +405,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   readOnlyValue: { flexShrink: 1 },
-  selectBox: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  select: {
-    backgroundColor: Colors.white,
-    color: Colors.ink,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 15,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    borderWidth: 0,
-  },
-  selectItem: {
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 15,
-    color: Colors.ink,
-  },
   thumb: {
     borderRadius: Radii.small,
     overflow: 'hidden',
