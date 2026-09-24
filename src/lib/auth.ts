@@ -56,7 +56,12 @@ export function currentAccount(): AccountState {
   return accountStateOf(currentSession().session);
 }
 
-export type AuthResult = { ok: true } | { ok: false; message: string };
+export type AuthResult =
+  // `confirmEmail` means the account exists but nobody is signed in yet: a link has gone out and
+  // the session only arrives once it is followed. Callers that do not look at it still behave
+  // correctly, they simply say less.
+  | { ok: true; confirmEmail?: boolean }
+  | { ok: false; message: string };
 
 // Making an account, by whichever of the two routes applies.
 //
@@ -83,8 +88,20 @@ export async function createAccount(email: string, password: string): Promise<Au
     return { ok: true };
   }
 
-  const { error } = await supabase.auth.signUp({ email: email.trim(), password });
+  const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
   if (error) return { ok: false, message: readable(error.message) };
+
+  // Supabase hands back a user with an empty `identities` array when the address is already
+  // registered. That is deliberate on their part and worth preserving on ours: answering "that
+  // email is taken" would let anybody test addresses against the member list one at a time. So this
+  // is reported exactly like a genuine sign-up — a link has been sent — and the person who owns the
+  // address finds out which it was by reading their inbox, where a stranger cannot follow.
+  const alreadyRegistered = data?.user?.identities?.length === 0;
+
+  // No session means email confirmation is switched on and the account is not usable yet. Without
+  // saying so the screen simply waits: the knitter presses Create, the password field clears, and
+  // nothing else happens, so they press it again.
+  if (alreadyRegistered || !data?.session) return { ok: true, confirmEmail: true };
   return { ok: true };
 }
 

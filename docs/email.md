@@ -20,10 +20,11 @@ failing outright.
 
 ## What to set up
 
-Any SMTP provider works. Free tiers are generous enough that Knitwit will not leave one for a long
-time — Resend, Postmark and Brevo are all reasonable, and all want a domain verified by DNS.
+**Knitwit uses TransIP**, the Dutch provider that also hosts the mail for pientr.com. Configured
+and tested on 2026-09-24. Being in the Netherlands it keeps Knitwit's processors inside the EU,
+which is the same reasoning behind Supabase's Irish region and GreenPT.
 
-Whichever you pick, you will end up with a host, a port, a username and a password.
+What follows is what was done, kept so it can be redone or moved.
 
 **1. Verify the sending domain with the provider.** Knitwit sends as `knitwit@pientr.com`, so it is
 **pientr.com** that needs verifying, not knitwit.eu — the provider gives you DNS records (SPF,

@@ -221,13 +221,37 @@ describe('creating an account', () => {
     jest.clearAllMocks();
     mockSession = null;
     mockUpdateUser.mockResolvedValue({ error: null });
-    mockSignUp.mockResolvedValue({ error: null });
+    // A signed-in session straight away — what Supabase returns with confirmation switched off.
+    mockSignUp.mockResolvedValue({ data: { user: { identities: [{}] }, session: {} }, error: null });
   });
 
   it('signs a new knitter up', async () => {
     expect(await createAccount('new@example.com', 'hunter22')).toEqual({ ok: true });
     expect(mockSignUp).toHaveBeenCalled();
     expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  // With confirmation on there is no session until the link is followed. Unsaid, the screen waits
+  // for one that is not coming: the knitter presses Create, the field clears, nothing happens, and
+  // they press it again.
+  it('says a link is on its way when there is no session yet', async () => {
+    mockSignUp.mockResolvedValue({ data: { user: { identities: [{}] }, session: null }, error: null });
+    expect(await createAccount('new@example.com', 'hunter22')).toEqual({
+      ok: true,
+      confirmEmail: true,
+    });
+  });
+
+  // Supabase reports an address that is already taken as a user with no identities, on purpose:
+  // answering plainly would let a stranger test addresses against the member list one at a time.
+  // Knitwit says the same thing it says for a real sign-up, and the owner of the address learns
+  // which it was from their inbox.
+  it('does not reveal that an address is already registered', async () => {
+    mockSignUp.mockResolvedValue({ data: { user: { identities: [] }, session: null }, error: null });
+    expect(await createAccount('taken@example.com', 'hunter22')).toEqual({
+      ok: true,
+      confirmEmail: true,
+    });
   });
 
   // The one that matters: same account, same id, same knitting.

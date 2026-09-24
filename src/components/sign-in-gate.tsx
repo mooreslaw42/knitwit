@@ -21,6 +21,7 @@ import {
   Spacing,
 } from "@/constants/theme";
 import {
+  type AuthResult,
   accountStateOf,
   createAccount,
   describeProviderReturn,
@@ -62,11 +63,11 @@ type Mode = "create" | "signin";
 
 // SwitchOutcome carries a third state that the gate has its own handling for; this flattens the
 // other two so the submit path reads as one thing.
-function asAuthResult(outcome: { status: string; message?: string }): {
-  ok: boolean;
-  message: string;
-} {
-  if (outcome.status === "switched") return { ok: true, message: "" };
+function asAuthResult(outcome: {
+  status: string;
+  message?: string;
+}): AuthResult {
+  if (outcome.status === "switched") return { ok: true };
   if (outcome.status === "backup-refused") {
     return { ok: false, message: "Nothing was changed. Try again." };
   }
@@ -83,6 +84,9 @@ export function SignInGate() {
   const [busy, setBusy] = useState(false);
   // Which provider is waiting on an answer about the knitting already on this device.
   const [asking, setAsking] = useState<"apple" | "google" | null>(null);
+  // The address a confirmation link has gone to. Set means the account exists and is waiting on an
+  // inbox, which is a different screen from the one that asks for a password.
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(() =>
     describeProviderReturn(),
   );
@@ -129,6 +133,13 @@ export function SignInGate() {
             : await signInExisting(email, password);
       if (!result.ok) {
         setNote(result.message);
+        return;
+      }
+      if (result.confirmEmail) {
+        // No session is coming until the link is followed, so waiting for one would be waiting for
+        // ever. Say where it went.
+        setSentTo(email.trim());
+        setPassword("");
         return;
       }
       // Nothing else to do: the session change propagates and this screen unmounts itself.
@@ -216,164 +227,199 @@ export function SignInGate() {
             Knitwit
           </ThemedText>
 
-          {stranded ? (
-            <ThemedText type="small" themeColor="coralDeep">
-              You have {local} saved on this device from before. Creating an
-              account keeps it — it moves with you and nothing is lost.
-            </ThemedText>
+          {sentTo ? (
+            <>
+              <ThemedText type="default">
+                Check your inbox. We have sent a link to{" "}
+                <ThemedText type="smallBold">{sentTo}</ThemedText> — open it and
+                you are in.
+              </ThemedText>
+              <ThemedText type="small" themeColor="inkSoft">
+                Nothing happens until you do: the account exists but is not
+                usable yet. If it has not arrived in a few minutes, look in your
+                spam folder.
+              </ThemedText>
+              <Pressable
+                onPress={() => {
+                  setSentTo(null);
+                  setNote(null);
+                }}
+                hitSlop={6}
+                style={styles.swap}
+              >
+                <ThemedText type="smallBold" themeColor="sageDeep">
+                  Use a different address →
+                </ThemedText>
+              </Pressable>
+            </>
           ) : (
-            <ThemedText type="small" themeColor="inkSoft">
-              {mode === "create"
-                ? "Your patterns, projects and stash live in your account, so they follow you to any device you sign in on."
-                : "Welcome back."}
-            </ThemedText>
-          )}
-
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            placeholder="you@example.com"
-            placeholderTextColor={Colors.inkSoft}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            keyboardType="email-address"
-          />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            style={styles.input}
-            placeholder={mode === "create" ? "Choose a password" : "Password"}
-            placeholderTextColor={Colors.inkSoft}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete={
-              mode === "create" ? "new-password" : "current-password"
-            }
-            secureTextEntry
-            onSubmitEditing={() => void submit()}
-          />
-
-          <PillButton
-            style={styles.primary}
-            onPress={() => void submit()}
-            disabled={busy}
-          >
-            <ThemedText type="smallBold" themeColor="white">
-              {busy
-                ? "One moment…"
-                : mode === "create"
-                  ? stranded
-                    ? "Create an account and keep my knitting"
-                    : "Create my account"
-                  : "Sign in"}
-            </ThemedText>
-          </PillButton>
-
-          <View style={styles.providers}>
-            <Pressable
-              onPress={() => void provider("apple")}
-              style={styles.provider}
-              disabled={busy}
-            >
-              <ThemedText type="smallBold" themeColor="ink">
-                Apple
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              onPress={() => void provider("google")}
-              style={styles.provider}
-              disabled={busy}
-            >
-              <ThemedText type="smallBold" themeColor="ink">
-                Google
-              </ThemedText>
-            </Pressable>
-          </View>
-
-          {note ? (
-            <ThemedText type="small" themeColor="coralDeep">
-              {note}
-            </ThemedText>
-          ) : null}
-
-          <Modal
-            visible={asking !== null}
-            transparent
-            animationType="fade"
-            onRequestClose={() => (busy ? null : setAsking(null))}
-          >
-            <View style={styles.backdrop}>
-              <View style={styles.dialog}>
-                <ThemedText type="subtitle" heading={2}>
-                  Keep a copy first?
-                </ThemedText>
-                <ThemedText type="default">
-                  The {local} on this device belongs to the account you have
-                  now. Signing in with {asking === "apple" ? "Apple" : "Google"}{" "}
-                  takes you to a different one, and leaves this behind.
-                </ThemedText>
+            <>
+              {stranded ? (
                 <ThemedText type="small" themeColor="coralDeep">
-                  That account has no email and no password, so nothing can sign
-                  back into it. A copy is the only way this knitting survives.
+                  You have {local} saved on this device from before. Creating an
+                  account keeps it — it moves with you and nothing is lost.
                 </ThemedText>
+              ) : (
+                <ThemedText type="small" themeColor="inkSoft">
+                  {mode === "create"
+                    ? "Your patterns, projects and stash live in your account, so they follow you to any device you sign in on."
+                    : "Welcome back."}
+                </ThemedText>
+              )}
 
-                {note ? (
-                  <ThemedText type="small" themeColor="coralDeep">
-                    {note}
-                  </ThemedText>
-                ) : null}
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor={Colors.inkSoft}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                keyboardType="email-address"
+              />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                style={styles.input}
+                placeholder={
+                  mode === "create" ? "Choose a password" : "Password"
+                }
+                placeholderTextColor={Colors.inkSoft}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={
+                  mode === "create" ? "new-password" : "current-password"
+                }
+                secureTextEntry
+                onSubmitEditing={() => void submit()}
+              />
 
-                <PillButton
-                  style={styles.dialogPrimary}
-                  onPress={() => asking && void runProviderSwitch(asking, true)}
-                  disabled={busy}
-                >
-                  <ThemedText type="smallBold" themeColor="white">
-                    {busy ? "One moment…" : "Save a copy, then sign in"}
-                  </ThemedText>
-                </PillButton>
+              <PillButton
+                style={styles.primary}
+                onPress={() => void submit()}
+                disabled={busy}
+              >
+                <ThemedText type="smallBold" themeColor="white">
+                  {busy
+                    ? "One moment…"
+                    : mode === "create"
+                      ? stranded
+                        ? "Create an account and keep my knitting"
+                        : "Create my account"
+                      : "Sign in"}
+                </ThemedText>
+              </PillButton>
 
+              <View style={styles.providers}>
                 <Pressable
-                  onPress={() =>
-                    asking && void runProviderSwitch(asking, false)
-                  }
+                  onPress={() => void provider("apple")}
+                  style={styles.provider}
                   disabled={busy}
-                  style={styles.dialogSkip}
                 >
                   <ThemedText type="smallBold" themeColor="ink">
-                    Sign in without saving
+                    Apple
                   </ThemedText>
                 </Pressable>
-
                 <Pressable
-                  onPress={() => setAsking(null)}
+                  onPress={() => void provider("google")}
+                  style={styles.provider}
                   disabled={busy}
-                  style={styles.dialogSkip}
                 >
-                  <ThemedText type="small" themeColor="inkSoft">
-                    Cancel
+                  <ThemedText type="smallBold" themeColor="ink">
+                    Google
                   </ThemedText>
                 </Pressable>
               </View>
-            </View>
-          </Modal>
 
-          <Pressable
-            onPress={() => {
-              setMode((m) => (m === "create" ? "signin" : "create"));
-              setNote(null);
-            }}
-            hitSlop={6}
-            style={styles.swap}
-          >
-            <ThemedText type="smallBold" themeColor="sageDeep">
-              {mode === "create"
-                ? "I already have an account →"
-                : "I need an account →"}
-            </ThemedText>
-          </Pressable>
+              {note ? (
+                <ThemedText type="small" themeColor="coralDeep">
+                  {note}
+                </ThemedText>
+              ) : null}
+
+              <Modal
+                visible={asking !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => (busy ? null : setAsking(null))}
+              >
+                <View style={styles.backdrop}>
+                  <View style={styles.dialog}>
+                    <ThemedText type="subtitle" heading={2}>
+                      Keep a copy first?
+                    </ThemedText>
+                    <ThemedText type="default">
+                      The {local} on this device belongs to the account you have
+                      now. Signing in with{" "}
+                      {asking === "apple" ? "Apple" : "Google"} takes you to a
+                      different one, and leaves this behind.
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="coralDeep">
+                      That account has no email and no password, so nothing can
+                      sign back into it. A copy is the only way this knitting
+                      survives.
+                    </ThemedText>
+
+                    {note ? (
+                      <ThemedText type="small" themeColor="coralDeep">
+                        {note}
+                      </ThemedText>
+                    ) : null}
+
+                    <PillButton
+                      style={styles.dialogPrimary}
+                      onPress={() =>
+                        asking && void runProviderSwitch(asking, true)
+                      }
+                      disabled={busy}
+                    >
+                      <ThemedText type="smallBold" themeColor="white">
+                        {busy ? "One moment…" : "Save a copy, then sign in"}
+                      </ThemedText>
+                    </PillButton>
+
+                    <Pressable
+                      onPress={() =>
+                        asking && void runProviderSwitch(asking, false)
+                      }
+                      disabled={busy}
+                      style={styles.dialogSkip}
+                    >
+                      <ThemedText type="smallBold" themeColor="ink">
+                        Sign in without saving
+                      </ThemedText>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setAsking(null)}
+                      disabled={busy}
+                      style={styles.dialogSkip}
+                    >
+                      <ThemedText type="small" themeColor="inkSoft">
+                        Cancel
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+              </Modal>
+
+              <Pressable
+                onPress={() => {
+                  setMode((m) => (m === "create" ? "signin" : "create"));
+                  setNote(null);
+                }}
+                hitSlop={6}
+                style={styles.swap}
+              >
+                <ThemedText type="smallBold" themeColor="sageDeep">
+                  {mode === "create"
+                    ? "I already have an account →"
+                    : "I need an account →"}
+                </ThemedText>
+              </Pressable>
+            </>
+          )}
 
           {/* Reachable before agreeing to them, which is the only way offering them means anything.
               These three routes are allow-listed past the wall in _layout.tsx. */}

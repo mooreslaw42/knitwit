@@ -94,6 +94,7 @@ export const PRIVACY: LegalDocument = {
       heading: 'Who processes data for us',
       list: [
         'Supabase — the database, file storage and sign-in behind Knitwit. Your data lives in their EU region (Ireland).',
+        'TransIP — the Dutch provider that sends Knitwit’s email. The only messages Knitwit sends are the ones you ask for: confirming your address, and resetting your password. There is no newsletter and nothing to unsubscribe from.',
         'GreenPT — the EU-based AI service that reads patterns and ball bands, as described above.',
         'Vercel — hosts knitwit.eu.',
         'Expo — builds the mobile app and delivers its updates.',
