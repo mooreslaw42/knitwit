@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { currentUserId, ensureSession, onSessionChange } from '@/lib/session';
+import { getSupabase } from '@/lib/supabase';
 import { markAllDirty, syncEntity } from '@/lib/sync/engine';
 import { ENTITIES } from '@/lib/sync/registry';
 import { watchAll } from '@/lib/sync/watch';
@@ -89,6 +90,28 @@ export async function runSync(): Promise<void> {
 }
 
 // Called once at launch. Returns a teardown for the store subscription.
+// Does this account already hold knitting?
+//
+// Asked before a first sync decides whether this device is the source of an account or a newcomer
+// to one. Returns 'unknown' rather than guessing when the server cannot be reached: the two answers
+// are not equally safe, and the wrong one is unrecoverable.
+async function accountHasRows(userId: string): Promise<boolean | 'unknown'> {
+  const supabase = getSupabase();
+  for (const entity of ENTITIES) {
+    const { data, error } = await supabase
+      .from(entity.table)
+      .select('id')
+      .eq('user_id', userId)
+      // A tombstone still means somebody has used this account, but it is not knitting to be
+      // overwritten — and an account emptied on purpose should still accept a fresh upload.
+      .is('deleted_at', null)
+      .limit(1);
+    if (error) return 'unknown';
+    if (data && data.length > 0) return true;
+  }
+  return false;
+}
+
 export function startSync(): () => void {
   if (started) return () => {};
   started = true;
@@ -116,15 +139,40 @@ export function startSync(): () => void {
 
     await setOutboxOwner(userId);
 
-    // The first time an account exists, everything already on the device is queued. Without this
-    // the stash a knitter built up before accounts existed would sit there for ever, since only
-    // *changes* are marked and none of it is about to change.
+    // The first time an account exists, everything already on the device is queued — but only into
+    // an account that has nothing in it yet.
+    //
+    // The queueing is for the case it was written for: an account appearing underneath work that
+    // was already on the device, where only *changes* are marked and none of that stash is about
+    // to change, so without this it would sit there for ever.
+    //
+    // It is exactly wrong for the other case. Signing in on a second device also reaches this line
+    // with a device full of records — and there, "everything already on the device" is not the
+    // knitter's accumulated work, it is whatever happened to be lying around, usually the seed the
+    // app ships with. Queued and pushed, with push running before pull and an outbox entry beating
+    // anything the server holds, that seed overwrites the real account. Which is what happened:
+    // a phone counted to row 30, a browser signed in, and the server came out holding row 24.
+    //
+    // So the account is asked first. Rows on the server mean this device is joining something that
+    // already exists, and joining means listening.
     if (!(await alreadySeeded(userId))) {
-      let queued = 0;
-      for (const entity of ENTITIES) queued += await markAllDirty(entity);
-      queued += await markAllPhotosForUpload();
-      await markSeeded(userId);
-      if (queued) console.log(`sync: queueing ${queued} existing records for first upload`);
+      const established = await accountHasRows(userId);
+
+      // Unreadable — offline, most likely. Neither seeded nor marked as seeded, so the question
+      // gets asked again next launch. Guessing "empty" here is the guess that loses data.
+      if (established !== 'unknown') {
+        let queued = 0;
+        if (!established) {
+          for (const entity of ENTITIES) queued += await markAllDirty(entity);
+          queued += await markAllPhotosForUpload();
+        }
+        await markSeeded(userId);
+        console.log(
+          established
+            ? 'sync: account already has knitting, pulling rather than pushing this device'
+            : `sync: queueing ${queued} existing records for first upload`,
+        );
+      }
     }
 
     await runSync();
