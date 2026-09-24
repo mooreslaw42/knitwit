@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 
 import { currentUserId, ensureSession, onSessionChange } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
@@ -126,6 +127,21 @@ export function startSync(): () => void {
 
   const unwatch = watchAll(scheduleSync);
 
+  // Coming back to the app is the other moment worth syncing on, and until now nothing did.
+  //
+  // Sync ran at launch and after a local change, which sounds like enough and is not. A device left
+  // open while the knitting happened on another one never hears about it: backgrounding a phone and
+  // returning does not restart the JavaScript, and a browser tab left in the background is not
+  // reloaded either. It sits there showing a row count that stopped being true hours ago.
+  //
+  // That is worse than stale, because of what happens next. The first tap on that device marks the
+  // section dirty at its own stale number, push runs before pull, and an outbox entry outranks the
+  // server — so one tap on a forgotten tab publishes row 31 over the row 35 somebody actually
+  // knitted. Catching up on the way in is what stops the catching up from being an overwrite.
+  const foreground = AppState.addEventListener('change', (state) => {
+    if (state === 'active') scheduleSync();
+  });
+
   // The outbox follows the account, including when it changes under us — a token refresh, a sign-in,
   // a sign-out. What one account has not yet sent is not another's to send.
   const unlisten = onSessionChange((state) => {
@@ -181,6 +197,7 @@ export function startSync(): () => void {
   return () => {
     unwatch();
     unlisten();
+    foreground.remove();
     if (timer) clearTimeout(timer);
     started = false;
   };

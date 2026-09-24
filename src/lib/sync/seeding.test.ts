@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 
 // The question this file exists for: on a first sync, is this device the source of an account or a
 // newcomer to one? Getting it backwards is not a sync delay, it is data loss — a browser signed in
@@ -85,5 +86,35 @@ describe('the first sync after signing in', () => {
     (await start())();
     expect(mockMarkAllDirty).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem('knitwit-sync-seeded')).toBeNull();
+  });
+});
+
+
+// A device left open while the knitting happened somewhere else has to catch up on the way back in.
+// Without this it sits on a stale row count, and the first tap publishes that stale count over what
+// somebody actually knitted — push runs before pull, and an outbox entry outranks the server.
+describe('coming back to the app', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    jest.clearAllMocks();
+    mockMarkAllDirty.mockResolvedValue(0);
+    mockRows.mockResolvedValue({ data: [{ id: 'x' }], error: null });
+  });
+
+  it('listens for the app becoming active', async () => {
+    const listen = jest.spyOn(AppState, 'addEventListener');
+    (await start())();
+    expect(listen).toHaveBeenCalledWith('change', expect.any(Function));
+    listen.mockRestore();
+  });
+
+  it('stops listening when sync stops', async () => {
+    const remove = jest.fn();
+    const listen = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockReturnValue({ remove } as unknown as ReturnType<typeof AppState.addEventListener>);
+    (await start())();
+    expect(remove).toHaveBeenCalled();
+    listen.mockRestore();
   });
 });
