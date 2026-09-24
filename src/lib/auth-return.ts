@@ -45,18 +45,24 @@ export async function finishProviderFlow(url: string | null): Promise<void> {
     throw new Error(`no-return:${returnUrl}`);
   }
 
-  const returned = new URL(result.url);
-  // The code arrives in the query string under PKCE and in the fragment under the implicit flow.
-  // Reading both costs nothing and means a change of flow does not present as silence.
-  const params = new URLSearchParams(
-    returned.search ? returned.search.slice(1) : returned.hash.replace(/^#/, ''),
-  );
+  // Split on the first ? or # and read what follows, rather than handing the string to `new URL`.
+  // The code arrives in the query under PKCE and in the fragment under the implicit flow, so both
+  // have to be read — and a custom scheme like knitwit:// is not a URL every parser agrees about,
+  // which is a poor thing to depend on when the failure mode is a knitter who cannot sign in.
+  const marker = result.url.search(/[?#]/);
+  const params = new URLSearchParams(marker >= 0 ? result.url.slice(marker + 1) : '');
 
   const refused = params.get('error_description') ?? params.get('error');
   if (refused) throw new Error(refused);
 
   const code = params.get('code');
-  if (!code) throw new Error('no-code');
+  if (!code) {
+    // The names of what came back, never the values: an implicit-flow fragment carries an access
+    // token, and this string is put on screen. The names alone say which flow ran, which is the
+    // whole question when a redirect returns successfully and carries nothing usable.
+    const names = [...params.keys()].join(', ') || 'nothing at all';
+    throw new Error(`no-code:${names}`);
+  }
 
   const { error } = await getSupabase().auth.exchangeCodeForSession(code);
   if (error) throw new Error(error.message);

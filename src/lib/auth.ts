@@ -251,6 +251,9 @@ function readable(message: string): string {
   if (text.startsWith('no-return:')) {
     return `Apple did not send you back to Knitwit. The app was waiting at ${message.slice('no-return:'.length)}, and that address has to be listed in Knitwit's sign-in settings.`;
   }
+  if (text.startsWith('no-code:')) {
+    return `Apple came back, but without the code Knitwit needs. It carried: ${message.slice('no-code:'.length)}.`;
+  }
   if (text === 'no-url' || text === 'no-code') {
     return 'Apple sent Knitwit back without an answer. Try again in a moment.';
   }
