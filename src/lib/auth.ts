@@ -245,6 +245,12 @@ function readable(message: string): string {
   if (text.includes('unable to exchange external code')) {
     return 'Apple let you in, but would not finish. This is a setting on Knitwit’s side, not anything you did.';
   }
+  // Carries the address the app expected to be sent back to, because that is the one value that
+  // has to appear — spelled identically — in the project's redirect allow-list, and naming it turns
+  // an unexplained dead end into something somebody can actually go and check.
+  if (text.startsWith('no-return:')) {
+    return `Apple did not send you back to Knitwit. The app was waiting at ${message.slice('no-return:'.length)}, and that address has to be listed in Knitwit's sign-in settings.`;
+  }
   if (text === 'no-url' || text === 'no-code') {
     return 'Apple sent Knitwit back without an answer. Try again in a moment.';
   }
