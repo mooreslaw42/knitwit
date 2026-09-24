@@ -233,7 +233,10 @@ export async function signOut(): Promise<AuthResult> {
 }
 
 // Supabase's messages are written for developers. These are the ones a knitter can actually meet.
-function readable(message: string): string {
+//
+// Exported so a screen catching a thrown error can say the same things as one reading a returned
+// one — two vocabularies for the same failures would be two sets of wording to keep true.
+export function readable(message: string): string {
   const text = message.toLowerCase();
   if (text.includes('already registered') || text.includes('already been registered')) {
     return 'That email already has a Knitwit account. Sign in to it instead.';
@@ -259,6 +262,12 @@ function readable(message: string): string {
   // Apple said yes to the knitter and no to Knitwit: the code came back, and the key Supabase signs
   // its request with was refused. Nothing the knitter did, and nothing they can fix, so it says so
   // rather than inviting them to try again into the same wall.
+  // knitwit.eu shipped without its Supabase credentials, so every button threw instead of
+  // answering. Named here because "that did not work, try again" invites somebody to keep pressing
+  // something that cannot work until it is fixed at our end.
+  if (text.includes('missing expo_public_supabase')) {
+    return 'Knitwit is not set up to sign anybody in here. That is a fault on our side, not yours.';
+  }
   if (text.includes('unable to exchange external code')) {
     return 'Apple let you in, but would not finish. This is a setting on Knitwit’s side, not anything you did.';
   }
