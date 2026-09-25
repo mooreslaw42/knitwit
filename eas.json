@@ -10,13 +10,19 @@
       "ios": {
         "resourceClass": "m-medium"
       },
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -24,6 +30,9 @@
       "channel": "production",
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },

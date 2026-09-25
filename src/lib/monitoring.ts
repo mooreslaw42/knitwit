@@ -26,6 +26,14 @@ import * as Sentry from '@sentry/react-native';
 //
 // Their knitting never goes. A crash report says where the code was, not what it was holding.
 
+// The Sentry SDK ships an Xcode build phase that uploads source maps to sentry.io. Knitwit reports
+// to Bugsink, so there is nothing there to upload to and the phase fails the build outright asking
+// for an organisation slug. It is switched off in eas.json with SENTRY_DISABLE_AUTO_UPLOAD.
+//
+// The cost is real and worth stating: stack traces arrive minified, naming entry-<hash>.js and a
+// column number rather than a function and a line. Readable enough to tell two crashes apart, not
+// readable enough to read. Bugsink accepts source maps of its own; wiring them up is a separate
+// job needing a token.
 const DSN = process.env.EXPO_PUBLIC_BUGSINK_DSN;
 
 let started = false;
