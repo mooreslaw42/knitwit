@@ -98,6 +98,11 @@ export type Material = {
   strands: string;
   craftType: CraftType;
   washing: string;
+  // The care symbols the ball band carries (see CARE_SYMBOLS), as many as it has. Optional, and
+  // separate from `washing` above: that is the one-line instruction the knitter chose, this is what
+  // the band actually printed. Unknown ids are kept rather than dropped — a symbol added in a later
+  // version must survive a save from an older one.
+  careSymbols?: string[];
   gauge: Gauge | null;
   link: string;
   photo: string | null;

@@ -321,3 +321,58 @@ export const WASHING_LABELS: Record<string, string> = {
   'lay-flat': 'Lay flat to dry',
   'no-wash': 'Do not wash',
 };
+
+// The care symbols printed on a ball band (ISO 3758 / GINETEX), for ticking off against the band
+// itself. `WASHING_LABELS` above says in one line what to do with the yarn; these say what the band
+// said, which is not the same thing — a band carries five separate instructions (wash, bleach, dry,
+// iron, professional care) and only one of them is the wash. Optional, and every one of them
+// independent of the others, so this is a list rather than a choice.
+//
+// `group` only orders the picker. The ids are stored on the material, so they are the one thing
+// here that can't be renamed without leaving older saved yarn pointing at nothing.
+export type CareSymbol = {
+  id: string;
+  group: string;
+  label: string;
+};
+
+export const CARE_SYMBOLS: CareSymbol[] = [
+  { id: 'wash-hand', group: 'Washing', label: 'Hand wash' },
+  { id: 'wash-30', group: 'Washing', label: 'Machine 30°' },
+  { id: 'wash-40', group: 'Washing', label: 'Machine 40°' },
+  { id: 'wash-gentle', group: 'Washing', label: 'Wool / gentle cycle' },
+  { id: 'wash-no', group: 'Washing', label: 'Do not wash' },
+  { id: 'bleach-no', group: 'Bleaching', label: 'Do not bleach' },
+  { id: 'dry-flat', group: 'Drying', label: 'Dry flat' },
+  { id: 'dry-line', group: 'Drying', label: 'Line dry' },
+  { id: 'tumble-low', group: 'Drying', label: 'Tumble dry low' },
+  { id: 'tumble-no', group: 'Drying', label: 'Do not tumble dry' },
+  { id: 'iron-low', group: 'Ironing', label: 'Iron cool' },
+  { id: 'iron-medium', group: 'Ironing', label: 'Iron warm' },
+  { id: 'iron-no', group: 'Ironing', label: 'Do not iron' },
+  { id: 'dryclean', group: 'Professional care', label: 'Dry clean' },
+  { id: 'dryclean-no', group: 'Professional care', label: 'Do not dry clean' },
+];
+
+export const CARE_SYMBOL_LABELS: Record<string, string> = Object.fromEntries(
+  CARE_SYMBOLS.map((s) => [s.id, s.label]),
+);
+
+// The symbols in the order the picker shows them, one row per family — the way they are printed on
+// the band, so ticking them off is a matter of reading along.
+export function careSymbolGroups(): { group: string; symbols: CareSymbol[] }[] {
+  const groups: { group: string; symbols: CareSymbol[] }[] = [];
+  for (const symbol of CARE_SYMBOLS) {
+    const last = groups[groups.length - 1];
+    if (last && last.group === symbol.group) last.symbols.push(symbol);
+    else groups.push({ group: symbol.group, symbols: [symbol] });
+  }
+  return groups;
+}
+
+// Ticking one on or off. A plain toggle, kept here rather than in the component so the order the
+// knitter picked them in survives — and so it can be tested without a renderer.
+export function toggleCareSymbol(current: string[] | undefined, id: string): string[] {
+  const chosen = current ?? [];
+  return chosen.includes(id) ? chosen.filter((s) => s !== id) : [...chosen, id];
+}
