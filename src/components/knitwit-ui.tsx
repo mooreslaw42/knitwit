@@ -315,19 +315,6 @@ export function ConfirmButton({
   );
 }
 
-export function DeleteButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
-      <ThemedText type="smallBold" themeColor="coralDeep">
-        Delete
-      </ThemedText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   labelRow: {
     flexDirection: 'row',
@@ -429,8 +416,4 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   confirmGrow: { flex: 1 },
-  deleteBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: Spacing.two,
-  },
 });

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   Card,
-  DeleteButton,
+  ConfirmButton,
   FormField,
   PillButton,
   ProgressBar,
@@ -132,8 +132,11 @@ export default function SectionDetailScreen() {
                 </ThemedText>
               </PillButton>
               {project.sections.length > 1 ? (
-                <DeleteButton
-                  onPress={() => {
+                <ConfirmButton
+                  label="Delete this section"
+                  question="Delete this section? The rows you've counted, the time against it and its notes go with it, and can't be brought back."
+                  confirmLabel="Yes, delete it"
+                  onConfirm={() => {
                     deleteSection(key, sectionIndex);
                     goBackOr(router, `/project/${key}`);
                   }}

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Card, ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { SharePattern } from '@/components/share-pattern';
 import { GaugeField } from '@/components/gauge-field';
@@ -389,8 +389,14 @@ export default function PatternDetailScreen() {
                 </View>
               )}
 
-              <DeleteButton
-                onPress={() => {
+              {/* The biggest of the four, so it says what survives as well as what doesn't: a
+                  project knitted from this pattern copied everything it needed and carries on
+                  without it. */}
+              <ConfirmButton
+                label="Delete this pattern"
+                question="Delete this pattern? Its sections, charts and notes go with it and can't be brought back. Projects made from it keep their own copy and carry on."
+                confirmLabel="Yes, delete it"
+                onConfirm={() => {
                   deletePattern(id);
                   goBackOr(router, '/library');
                 }}
