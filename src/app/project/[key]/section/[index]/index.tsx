@@ -18,7 +18,7 @@ import {
   toolLabel,
 } from '@/components/stash-picker';
 import { NotesCard } from '@/components/notes-card';
-import { resolveTechnique } from '@/lib/technique-catalogue';
+import { resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -71,7 +71,7 @@ export default function SectionDetailScreen() {
     kitSummary(section.toolIds, tools, toolLabel),
     kitSummary(section.techniqueIds, techniques, () => '').trim()
       ? section.techniqueIds
-          .map((tid) => resolveTechnique(tid, techniques[tid], catalogue).name)
+          .map((tid) => techniqueLabel(resolveTechnique(tid, techniques[tid], catalogue)))
           .join(', ')
       : '',
   ]

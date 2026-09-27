@@ -123,6 +123,11 @@ export type CatalogueTechnique = {
   name: string;
   craft: TechniqueCraft;
   family: TechniqueFamily;
+  // What a pattern writes instead of the name — "ssk", "M1L", "w&t", "St st". Most techniques have
+  // one and a pattern uses it far more often than the full name, which is why it is a field of its
+  // own rather than another alias: an alias is for matching, this is for showing. Empty for the
+  // ones that genuinely have no standard short form — nobody abbreviates "Blocking".
+  abbr: string;
   summary: string;
   // What patterns actually call it, so imported text can be matched back to this entry.
   aliases: string[];
@@ -154,7 +159,7 @@ export type Technique = {
   // Set on a technique the knitter added because the catalogue didn't have it. It carries its own
   // name and craft, is never matched from a pattern, and sorts below catalogue entries. The
   // escape hatch, not a second catalogue.
-  custom?: { name: string; craft: TechniqueCraft };
+  custom?: { name: string; craft: TechniqueCraft; abbr?: string };
 };
 
 export type ToolType =

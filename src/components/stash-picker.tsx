@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { describeToolSize, scaleForToolType, TOOL_TYPE_LABELS } from '@/constants/catalogs';
 import { Colors, Radii, Spacing } from '@/constants/theme';
-import { resolveTechnique } from '@/lib/technique-catalogue';
+import { resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Material, ProjectSection, Technique, Tool } from '@/types/knitwit';
 
@@ -151,7 +151,7 @@ export function SectionKitEditor({
         label="Techniques"
         options={limit(Object.entries(techniques), only?.techniqueIds).map(([id, t]) => ({
           id,
-          label: resolveTechnique(id, t as Technique, catalogue).name,
+          label: techniqueLabel(resolveTechnique(id, t as Technique, catalogue)),
         }))}
         selected={value.techniqueIds}
         onToggle={(id) => toggle('techniqueIds', id)}

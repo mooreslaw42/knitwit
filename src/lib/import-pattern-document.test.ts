@@ -204,11 +204,11 @@ describe('techniques from an import', () => {
   const catalogue = [
     {
       id: 'german-short-rows', name: 'German short rows', craft: 'knit' as const,
-      family: 'shaping' as const, summary: '', aliases: ['GSR'], video: '', link: '',
+      family: 'shaping' as const, abbr: 'GSR', summary: '', aliases: ['GSR'], video: '', link: '',
     },
     {
       id: 'magic-ring', name: 'Magic ring', craft: 'crochet' as const,
-      family: 'cast-on' as const, summary: '', aliases: ['magic circle'], video: '', link: '',
+      family: 'cast-on' as const, abbr: 'MR', summary: '', aliases: ['magic circle'], video: '', link: '',
     },
   ];
 

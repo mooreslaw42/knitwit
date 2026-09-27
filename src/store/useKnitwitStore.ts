@@ -177,7 +177,9 @@ type KnitwitState = {
   setTechniqueStatus: (id: string, status: TechniqueStatus | null) => void;
   setTechniqueNotes: (id: string, notes: string) => void;
   // The escape hatch: something the catalogue doesn't have. Never matched from a pattern.
-  addCustomTechnique: (name: string, craft: TechniqueCraft) => string;
+  // `abbr` is what a pattern would write for it — optional, because a technique the knitter had to
+  // invent a name for often has no short form either.
+  addCustomTechnique: (name: string, craft: TechniqueCraft, abbr?: string) => string;
   deleteTechnique: (id: string) => void;
 
   setActiveSection: (projectKey: string, sectionIndex: number) => void;
@@ -421,7 +423,15 @@ function repairTechniques(state: { techniques?: Record<string, Record<string, un
       status: 'known',
       notes: typeof t?.notes === 'string' ? t.notes : '',
       addedOn: localDate(),
-      ...(name ? { custom: { name, craft } } : {}),
+      ...(name
+        ? {
+            custom: {
+              name,
+              craft,
+              ...(typeof t?.abbr === 'string' && t.abbr.trim() ? { abbr: t.abbr.trim() } : {}),
+            },
+          }
+        : {}),
     };
   }
 }
@@ -1095,7 +1105,7 @@ export const useKnitwitStore = create<KnitwitState>()(
         set({ techniques: { ...techniques, [id]: { ...existing, notes } } });
       },
 
-      addCustomTechnique: (name, craft) => {
+      addCustomTechnique: (name, craft, abbr) => {
         const { techniques, techniqueSeq } = get();
         const resolvedId = `own-${techniqueSeq}`;
         set({
@@ -1105,7 +1115,11 @@ export const useKnitwitStore = create<KnitwitState>()(
               status: 'want',
               notes: '',
               addedOn: localDate(),
-              custom: { name: name.trim() || 'Untitled technique', craft },
+              custom: {
+                name: name.trim() || 'Untitled technique',
+                craft,
+                ...(abbr?.trim() ? { abbr: abbr.trim() } : {}),
+              },
             },
           },
           techniqueSeq: techniqueSeq + 1,

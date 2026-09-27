@@ -90,11 +90,11 @@ const stash: Stash = {
   catalogue: {
     q1: {
       id: 'q1', name: 'German short rows', craft: 'knit', family: 'shaping',
-      summary: '', aliases: [], video: '', link: '',
+      abbr: 'GSR', summary: '', aliases: [], video: '', link: '',
     },
     q2: {
       id: 'q2', name: 'Tubular cast-on', craft: 'knit', family: 'cast-on',
-      summary: '', aliases: [], video: '', link: '',
+      abbr: '', summary: '', aliases: [], video: '', link: '',
     },
   },
 };

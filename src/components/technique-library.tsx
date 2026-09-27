@@ -11,6 +11,7 @@ import {
   FAMILY_LABELS,
   FAMILY_ORDER,
   resolveTechnique,
+  techniqueLabel,
   STATUS_LABELS,
   STATUS_ORDER,
 } from '@/lib/technique-catalogue';
@@ -74,7 +75,14 @@ export function TechniqueLibrary() {
       : marked;
     return source.filter((t) => {
       if (!matchesCraft(t.craft, craft)) return false;
-      if (q && !t.name.toLowerCase().includes(q) && !t.summary.toLowerCase().includes(q)) {
+      // Searchable by the short form too: a knitter who has just read "w&t" in a pattern types
+      // that, not "wrap and turn short rows".
+      if (
+        q &&
+        !t.name.toLowerCase().includes(q) &&
+        !(t.abbr ?? '').toLowerCase().includes(q) &&
+        !t.summary.toLowerCase().includes(q)
+      ) {
         return false;
       }
       return true;
@@ -178,7 +186,7 @@ export function TechniqueLibrary() {
             <View key={t.id} style={styles.row}>
               <CardLink href={`/technique/${t.id}`} style={styles.rowMain}>
                 <ThemedText type="smallBold">
-                  {t.name}
+                  {techniqueLabel(t)}
                   {t.isCustom ? ' · yours' : ''}
                 </ThemedText>
                 <ThemedText type="small" themeColor="inkSoft" numberOfLines={2}>

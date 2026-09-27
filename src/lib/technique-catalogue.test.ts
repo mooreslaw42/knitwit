@@ -1,9 +1,10 @@
-import { matchTechnique, resolveTechnique } from '@/lib/technique-catalogue';
+import { matchTechnique, resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import type { CatalogueTechnique } from '@/types/knitwit';
 
 const entry = (over: Partial<CatalogueTechnique> & { id: string; name: string }): CatalogueTechnique => ({
   craft: 'knit',
   family: 'other',
+  abbr: '',
   summary: '',
   aliases: [],
   video: '',
@@ -12,10 +13,10 @@ const entry = (over: Partial<CatalogueTechnique> & { id: string; name: string })
 });
 
 const catalogue: CatalogueTechnique[] = [
-  entry({ id: 'german-short-rows', name: 'German short rows', family: 'shaping', aliases: ['GSR', 'double stitch'] }),
+  entry({ id: 'german-short-rows', name: 'German short rows', family: 'shaping', abbr: 'GSR', aliases: ['double stitch'] }),
   entry({ id: 'kitchener-stitch', name: 'Kitchener stitch', family: 'joining', aliases: ['grafting', 'graft'] }),
   entry({ id: 'magic-ring', name: 'Magic ring', craft: 'crochet', aliases: ['magic circle', 'MR'] }),
-  entry({ id: 'wrap-and-turn', name: 'Wrap and turn short rows', family: 'shaping', aliases: ['w&t'] }),
+  entry({ id: 'wrap-and-turn', name: 'Wrap and turn short rows', family: 'shaping', abbr: 'w&t' }),
   entry({ id: 'blocking', name: 'Blocking', craft: 'both' }),
 ];
 
@@ -78,5 +79,57 @@ describe('resolveTechnique', () => {
   // still says so, rather than the technique silently vanishing from the project.
   it('falls back to the slug rather than disappearing', () => {
     expect(resolveTechnique('tubular-cast-on', undefined, {}).name).toBe('tubular cast on');
+  });
+});
+
+// A pattern writes "ssk" far more often than "slip slip knit", so the short form has to be a thing
+// the app knows rather than something buried in the aliases.
+describe('abbreviations', () => {
+  it('finds a technique by what the pattern actually wrote', () => {
+    expect(matchTechnique('w&t', catalogue)?.id).toBe('wrap-and-turn');
+    expect(matchTechnique('GSR', catalogue)?.id).toBe('german-short-rows');
+    // Punctuation and case are not the knitter's problem.
+    expect(matchTechnique('W & T', catalogue)?.id).toBe('wrap-and-turn');
+  });
+
+  // An abbreviation is two or three characters; letting one match inside a sentence would hang the
+  // wrong technique off half the rows in a pattern.
+  it('only ever matches an abbreviation exactly', () => {
+    expect(matchTechnique('knit to the end, then w&t the next stitch', catalogue)).toBeNull();
+  });
+
+  it('carries the short form through to the screens', () => {
+    const byId = Object.fromEntries(catalogue.map((t) => [t.id, t]));
+    expect(resolveTechnique('wrap-and-turn', undefined, byId).abbr).toBe('w&t');
+    // A catalogue cached before this field existed, and an entry that has no short form.
+    expect(resolveTechnique('blocking', undefined, byId).abbr).toBe('');
+    expect(resolveTechnique('unknown-slug', undefined, {}).abbr).toBe('');
+  });
+
+  it("keeps a custom technique's own short form", () => {
+    const r = resolveTechnique(
+      'own-3',
+      {
+        status: 'want',
+        notes: '',
+        addedOn: '',
+        custom: { name: 'Nan’s edging', craft: 'crochet', abbr: 'NE' },
+      },
+      {},
+    );
+    expect(r).toMatchObject({ name: 'Nan’s edging', abbr: 'NE', isCustom: true });
+  });
+
+  describe('techniqueLabel', () => {
+    it('names it in full, with the short form after', () => {
+      expect(techniqueLabel({ name: 'Slip slip knit', abbr: 'ssk' })).toBe('Slip slip knit (ssk)');
+    });
+
+    // Nobody abbreviates "Blocking", and an empty pair of brackets would say the app lost something.
+    it('leaves the brackets off when there is no short form', () => {
+      expect(techniqueLabel({ name: 'Blocking', abbr: '' })).toBe('Blocking');
+      expect(techniqueLabel({ name: 'Blocking' })).toBe('Blocking');
+      expect(techniqueLabel({ name: 'Blocking', abbr: '  ' })).toBe('Blocking');
+    });
   });
 });

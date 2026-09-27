@@ -48,7 +48,19 @@ export default function TechniqueScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title" heading={1}>{technique.name}</ThemedText>
+          <View style={styles.titleRow}>
+            <ThemedText type="title" heading={1}>{technique.name}</ThemedText>
+            {/* The short form as a tag rather than in the heading: it is what a pattern writes, so
+                a knitter arriving from "w&t" needs to see at a glance that they are in the right
+                place, without it becoming part of the technique's name. */}
+            {technique.abbr ? (
+              <View style={styles.abbrTag}>
+                <ThemedText type="smallBold" themeColor="ink">
+                  {technique.abbr}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
           <ThemedText type="small" themeColor="inkSoft">
             {CRAFT_LABELS[technique.craft]} · {FAMILY_LABELS[technique.family]}
             {technique.isCustom ? ' · your own' : ''}
@@ -138,6 +150,18 @@ export default function TechniqueScreen() {
 }
 
 const styles = StyleSheet.create({
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  abbrTag: {
+    backgroundColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.half,
+  },
   container: { flex: 1, alignItems: 'center' },
   safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
   scrollContent: {
