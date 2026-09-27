@@ -138,6 +138,248 @@ describe('parseSectionText', () => {
   });
 });
 
+// The shorthand a knitter actually types. A pattern written "R21: k2, p2" throughout used to parse
+// to *zero* rows, and the only thing it said was that no rows had been found — the notation was the
+// whole of the problem, and every row in the pattern was lost to it.
+describe('row headers, in every notation', () => {
+  const labels = (text: string) => parseSectionText(text).rows.map((r) => r.label);
+
+  it('reads a row numbered with a bare R, spaced or not', () => {
+    for (const text of ['R1: k2, p2', 'r1: k2, p2', 'R 1: k2, p2', 'Row1: k2, p2']) {
+      expect(shape(text)[0].stitches).toEqual(['knit:exact:2', 'purl:exact:2']);
+    }
+  });
+
+  it('keeps the row number the pattern gave it', () => {
+    expect(labels('r21: knit')).toEqual(['Row 21']);
+  });
+
+  it('reads a row with no separator at all', () => {
+    // "r21 k to end" — nothing but a space between the number and the instruction.
+    expect(shape('r21 k to end')[0].stitches).toEqual(['knit:all:-']);
+    expect(labels('r21 k to end')).toEqual(['Row 21']);
+  });
+
+  it('reads the other separators patterns use', () => {
+    for (const text of ['Row 1) knit', 'R1. knit', 'Row 1 – knit', 'Row 1 = knit']) {
+      expect(shape(text)[0].stitches).toEqual(['knit:all:-']);
+    }
+  });
+
+  it('reads rounds as readily as rows', () => {
+    expect(labels('Rnd1: knit\nRnd 2: knit\nRound 3: knit\nR4: knit')).toHaveLength(4);
+  });
+
+  it('reads a range however it is written', () => {
+    for (const text of ['Rows 1-4: knit', 'R1-R4: knit', 'Rows 1 to 4: knit', 'Rows 1–4: knit']) {
+      expect(labels(text)).toEqual(['Row 1', 'Row 2', 'Row 3', 'Row 4']);
+    }
+    expect(labels('Rows 1 and 2: knit')).toEqual(['Row 1', 'Row 2']);
+  });
+
+  it('reads a plainly numbered list', () => {
+    expect(shape('1: knit')[0].stitches).toEqual(['knit:all:-']);
+    expect(shape('1) knit')[0].stitches).toEqual(['knit:all:-']);
+  });
+
+  // "1." is a numbered prose step far more often than it is a row, and reading it as one would turn
+  // a set-up instruction into a row that charts nothing.
+  it('does not mistake a numbered prose step for a row', () => {
+    const result = parseSectionText('1. Cast on 20 sts.\n2: knit');
+    expect(result.rows.map((r) => r.label)).toEqual(['Row 2']);
+    expect(result.castOn).toBe(20);
+  });
+
+  it('finds the side wherever the pattern put it', () => {
+    for (const text of [
+      'Row 1 (WS): purl',
+      'Row 1 [WS]: purl',
+      'Row 1 WS: purl',
+      'Row 1 (WS row): purl',
+      'Row 1: (WS) purl',
+    ]) {
+      expect(shape(text)[0].side).toBe('WS');
+    }
+  });
+
+  // The loose form has no punctuation to prove it is a row, so prose that opens with a row number
+  // must not become one — it would chart nothing and claim a row the pattern never had.
+  it('leaves prose about rows as prose', () => {
+    for (const text of [
+      'Round 2 is worked in the round.',
+      'Rows 1 and 2 form the pattern repeat.',
+      'Row 4 of the chart is where the cable crosses.',
+    ]) {
+      const result = parseSectionText(text);
+      expect(result.rows).toHaveLength(0);
+      expect(result.ignoredLines).toEqual([text]);
+    }
+  });
+
+  // Copy a pattern out of a PDF and the rows arrive run together, with whatever spaces and bullets
+  // the layout left behind.
+  it('separates rows that arrived on one line', () => {
+    const result = parseSectionText('Row 1: knit. Row 2: purl. Row 3: knit.');
+    expect(result.rows.map((r) => r.label)).toEqual(['Row 1', 'Row 2', 'Row 3']);
+    expect(result.rows[1].stitches[0]).toMatchObject({ type: 'purl', span: 'all' });
+  });
+
+  it('copes with a non-breaking space and a bullet', () => {
+    expect(shape('\u2022 R\u00a01: k2,\u00a0p2')[0].stitches).toEqual([
+      'knit:exact:2',
+      'purl:exact:2',
+    ]);
+  });
+
+  it('says what a row should look like when it finds none', () => {
+    expect(parseSectionText('Just some prose.').issues[0].message).toContain('"R1:"');
+  });
+});
+
+describe('stitch shorthand', () => {
+  it('reads a decrease however it is spaced', () => {
+    expect(shape('R1: k2 tog, p 2 tog, K 2 TOG')[0].stitches).toEqual([
+      'k2tog:exact:1',
+      'p2tog:exact:1',
+      'k2tog:exact:1',
+    ]);
+  });
+
+  it('reads a run written with its stitches spelled out', () => {
+    expect(shape('R1: knit 2 sts, purl 4 sts, k1')[0].stitches).toEqual([
+      'knit:exact:2',
+      'purl:exact:4',
+      'knit:exact:1',
+    ]);
+  });
+
+  it('reads a slip with the modifier that says how to slip it', () => {
+    for (const token of ['sl1 wyif', 'sl 1 purlwise', 'slip 1 pwise', 'sl1 as if to knit']) {
+      expect(shape(`R1: ${token}, k to end`)[0].stitches).toEqual([
+        'slip:exact:1',
+        'knit:all:-',
+      ]);
+    }
+  });
+
+  it('reads "sl 1, k1, psso" as the one decrease it is', () => {
+    expect(shape('R1: sl 1, k1, psso, knit to end')[0].stitches).toEqual([
+      'ssk:exact:1',
+      'knit:all:-',
+    ]);
+    expect(shape('R1: skp, knit to end')[0].stitches[0]).toBe('ssk:exact:1');
+  });
+
+  it('reads a shaping named without its stitch', () => {
+    expect(shape('R1: inc, k to last st, dec')[0].stitches).toEqual([
+      'kfb:exact:1',
+      'knit:to-last:1',
+      'k2tog:exact:1',
+    ]);
+  });
+
+  it('reads ktbl with the number on either side', () => {
+    expect(shape('R1: ktbl2, k1 tbl, ktbl')[0].stitches).toEqual([
+      'ktbl:exact:2',
+      'ktbl:exact:1',
+      'ktbl:exact:1',
+    ]);
+  });
+
+  it('binds off the whole row when the pattern says so', () => {
+    expect(shape('R1: k2, BO all sts')[0].stitches).toEqual(['knit:exact:2', 'bo:all:-']);
+    expect(shape('R1: cast off remaining sts')[0].stitches).toEqual(['bo:all:-']);
+  });
+
+  // "turn" is not a stitch and charts nothing, but it used to cost the whole row.
+  it('works past an instruction about the fabric rather than the stitches', () => {
+    const result = parseSectionText('R1: k2, p2, turn');
+    expect(result.rows[0].stitches.map((g) => g.type)).toEqual(['knit', 'purl']);
+    expect(result.issues).toEqual([]);
+    // Nothing is lost: the row still says what the knitter wrote.
+    expect(result.rows[0].instruction).toContain('turn');
+  });
+
+  it('reads crochet shorthand through a round header', () => {
+    const result = parseSectionText('Rnd1: ch 2, dc in each st around, turn', 'crochet');
+    expect(result.rows[0].stitches.map((g) => `${g.type}:${g.span}`)).toEqual([
+      'ch:exact',
+      'dc:all',
+    ]);
+  });
+
+  // A trailing "4 sts" is a count of the row about half the time and the last instruction in it the
+  // other half. Reading "purl 4 sts" as a count silently drops four stitches off the row.
+  it('tells a stated count from an instruction that ends in stitches', () => {
+    expect(parseSectionText('R1: k2, p2. (4 sts)').expectedCounts).toEqual([4]);
+    expect(parseSectionText('R1: k2tog, k to end. 47 sts.').expectedCounts).toEqual([47]);
+    expect(parseSectionText('R1: knit 2 sts, purl 4 sts').expectedCounts).toEqual([null]);
+    expect(parseSectionText('Rnd1: 2 sc in each st around (12 sts)', 'crochet').expectedCounts).toEqual([
+      12,
+    ]);
+  });
+
+  // The point of all of it: a pattern in shorthand reconciles against its own stated counts, which
+  // is what makes the chart trustworthy rather than merely present.
+  it('reconciles a shorthand pattern against the counts it states', () => {
+    const text = [
+      'Cast on 20 sts.',
+      'R1 (RS): K1, M1L, k to last st, M1R, K1. (22 sts)',
+      'R2 (WS): p to end. 22 sts.',
+      'R3: k2tog, k to last 2 sts, ssk. (20 sts)',
+    ].join('\n');
+    const result = parseSectionText(text);
+    expect(result.castOn).toBe(20);
+    expect(result.rows).toHaveLength(3);
+    expect(reconcileRowCounts(result.rows, result.expectedCounts, 20)).toEqual([]);
+  });
+});
+
+describe('repeating a block of rows', () => {
+  const knitBlock = 'Rows 1-2: knit';
+
+  // "Repeat" and "work" do not mean the same number of passes, and a house rule for both would make
+  // every section written the other way a repeat too long or too short.
+  it('reads a plain repeat as passes on top of the rows as written', () => {
+    expect(parseSectionText(`${knitBlock}\nRepeat rows 1-2 4 times.`).rows).toHaveLength(10);
+    expect(parseSectionText(`${knitBlock}\nRep rows 1-2 4 more times.`).rows).toHaveLength(10);
+  });
+
+  it('reads "a total of" and "work" as the whole of what to work', () => {
+    expect(parseSectionText(`${knitBlock}\nWork rows 1-2 4 times.`).rows).toHaveLength(8);
+    expect(parseSectionText(`${knitBlock}\nRepeat rows 1-2 a total of 4 times.`).rows).toHaveLength(
+      8,
+    );
+  });
+
+  it('reads the row numbers in shorthand', () => {
+    expect(parseSectionText(`${knitBlock}\nRep R1-R2 x 3`).rows).toHaveLength(8);
+    expect(parseSectionText(`${knitBlock}\nRepeat rows 1 and 2 three times`).rows).toHaveLength(8);
+  });
+
+  it('reads a block named by position rather than by number', () => {
+    const text = 'Row 1: knit\nRow 2: purl\nRep last 2 rows twice more.';
+    const rows = parseSectionText(text).rows;
+    expect(rows).toHaveLength(6);
+    expect(rows.map((r) => r.stitches[0].type)).toEqual([
+      'knit',
+      'purl',
+      'knit',
+      'purl',
+      'knit',
+      'purl',
+    ]);
+  });
+
+  // "Until it measures 24 cm" is a length, not a count. Guessing one would be worse than leaving
+  // the instruction where the knitter can read it.
+  it('leaves a repeat it cannot count alone', () => {
+    const result = parseSectionText(`${knitBlock}\nRepeat rows 1-2 until it measures 24 cm.`);
+    expect(result.rows).toHaveLength(2);
+    expect(result.ignoredLines).toEqual(['Repeat rows 1-2 until it measures 24 cm.']);
+  });
+});
+
 describe('reconcileRowCounts', () => {
   it('passes when the parse agrees with the count the pattern states', () => {
     const { rows, expectedCounts } = parseSectionText(
