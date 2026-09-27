@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PhotoImage } from '@/components/photo';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
+import { Card, InputStyle, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { NotesCard } from '@/components/notes-card';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
@@ -13,10 +13,12 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
   formatStarted,
+  projectMaterialIds,
   projectProgress,
   projectState,
   sectionStatus,
 } from '@/lib/knitwit-helpers';
+import { materialLabel } from '@/components/stash-picker';
 import { formatGaugeIn } from '@/lib/gauge';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -29,13 +31,18 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
+  const materials = useKnitwitStore((state) => state.materials);
   usePageTitle(project?.name);
   const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
+  const setMaterialSkeins = useKnitwitStore((state) => state.setMaterialSkeins);
 
   if (!project) return null;
 
   const pct = projectProgress(project).pct;
   const curIdx = currentSectionIndexOf(project);
+  // Only the yarns that are actually in the stash: a section can still point at one the knitter
+  // deleted, and a row with no name to put on it is no use to anybody.
+  const yarns = projectMaterialIds(project).filter((id) => materials[id]);
 
   return (
     <ThemedView style={styles.container}>
@@ -115,6 +122,47 @@ export default function ProjectDetailScreen() {
             </ThemedText>
           </View>
 
+          {/* How much yarn this make needs, in balls rather than in metres, because that is the
+              unit a yarn shop sells in and the number a knitter checks before casting on.
+              Stamped from the pattern's per-size counts when the project was created and editable
+              ever since: a pattern says what the design takes, a project records what this knitter
+              is actually using. Hidden until the project has yarn — an empty table is not an
+              invitation, and yarn is chosen on the section screens. */}
+          {yarns.length > 0 ? (
+            <Card style={styles.yarnCard}>
+              <ThemedText type="small" themeColor="inkSoft">
+                Yarn you&apos;ll need
+              </ThemedText>
+              {yarns.map((id) => {
+                const needed = project.materialSkeins?.[id];
+                return (
+                  <View key={id} style={styles.yarnRow}>
+                    <ThemedText type="smallBold" numberOfLines={2} style={styles.yarnName}>
+                      {materialLabel(materials[id])}
+                    </ThemedText>
+                    <TextInput
+                      style={styles.skeinInput}
+                      value={needed == null ? '' : String(needed)}
+                      onChangeText={(v) => {
+                        // Digits only, and an empty box clears the number rather than storing a
+                        // zero — "not worked out yet" is not the same answer as "none".
+                        const digits = v.replace(/[^0-9]/g, '');
+                        setMaterialSkeins(key, id, digits ? Number(digits) : null);
+                      }}
+                      keyboardType="numeric"
+                      placeholder="—"
+                      placeholderTextColor={Colors.inkSoft}
+                      accessibilityLabel={`Skeins of ${materialLabel(materials[id])}`}
+                    />
+                    <ThemedText type="small" themeColor="inkSoft" style={styles.skeinUnit}>
+                      {needed === 1 ? 'skein' : 'skeins'}
+                    </ThemedText>
+                  </View>
+                );
+              })}
+            </Card>
+          ) : null}
+
           <NotesCard
             value={project.notes}
             onChange={(notes) => setProjectNotes(key, notes)}
@@ -163,6 +211,29 @@ export default function ProjectDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  yarnCard: {
+    gap: Spacing.two,
+  },
+  yarnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  // The name takes whatever is left once the number has what it needs, so a long yarn name wraps
+  // rather than squeezing the box it is a count of.
+  yarnName: {
+    flex: 1,
+  },
+  skeinInput: {
+    ...InputStyle,
+    backgroundColor: Colors.cream,
+    paddingVertical: Spacing.two,
+    width: 64,
+    textAlign: 'center',
+  },
+  skeinUnit: {
+    width: 44,
+  },
   container: {
     flex: 1,
     alignItems: 'center',

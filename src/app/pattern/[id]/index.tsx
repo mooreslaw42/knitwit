@@ -24,7 +24,7 @@ import {
   scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { patternSectionMarkers } from '@/lib/knitwit-helpers';
+import { patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
@@ -326,7 +326,12 @@ export default function PatternDetailScreen() {
               <Field
                 label="Yarn"
                 value={(pattern.materials ?? [])
-                  .map((m) => `${m.short ? `${m.short} · ` : ''}${m.label}`)
+                  .map((m) => {
+                    // The quantity belongs on the same line as the colour it is a quantity of;
+                    // read as a list, that is what a knitter takes to the yarn shop.
+                    const needed = skeinsLabel(m.skeins);
+                    return `${m.short ? `${m.short} · ` : ''}${m.label}${needed ? ` — ${needed}` : ''}`;
+                  })
                   .join('\n')}
               />
               <Field

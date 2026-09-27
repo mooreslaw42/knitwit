@@ -151,6 +151,9 @@ type KnitwitState = {
   // Free-text notes, saved as they're typed. No Save button: a notes box that can lose what you
   // wrote by navigating away is worse than no notes box.
   setProjectNotes: (projectKey: string, notes: string) => void;
+  // How many skeins of one yarn this project needs. Null clears it, which is not the same as zero:
+  // "I haven't worked it out" and "none" are different answers and the card shows them differently.
+  setMaterialSkeins: (projectKey: string, materialId: string, skeins: number | null) => void;
   setSectionNotes: (projectKey: string, index: number, notes: string) => void;
   setPatternNotes: (patternId: string, notes: string) => void;
   setPatternSectionNotes: (patternId: string, index: number, notes: string) => void;
@@ -633,6 +636,17 @@ export const useKnitwitStore = create<KnitwitState>()(
           ...over,
         });
 
+        // What to buy, resolved to the size being knitted. Two slots can land on the same skein — a
+        // main and a contrast both worked in Sage Green — so they add up rather than the second
+        // quietly replacing the first.
+        const materialSkeins: Record<string, number> = {};
+        for (const slot of pattern?.materials ?? []) {
+          const materialId = slotMaterials[slot.id];
+          if (!materialId || slot.skeins == null) continue;
+          const count = Math.max(0, Math.round(sizeValue(slot.skeins, sizeIndex)));
+          if (count > 0) materialSkeins[materialId] = (materialSkeins[materialId] ?? 0) + count;
+        }
+
         const sections =
           patternSections.length > 0
             ? patternSections.map((ps) =>
@@ -703,6 +717,7 @@ export const useKnitwitStore = create<KnitwitState>()(
                 : null,
               slotMaterials,
               slotTools,
+              materialSkeins,
               sections,
             },
           },
@@ -859,6 +874,16 @@ export const useKnitwitStore = create<KnitwitState>()(
         const project = projects[projectKey];
         if (!project) return;
         set({ projects: { ...projects, [projectKey]: { ...project, notes } } });
+      },
+
+      setMaterialSkeins: (projectKey, materialId, skeins) => {
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (!project) return;
+        const next = { ...(project.materialSkeins ?? {}) };
+        if (skeins == null) delete next[materialId];
+        else next[materialId] = Math.max(0, Math.round(skeins));
+        set({ projects: { ...projects, [projectKey]: { ...project, materialSkeins: next } } });
       },
 
       setSectionNotes: (projectKey, index, notes) =>

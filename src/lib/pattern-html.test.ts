@@ -203,3 +203,34 @@ describe('the document itself', () => {
     expect(html).toContain('Nog geen instructies.');
   });
 });
+
+// A printed pattern is what goes to the yarn shop, so the quantity has to be on the page and not
+// only on the screen.
+describe('how much yarn to buy', () => {
+  const withMaterials = (materials: Pattern['materials']) =>
+    patternHtml({ pattern: pattern({ materials }), photo: null });
+
+  it('prints the count beside the colour it is a count of', () => {
+    const html = withMaterials([
+      { id: 'a', label: 'Main colour', short: 'A', skeins: [5, 6, 7] },
+      { id: 'b', label: 'Contrast', short: 'B', skeins: 1 },
+    ]);
+    expect(html).toContain('Main colour (A) — 5 (6) 7 skeins');
+    expect(html).toContain('Contrast (B) — 1 skein');
+  });
+
+  it('prints the colour alone when the pattern never said how much', () => {
+    const html = withMaterials([{ id: 'a', label: 'Main colour', short: 'A' }]);
+    expect(html).toContain('Main colour (A)');
+    expect(html).not.toContain('skein');
+  });
+
+  it('says it in the language the pattern was translated into', () => {
+    const html = patternHtml({
+      pattern: pattern({ materials: [{ id: 'a', label: 'Garen', short: 'A', skeins: 3 }] }),
+      photo: null,
+      strings: { ...EN, skein: 'bol', skeins: 'bollen' },
+    });
+    expect(html).toContain('3 bollen');
+  });
+});

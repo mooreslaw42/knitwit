@@ -251,3 +251,40 @@ export function formatClock(sec: number): string {
   const mm = h ? String(m).padStart(2, '0') : String(m);
   return (h ? h + ':' : '') + mm + ':' + String(r).padStart(2, '0');
 }
+
+// ---- Yarn quantities ----
+
+// "6 skeins", "5 (6) 7 skeins", or nothing at all when the pattern doesn't say.
+//
+// Singular when it is one for every size: "1 skeins" on a printed pattern is the kind of small
+// wrongness that makes a knitter doubt the numbers around it.
+// `words` is how a printed pattern says it in the language it was translated into; the default is
+// the app's own English, which is what every screen uses.
+export function skeinsLabel(
+  skeins: SizedNumber | null | undefined,
+  words: { skein: string; skeins: string } = { skein: 'skein', skeins: 'skeins' },
+): string {
+  const run = formatSizeRun(skeins ?? null);
+  if (!run) return '';
+  const one = typeof skeins === 'number' ? skeins === 1 : (skeins as number[]).every((n) => n === 1);
+  return `${run} ${one ? words.skein : words.skeins}`;
+}
+
+// Every yarn a project uses, once each: what the knitter matched to the pattern's slots first,
+// in the pattern's own order, then anything a section is worked in that no slot named.
+//
+// Both halves are needed. A project's yarn lives on its sections, but a slot the knitter matched
+// before casting on is a yarn the project needs even if no section has been given it yet — and
+// that is exactly the case where knowing how many skeins to buy matters most.
+export function projectMaterialIds(project: Project): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  const add = (id: string) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    ids.push(id);
+  };
+  for (const id of Object.values(project.slotMaterials ?? {})) add(id);
+  for (const section of project.sections) for (const id of section.materialIds) add(id);
+  return ids;
+}

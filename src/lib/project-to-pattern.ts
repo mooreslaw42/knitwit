@@ -108,10 +108,15 @@ export function projectToPattern(project: Project, stash: Stash, source: Pattern
 
   const materials: PatternMaterial[] = materialIds.map((id, i) => {
     const m = stash.materials[id];
+    // How many the knitter actually used, carried back as the new pattern's requirement. The
+    // pattern this makes has exactly one size (the one that was knitted), so the project's plain
+    // number is already the whole answer.
+    const skeins = project.materialSkeins?.[id];
     return {
       id: materialSlots.get(id)!,
       label: m ? `${m.brand} — ${m.colorName}` : `Yarn ${shortForIndex(i)}`,
       short: shortForIndex(i),
+      ...(skeins ? { skeins } : {}),
     };
   });
 

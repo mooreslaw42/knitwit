@@ -215,6 +215,11 @@ export type PatternMaterial = {
   id: string; // slot id, unique within the pattern
   label: string;
   short: string; // one-letter tag used in charts, e.g. "A"
+  // How many skeins the pattern calls for, one number per size. Sized for the same reason cast-on
+  // and row counts are: a 4XL eats more yarn than an XS, and a knitter buying wool needs the
+  // number for the size they are actually making. Optional — most patterns predate the field, and
+  // plenty of real ones never say.
+  skeins?: SizedNumber;
 };
 
 // A generic tool requirement — "4.5mm circular, US 7" — again not a specific tool the user owns.
@@ -431,6 +436,12 @@ export type Project = {
   // generic pattern requirement is resolved to the actual stash item for this project.
   slotMaterials?: Record<string, string>;
   slotTools?: Record<string, string>;
+  // How many skeins of the knitter's own yarn this project needs, keyed by stash material id.
+  // Resolved from the pattern's per-size numbers when the project is cast on — from here on it is
+  // a plain number, like every other per-size value a project holds — and editable afterwards,
+  // because what a project needs is what the knitter actually bought. Keyed by the yarn rather
+  // than by the pattern's slot so a project improvised without a pattern can hold it too.
+  materialSkeins?: Record<string, number>;
   sections: ProjectSection[];
 };
 

@@ -1,5 +1,5 @@
 import { STITCHES, TOOL_TYPE_LABELS } from '@/constants/catalogs';
-import { resolveRowGroups, sectionRowCounts } from '@/lib/knitwit-helpers';
+import { resolveRowGroups, sectionRowCounts, skeinsLabel } from '@/lib/knitwit-helpers';
 import { stitchGroupLabel } from '@/lib/stitch-group-label';
 import type { Pattern, PatternRow, PatternSection, SizedNumber } from '@/types/knitwit';
 
@@ -44,6 +44,8 @@ export type PatternStrings = {
   row: string;
   rows: string;
   castOn: string;
+  skein: string;
+  skeins: string;
   instructions: string;
   noInstructions: string;
   madeWith: string;
@@ -63,6 +65,8 @@ export const EN: PatternStrings = {
   row: 'Row',
   rows: 'rows',
   castOn: 'Cast on',
+  skein: 'skein',
+  skeins: 'skeins',
   instructions: 'Instructions',
   noInstructions: 'No instructions written for this section yet.',
   madeWith: 'Made with Knitwit',
@@ -274,7 +278,19 @@ export function patternHtml({ pattern, photo, strings = EN }: PatternDocument): 
   // A slot's own words where it has them, and what it is where it does not — a needle slot carries
   // a type and a thickness rather than a name, and "4.5mm circular" is what a knitter would write.
   const materialNames = pattern.materials
-    .map((m) => [m.label, m.short && m.label !== m.short ? `(${m.short})` : ''].filter(Boolean).join(' '))
+    .map((m) =>
+      [
+        m.label,
+        m.short && m.label !== m.short ? `(${m.short})` : '',
+        // What to buy, in the pattern's own words and in the same order as its sizes. A printed
+        // pattern is what a knitter takes to the yarn shop, so this is the line that has to carry
+        // it — the screen can be consulted, a printout cannot.
+        skeinsLabel(m.skeins, { skein: s.skein, skeins: s.skeins }) &&
+          `— ${skeinsLabel(m.skeins, { skein: s.skein, skeins: s.skeins })}`,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
     .filter(Boolean);
   const toolNames = pattern.tools
     .map((t) => [t.thickness, TOOL_TYPE_LABELS[t.type] ?? t.type, t.note].filter(Boolean).join(' '))

@@ -11,7 +11,7 @@ import { TOOL_TYPE_LABELS,
   scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, Fonts, MaxNameLength, Radii, Spacing } from '@/constants/theme';
-import { parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
+import { formatSizeRun, parseSizeRun, sizeValue } from '@/lib/knitwit-helpers';
 import type {
   PatternMaterial,
   PatternRow,
@@ -43,7 +43,16 @@ const shortForIndex = (i: number) => String.fromCharCode(65 + (i % 26));
 
 // ---------- Yarn / tools / techniques editor ----------
 
-type EditMaterial = { id: string; label: string; short: string; expanded: boolean };
+// `skeins` is held as the text the knitter typed, not as numbers: a per-size run is edited the way
+// a cast-on run is, and parsing on every keystroke would fight anyone typing "5 (6" on their way to
+// "5 (6) 7".
+type EditMaterial = {
+  id: string;
+  label: string;
+  short: string;
+  skeins: string;
+  expanded: boolean;
+};
 type EditTool = { id: string; type: ToolType; thickness: string; note: string; expanded: boolean };
 type EditTechnique = { id: string; name: string; note: string; expanded: boolean };
 
@@ -61,7 +70,11 @@ type EditKit = {
 
 function kitToEdit(kit: PatternKit): EditKit {
   return {
-    materials: kit.materials.map((m) => ({ ...m, expanded: false })),
+    materials: kit.materials.map((m) => ({
+      ...m,
+      skeins: formatSizeRun(m.skeins ?? null),
+      expanded: false,
+    })),
     tools: kit.tools.map((t) => ({ ...t, expanded: false })),
     techniques: kit.techniques.map((t) => ({ ...t, expanded: false })),
   };
@@ -69,11 +82,17 @@ function kitToEdit(kit: PatternKit): EditKit {
 
 function kitToPattern(kit: EditKit): PatternKit {
   return {
-    materials: kit.materials.map((m) => ({
-      id: m.id,
-      label: m.label.trim() || 'Yarn',
-      short: m.short.trim(),
-    })),
+    materials: kit.materials.map((m) => {
+      const skeins = parseSizeRun(m.skeins);
+      return {
+        id: m.id,
+        label: m.label.trim() || 'Yarn',
+        short: m.short.trim(),
+        // Left off entirely when the pattern doesn't say, rather than stored as a zero — "0
+        // skeins" and "the pattern never said" are different answers.
+        ...(skeins == null ? {} : { skeins }),
+      };
+    }),
     tools: kit.tools.map((t) => ({
       id: t.id,
       type: t.type,
@@ -124,7 +143,9 @@ export function PatternKitEditor({
           <EntryCard
             key={m.id}
             expanded={m.expanded}
-            summary={`${m.short || shortForIndex(i)} · ${m.label || 'New yarn'}`}
+            summary={`${m.short || shortForIndex(i)} · ${m.label || 'New yarn'}${
+              m.skeins.trim() ? ` · ${m.skeins.trim()} skeins` : ''
+            }`}
             onToggle={() => updateMaterial(i, { expanded: !m.expanded })}
             onRemove={() => commit({ ...kit, materials: kit.materials.filter((_, idx) => idx !== i) })}>
             <FormField
@@ -140,6 +161,15 @@ export function PatternKitEditor({
               onChangeText={(v) => updateMaterial(i, { short: v })}
               placeholder="A"
             />
+            {/* One number per size, like every other quantity a pattern states. How much yarn a
+                garment eats depends on the size being made, the needles and the yarn itself, so a
+                single number would be wrong for everybody but one knitter. */}
+            <FormField
+              label="Skeins needed — one number per size"
+              value={m.skeins}
+              onChangeText={(v) => updateMaterial(i, { skeins: v })}
+              placeholder="e.g. 5 (6) 7 (7) 8"
+            />
           </EntryCard>
         ))}
         <AddLink
@@ -149,7 +179,13 @@ export function PatternKitEditor({
               ...kit,
               materials: [
                 ...kit.materials,
-                { id: uid('ms'), label: '', short: shortForIndex(kit.materials.length), expanded: true },
+                {
+                  id: uid('ms'),
+                  label: '',
+                  short: shortForIndex(kit.materials.length),
+                  skeins: '',
+                  expanded: true,
+                },
               ],
             })
           }
