@@ -4,6 +4,7 @@ import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText } from 'react-nati
 import { ThemedText } from '@/components/themed-text';
 import { STITCHES } from '@/constants/catalogs';
 import { Colors, Spacing } from '@/constants/theme';
+import { chartLimitNote, CROCHET_CHART_LIMITS, rowsWithinBudget } from '@/lib/chart-limits';
 import { resolveRowGroups, sectionRowCounts } from '@/lib/knitwit-helpers';
 import type { PatternRow } from '@/types/knitwit';
 
@@ -42,8 +43,9 @@ const HEIGHTS: Record<string, number> = {
   pm: 1,
 };
 
-const MAX_STITCHES = 40;
-const MAX_ROWS = 30;
+// Shared with the knitting chart, and deliberately generous: the old ceiling of 40 stitches was
+// narrower than an ordinary blanket row, and it was enforced without a word.
+const LIMITS = CROCHET_CHART_LIMITS;
 
 const heightOf = (type: string) => (HEIGHTS[type] ?? 1) * UNIT;
 
@@ -191,14 +193,25 @@ function StitchSymbol({ type, colour }: { type: string; colour: string }) {
 
 type Placed = { type: string; groupIndex: number };
 
-function rowStitches(row: PatternRow, before: number, sizeIndex: number): Placed[] {
+// `clipped` is the whole reason this returns an object: a row that runs on past what the chart can
+// draw has to be able to say so, rather than looking like a shorter row than the knitter wrote.
+function rowStitches(
+  row: PatternRow,
+  before: number,
+  sizeIndex: number,
+): { stitches: Placed[]; clipped: boolean } {
   const out: Placed[] = [];
+  let clipped = false;
   for (const [groupIndex, r] of resolveRowGroups(row, before, sizeIndex).entries()) {
-    for (let i = 0; i < r.units && out.length < MAX_STITCHES; i++) {
+    for (let i = 0; i < r.units; i++) {
+      if (out.length >= LIMITS.maxStitchesPerRow) {
+        clipped = true;
+        return { stitches: out, clipped };
+      }
       out.push({ type: r.group.type, groupIndex });
     }
   }
-  return out;
+  return { stitches: out, clipped };
 }
 
 // One row of the diagram, for the counter's "you are here" strip. Same symbols at the same
@@ -212,7 +225,7 @@ export function CrochetRowStrip({
   before: number;
   sizeIndex?: number;
 }) {
-  const stitches = rowStitches(row, before, sizeIndex);
+  const { stitches } = rowStitches(row, before, sizeIndex);
   if (stitches.length === 0) return null;
 
   const reversed = row.side === 'WS';
@@ -251,11 +264,25 @@ export function CrochetChart({
   if (rows.length === 0) return null;
 
   const before = sectionRowCounts(rows, castOn, sizeIndex);
-  const drawn = rows.slice(0, MAX_ROWS).map((row, index) => ({
+  // Measured first, then cut: how many rows fit depends on how wide they are, so the widths have
+  // to be known before the decision rather than after it.
+  const all = rows.map((row, index) => ({
     row,
     index,
-    stitches: rowStitches(row, before[index], sizeIndex),
+    ...rowStitches(row, before[index], sizeIndex),
   }));
+  const rowsShown = rowsWithinBudget(
+    all.map((d) => d.stitches.length),
+    LIMITS,
+  );
+  const drawn = all.slice(0, rowsShown);
+  const clippedRows = drawn.filter((d) => d.clipped).length;
+  const note = chartLimitNote({
+    rowsShown,
+    rowsTotal: rows.length,
+    clippedRows,
+    maxStitchesPerRow: LIMITS.maxStitchesPerRow,
+  });
 
   const widest = Math.max(1, ...drawn.map((d) => d.stitches.length));
   // Each row is as tall as its tallest stitch, so a row of chains takes the space of chains.
@@ -293,6 +320,19 @@ export function CrochetChart({
                   textAnchor="end">
                   {d.index + 1}
                 </SvgText>
+                {/* The row runs on past here. Drawn at the far end of the last stitch, on
+                    whichever side the row was being worked towards, so it reads as "and onwards"
+                    rather than as a stitch of its own. */}
+                {d.clipped ? (
+                  <SvgText
+                    x={reversed ? 14 + count * COL + 4 : 8}
+                    y={baselines[i] - 4}
+                    fontSize={12}
+                    fill={Colors.inkSoft}
+                    textAnchor={reversed ? 'start' : 'end'}>
+                    …
+                  </SvgText>
+                ) : null}
                 {d.stitches.map((s, j) => {
                   // Right-to-left on a right-side row, left-to-right on a wrong-side one.
                   const slot = reversed ? j : count - 1 - j;
@@ -309,9 +349,9 @@ export function CrochetChart({
         </Svg>
       </ScrollView>
 
-      {rows.length > MAX_ROWS ? (
-        <ThemedText type="small" themeColor="inkSoft">
-          Showing the first {MAX_ROWS} rows.
+      {note ? (
+        <ThemedText type="small" themeColor="coralDeep">
+          {note}
         </ThemedText>
       ) : null}
 

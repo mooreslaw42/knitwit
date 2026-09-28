@@ -4,6 +4,7 @@ import { CrochetChart, CrochetRowStrip } from '@/components/crochet-chart';
 import { ThemedText } from '@/components/themed-text';
 import { STITCHES } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
+import { chartLimitNote, KNIT_CHART_LIMITS, rowsWithinBudget } from '@/lib/chart-limits';
 import { resolveRowGroups, rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
 import type { PatternRow, TechniqueCraft } from '@/types/knitwit';
 
@@ -13,8 +14,9 @@ import type { PatternRow, TechniqueCraft } from '@/types/knitwit';
 const CELL = 22;
 // Charts are a glance-able overview, not a canvas — cap the grid so a 200-stitch row or a
 // 400-row section can't spray thousands of views onto the screen.
-const MAX_CELLS = 40;
-const MAX_ROWS = 60;
+// Shared with the crochet chart. The old ceiling of 40 cells a row was narrower than an ordinary
+// sweater body, and a row that ran past it said so only with a small ellipsis cell.
+const LIMITS = KNIT_CHART_LIMITS;
 
 // A cell remembers which stitch group produced it, so tapping any cell of a run ("k to last 1"
 // draws 18 cells but is one editable group) selects that group.
@@ -32,7 +34,7 @@ function rowCells(
   for (let groupIndex = 0; groupIndex < resolved.length; groupIndex++) {
     const def = STITCHES[resolved[groupIndex].group.type];
     for (let i = 0; i < resolved[groupIndex].units; i++) {
-      if (cells.length >= MAX_CELLS) return { cells, clipped: true };
+      if (cells.length >= LIMITS.maxStitchesPerRow) return { cells, clipped: true };
       cells.push({ type: resolved[groupIndex].group.type, symbol: def ? def.symbol : '?', groupIndex });
     }
   }
@@ -128,11 +130,23 @@ export function StitchChart({
   }
 
   const before = sectionRowCounts(rows, castOn, sizeIndex);
-  const drawn = rows.slice(0, MAX_ROWS).map((row, index) => ({
+  // Measured before it is cut, because how many rows fit depends on how wide they are.
+  const all = rows.map((row, index) => ({
     row,
     index,
     ...rowCells(row, before[index], sizeIndex),
   }));
+  const rowsShown = rowsWithinBudget(
+    all.map((d) => d.cells.length),
+    LIMITS,
+  );
+  const drawn = all.slice(0, rowsShown);
+  const note = chartLimitNote({
+    rowsShown,
+    rowsTotal: rows.length,
+    clippedRows: drawn.filter((d) => d.clipped).length,
+    maxStitchesPerRow: LIMITS.maxStitchesPerRow,
+  });
   const width = Math.max(1, ...drawn.map((d) => d.cells.length));
   const gridWidth = width * CELL;
 
@@ -212,11 +226,11 @@ export function StitchChart({
         </View>
       </ScrollView>
 
-      {rows.length > MAX_ROWS && (
-        <ThemedText type="small" themeColor="inkSoft">
-          Showing the first {MAX_ROWS} rows.
+      {note ? (
+        <ThemedText type="small" themeColor="coralDeep">
+          {note}
         </ThemedText>
-      )}
+      ) : null}
 
       <View style={styles.legend}>
         {usedTypes.map((t) => {
