@@ -97,11 +97,14 @@ export function DeleteAccountSection() {
         servers. It cannot be undone.
       </ThemedText>
 
-      <Pressable onPress={() => setOpen(true)} style={styles.trigger} hitSlop={6}>
+      {/* The same button every other delete in the app wears, so the most destructive one is not
+          the odd one out — a text link here read as the smallest thing on the page. What it opens
+          is still the dialog below rather than an in-place ask: this one is worth a full stop. */}
+      <PillButton variant="secondary" style={styles.trigger} onPress={() => setOpen(true)}>
         <ThemedText type="smallBold" themeColor="coralDeep">
           Delete my account
         </ThemedText>
-      </Pressable>
+      </PillButton>
 
       <Modal
         visible={open}
@@ -169,7 +172,7 @@ export function DeleteAccountSection() {
 const styles = StyleSheet.create({
   wrap: { marginTop: Spacing.six, gap: Spacing.two },
   label: { color: Colors.coralDeep },
-  trigger: { alignSelf: 'flex-start', paddingVertical: Spacing.two },
+  trigger: { alignSelf: 'flex-start' },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(74,59,56,0.45)',

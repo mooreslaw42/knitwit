@@ -1,10 +1,14 @@
+import { careSymbolIsDrawn } from '@/components/care-symbol';
 import {
+  CARE_SYMBOLS,
+  careSymbolGroups,
   describeToolSize,
   formatToolSize,
   scaleForToolType,
   STITCH_ORDER,
   TOOL_SIZES,
   toolSizeLabel,
+  toggleCareSymbol,
   toolSizeOptions,
 } from '@/constants/catalogs';
 
@@ -117,5 +121,57 @@ describe('US size names', () => {
   it('puts the US name in the picker', () => {
     const label = toolSizeOptions('', 'knit').find((o) => o.value === '4.5mm')?.label;
     expect(label).toBe('4.5 mm · US 7');
+  });
+});
+
+// The care symbols on a ball band. Ticked off against the band rather than chosen from, so the
+// list is what matters: the ids are stored on the material, and the order the knitter picked them
+// in is the order they are shown back.
+describe('care symbols', () => {
+  it('has a unique id for every symbol', () => {
+    const ids = CARE_SYMBOLS.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  // A symbol with no drawing would show as a labelled hole. The vocabulary and the ink live in
+  // separate files, so nothing but this keeps them in step.
+  it('can draw every symbol it offers', () => {
+    const missing = CARE_SYMBOLS.filter((s) => !careSymbolIsDrawn(s.id)).map((s) => s.id);
+    expect(missing).toEqual([]);
+  });
+
+  it('groups the symbols the way a label prints them, each family once', () => {
+    const groups = careSymbolGroups().map((g) => g.group);
+    expect(groups).toEqual(['Washing', 'Bleaching', 'Drying', 'Ironing', 'Professional care']);
+    expect(new Set(groups).size).toBe(groups.length);
+    expect(careSymbolGroups().reduce((n, g) => n + g.symbols.length, 0)).toBe(CARE_SYMBOLS.length);
+  });
+
+  describe('toggleCareSymbol', () => {
+    it('ticks one on, and keeps the order they were ticked in', () => {
+      expect(toggleCareSymbol(['wash-30'], 'iron-no')).toEqual(['wash-30', 'iron-no']);
+    });
+
+    it('ticks one off without disturbing the rest', () => {
+      expect(toggleCareSymbol(['wash-30', 'iron-no', 'dry-flat'], 'iron-no')).toEqual([
+        'wash-30',
+        'dry-flat',
+      ]);
+    });
+
+    // The field is optional and was added after the first yarns were saved, so most materials
+    // arrive here with nothing at all.
+    it('starts a list from a material that has none', () => {
+      expect(toggleCareSymbol(undefined, 'wash-hand')).toEqual(['wash-hand']);
+    });
+
+    it('leaves a symbol it does not know alone rather than dropping it', () => {
+      // Saved by a later version: unknown here, and still the knitter's answer.
+      expect(toggleCareSymbol(['wash-hand', 'steam-2027'], 'dry-flat')).toEqual([
+        'wash-hand',
+        'steam-2027',
+        'dry-flat',
+      ]);
+    });
   });
 });

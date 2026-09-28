@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   Card,
-  DeleteButton,
+  ConfirmButton,
   FormField,
   PillButton,
   ProgressBar,
@@ -18,7 +18,7 @@ import {
   toolLabel,
 } from '@/components/stash-picker';
 import { NotesCard } from '@/components/notes-card';
-import { resolveTechnique } from '@/lib/technique-catalogue';
+import { resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -71,7 +71,7 @@ export default function SectionDetailScreen() {
     kitSummary(section.toolIds, tools, toolLabel),
     kitSummary(section.techniqueIds, techniques, () => '').trim()
       ? section.techniqueIds
-          .map((tid) => resolveTechnique(tid, techniques[tid], catalogue).name)
+          .map((tid) => techniqueLabel(resolveTechnique(tid, techniques[tid], catalogue)))
           .join(', ')
       : '',
   ]
@@ -132,8 +132,11 @@ export default function SectionDetailScreen() {
                 </ThemedText>
               </PillButton>
               {project.sections.length > 1 ? (
-                <DeleteButton
-                  onPress={() => {
+                <ConfirmButton
+                  label="Delete this section"
+                  question="Delete this section? The rows you've counted, the time against it and its notes go with it, and can't be brought back."
+                  confirmLabel="Yes, delete it"
+                  onConfirm={() => {
                     deleteSection(key, sectionIndex);
                     goBackOr(router, `/project/${key}`);
                   }}

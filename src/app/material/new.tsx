@@ -2,10 +2,11 @@ import { useRouter } from 'expo-router';
 import { putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -217,264 +218,274 @@ export default function NewMaterialWizardScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <View style={styles.topbar}>
-          <Pressable onPress={handleBack} hitSlop={8}>
-            <ThemedText type="default">←</ThemedText>
-          </Pressable>
-          <View style={styles.dots}>
-            {STEPS.map((s, i) => (
-              <View
-                key={s}
-                style={[
-                  styles.dot,
-                  i === step && styles.dotActive,
-                  i < step && styles.dotDone,
-                ]}
-              />
-            ))}
+        {/* The whole wizard scrolls, the way the pattern wizard's does. Without this the steps were
+            laid out in a box the height of the window and anything past the fold was simply cut
+            off — on the Care step, which is the tallest, that took the Next button with it and
+            left no way to finish the yarn or go back to it. */}
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.topbar}>
+            <Pressable onPress={handleBack} hitSlop={8}>
+              <ThemedText type="default">←</ThemedText>
+            </Pressable>
+            <View style={styles.dots}>
+              {STEPS.map((s, i) => (
+                <View
+                  key={s}
+                  style={[
+                    styles.dot,
+                    i === step && styles.dotActive,
+                    i < step && styles.dotDone,
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.topbarSpacer} />
           </View>
-          <View style={styles.topbarSpacer} />
-        </View>
-        <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
-          Step {step + 1} of {STEPS.length} · {STEPS[step]}
-        </ThemedText>
+          <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
+            Step {step + 1} of {STEPS.length} · {STEPS[step]}
+          </ThemedText>
 
-        <View style={styles.body}>
-          {step === 0 && (
-            <>
-              <ThemedText type="subtitle">Start with the band?</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Photograph the ball band and Knitwit fills in what it says — brand, colour, dye lot,
-                length, fibre, tension and care. You check it on the next steps. Or skip and type it
-                in yourself.
-              </ThemedText>
-
-              {form.photo ? (
-                <PhotoImage photo={form.photo} style={styles.preview} />
-              ) : null}
-
-              {reading ? (
-                <View style={styles.readingRow}>
-                  <ActivityIndicator color={Colors.blushDeep} />
-                  <ThemedText type="small" themeColor="inkSoft">
-                    Reading the band…
-                  </ThemedText>
-                </View>
-              ) : (
-                <>
-                  <PillButton style={styles.scanBtn} onPress={() => void scanLabel('camera')}>
-                    <ThemedText type="smallBold" themeColor="white">
-                      Take a photo
-                    </ThemedText>
-                  </PillButton>
-                  <Pressable
-                    onPress={() => void scanLabel('library')}
-                    hitSlop={6}
-                    style={styles.scanAlt}>
-                    <ThemedText type="smallBold" themeColor="sageDeep">
-                      Choose a photo instead
-                    </ThemedText>
-                  </Pressable>
-                </>
-              )}
-
-              {scanError ? (
-                <ThemedText type="small" themeColor="coralDeep">
-                  {scanError}
-                </ThemedText>
-              ) : null}
-            </>
-          )}
-
-          {step === 1 && (
-            <>
-              <ThemedText type="subtitle">Which yarn is it?</ThemedText>
-              {/* The badges beside each field say what came from where. This is only for the
-                  thing no single field can say: that the photo as a whole was hard to read. */}
-              {unsure ? (
-                <View style={[styles.scanNote, styles.scanNoteUnsure]}>
-                  <ThemedText type="smallBold" themeColor="coralDeep">
-                    That photo was hard to read
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="inkSoft">
-                    Check every marked field carefully, or retake the photo straighter on.
-                  </ThemedText>
-                </View>
-              ) : (
+          <View style={styles.body}>
+            {step === 0 && (
+              <>
+                <ThemedText type="subtitle">Start with the band?</ThemedText>
                 <ThemedText type="small" themeColor="inkSoft">
-                  The dye lot matters if you ever need to match another skein.
+                  Photograph the ball band and Knitwit fills in what it says — brand, colour, dye lot,
+                  length, fibre, tension and care. You check it on the next steps. Or skip and type it
+                  in yourself.
                 </ThemedText>
-              )}
 
-              {/* Offered only once the yarn has a name to search on and only while something is
-                  still blank, so the call is never made when it cannot buy anything. */}
-              {form.brand.trim() && stillMissing > 0 ? (
-                lookingUp ? (
+                {form.photo ? (
+                  <PhotoImage photo={form.photo} style={styles.preview} />
+                ) : null}
+
+                {reading ? (
                   <View style={styles.readingRow}>
                     <ActivityIndicator color={Colors.blushDeep} />
                     <ThemedText type="small" themeColor="inkSoft">
-                      Looking up {form.brand.trim()}…
+                      Reading the band…
                     </ThemedText>
                   </View>
                 ) : (
-                  <Pressable onPress={() => void lookUp()} hitSlop={6} style={styles.scanAlt}>
-                    <ThemedText type="smallBold" themeColor="sageDeep">
-                      Look up {stillMissing} missing{' '}
-                      {stillMissing === 1 ? 'field' : 'fields'} on the web →
+                  <>
+                    <PillButton style={styles.scanBtn} onPress={() => void scanLabel('camera')}>
+                      <ThemedText type="smallBold" themeColor="white">
+                        Take a photo
+                      </ThemedText>
+                    </PillButton>
+                    <Pressable
+                      onPress={() => void scanLabel('library')}
+                      hitSlop={6}
+                      style={styles.scanAlt}>
+                      <ThemedText type="smallBold" themeColor="sageDeep">
+                        Choose a photo instead
+                      </ThemedText>
+                    </Pressable>
+                  </>
+                )}
+
+                {scanError ? (
+                  <ThemedText type="small" themeColor="coralDeep">
+                    {scanError}
+                  </ThemedText>
+                ) : null}
+              </>
+            )}
+
+            {step === 1 && (
+              <>
+                <ThemedText type="subtitle">Which yarn is it?</ThemedText>
+                {/* The badges beside each field say what came from where. This is only for the
+                    thing no single field can say: that the photo as a whole was hard to read. */}
+                {unsure ? (
+                  <View style={[styles.scanNote, styles.scanNoteUnsure]}>
+                    <ThemedText type="smallBold" themeColor="coralDeep">
+                      That photo was hard to read
                     </ThemedText>
-                  </Pressable>
-                )
-              ) : null}
-
-              {noMatch ? (
-                <View style={[styles.scanNote, styles.scanNoteUnsure]}>
-                  <ThemedText type="smallBold" themeColor="coralDeep">
-                    Couldn&apos;t find that yarn
-                  </ThemedText>
+                    <ThemedText type="small" themeColor="inkSoft">
+                      Check every marked field carefully, or retake the photo straighter on.
+                    </ThemedText>
+                  </View>
+                ) : (
                   <ThemedText type="small" themeColor="inkSoft">
-                    The name may be too general. Try the maker and range together, like “DROPS Baby
-                    Merino”.
+                    The dye lot matters if you ever need to match another skein.
                   </ThemedText>
-                </View>
-              ) : null}
+                )}
 
-              <FormField
-                label="Brand"
-                badge={badgeFor('brand')}
-                value={form.brand}
-                maxLength={MaxNameLength}
-                onChangeText={(v) => set('brand', v)}
-                placeholder="e.g. Rico Design"
-              />
-              <FormField
-                label="Color name"
-                badge={badgeFor('colorName')}
-                value={form.colorName}
-                maxLength={MaxNameLength}
-                onChangeText={(v) => set('colorName', v)}
-                placeholder="e.g. Blossom Pink"
-              />
-              <FormField
-                label="Dye lot / batch #"
-                badge={badgeFor('colorLot')}
-                value={form.colorLot}
-                onChangeText={(v) => set('colorLot', v)}
-                placeholder="e.g. L28304"
-              />
-              <FormField
-                label="Price / skein (€)"
-                badge={badgeFor('price')}
-                value={form.price}
-                onChangeText={(v) => set('price', v)}
-                keyboardType="decimal-pad"
-                placeholder="6.50"
-              />
-            </>
-          )}
+                {/* Offered only once the yarn has a name to search on and only while something is
+                    still blank, so the call is never made when it cannot buy anything. */}
+                {form.brand.trim() && stillMissing > 0 ? (
+                  lookingUp ? (
+                    <View style={styles.readingRow}>
+                      <ActivityIndicator color={Colors.blushDeep} />
+                      <ThemedText type="small" themeColor="inkSoft">
+                        Looking up {form.brand.trim()}…
+                      </ThemedText>
+                    </View>
+                  ) : (
+                    <Pressable onPress={() => void lookUp()} hitSlop={6} style={styles.scanAlt}>
+                      <ThemedText type="smallBold" themeColor="sageDeep">
+                        Look up {stillMissing} missing{' '}
+                        {stillMissing === 1 ? 'field' : 'fields'} on the web →
+                      </ThemedText>
+                    </Pressable>
+                  )
+                ) : null}
 
-          {step === 2 && (
-            <>
-              <ThemedText type="subtitle">What is it made of?</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Weight, grams and meters are what you&apos;ll compare against a pattern.
+                {noMatch ? (
+                  <View style={[styles.scanNote, styles.scanNoteUnsure]}>
+                    <ThemedText type="smallBold" themeColor="coralDeep">
+                      Couldn&apos;t find that yarn
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="inkSoft">
+                      The name may be too general. Try the maker and range together, like “DROPS Baby
+                      Merino”.
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                <FormField
+                  label="Brand"
+                  badge={badgeFor('brand')}
+                  value={form.brand}
+                  maxLength={MaxNameLength}
+                  onChangeText={(v) => set('brand', v)}
+                  placeholder="e.g. Rico Design"
+                />
+                <FormField
+                  label="Color name"
+                  badge={badgeFor('colorName')}
+                  value={form.colorName}
+                  maxLength={MaxNameLength}
+                  onChangeText={(v) => set('colorName', v)}
+                  placeholder="e.g. Blossom Pink"
+                />
+                <FormField
+                  label="Dye lot / batch #"
+                  badge={badgeFor('colorLot')}
+                  value={form.colorLot}
+                  onChangeText={(v) => set('colorLot', v)}
+                  placeholder="e.g. L28304"
+                />
+                <FormField
+                  label="Price / skein (€)"
+                  badge={badgeFor('price')}
+                  value={form.price}
+                  onChangeText={(v) => set('price', v)}
+                  keyboardType="decimal-pad"
+                  placeholder="6.50"
+                />
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <ThemedText type="subtitle">What is it made of?</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Weight, grams and meters are what you&apos;ll compare against a pattern.
+                </ThemedText>
+                <FormField
+                  label="Material"
+                  badge={badgeFor('composition')}
+                  value={form.composition}
+                  onChangeText={(v) => set('composition', v)}
+                  placeholder="e.g. 100% wool, or 80/20 wool/nylon"
+                />
+                <SelectField
+                  label="Yarn weight"
+                  badge={badgeFor('weight')}
+                  options={WEIGHT_OPTIONS}
+                  value={form.weight}
+                  onChange={(v) => set('weight', v)}
+                />
+                <FormField
+                  label="Grams"
+                  badge={badgeFor('grams')}
+                  value={form.grams}
+                  onChangeText={(v) => set('grams', v)}
+                  keyboardType="numeric"
+                  placeholder="50"
+                />
+                <FormField
+                  label="Meters"
+                  badge={badgeFor('meters')}
+                  value={form.meters}
+                  onChangeText={(v) => set('meters', v)}
+                  keyboardType="numeric"
+                  placeholder="250"
+                />
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <ThemedText type="subtitle">How is it cared for?</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Worth recording now — the ball band tends to go missing.
+                </ThemedText>
+                <SelectField
+                  label="Washing"
+                  badge={badgeFor('washing')}
+                  options={WASHING_OPTIONS}
+                  value={form.washing}
+                  onChange={(v) => set('washing', v)}
+                />
+                <CareSymbolsField
+                  value={form.careSymbols}
+                  onChange={(careSymbols) => set('careSymbols', careSymbols)}
+                />
+                <FormField
+                  label="Strands held together"
+                  value={form.strands}
+                  onChangeText={(v) => set('strands', v)}
+                  keyboardType="numeric"
+                  placeholder="1"
+                />
+                <FormField
+                  label="Product link (optional)"
+                  badge={badgeFor('link')}
+                  value={form.link}
+                  onChangeText={(v) => set('link', v)}
+                  placeholder="https://…"
+                />
+              </>
+            )}
+
+            {step === 4 && (
+              <>
+                <ThemedText type="subtitle">How do you work it?</ThemedText>
+                <ThemedText type="small" themeColor="inkSoft">
+                  Record a gauge for the craft you use.
+                </ThemedText>
+                <SelectField
+                  label="Craft"
+                  options={CRAFT_OPTIONS}
+                  value={form.craftType}
+                  onChange={(v) => set('craftType', v)}
+                />
+                <SelectField
+                  badge={badgeFor('thickness')}
+                  label={form.craftType === 'crochet' ? 'Hook size' : 'Needle size'}
+                  options={toolSizeOptions(form.thickness, form.craftType)}
+                  value={form.thickness}
+                  onChange={(v) => set('thickness', v)}
+                />
+                <GaugeField
+                  badge={badgeFor('gauge')}
+                  value={form.gauge}
+                  onChange={(g) => set('gauge', g)}
+                  hint="What the ball band says, or what you got on a swatch."
+                />
+              </>
+            )}
+
+            <PillButton style={styles.nextBtn} onPress={handleNext}>
+              <ThemedText type="smallBold" themeColor="white">
+                {isLast ? 'Save material' : step === 0 ? 'Skip — type it in' : 'Next'}
               </ThemedText>
-              <FormField
-                label="Material"
-                badge={badgeFor('composition')}
-                value={form.composition}
-                onChangeText={(v) => set('composition', v)}
-                placeholder="e.g. 100% wool, or 80/20 wool/nylon"
-              />
-              <SelectField
-                label="Yarn weight"
-                badge={badgeFor('weight')}
-                options={WEIGHT_OPTIONS}
-                value={form.weight}
-                onChange={(v) => set('weight', v)}
-              />
-              <FormField
-                label="Grams"
-                badge={badgeFor('grams')}
-                value={form.grams}
-                onChangeText={(v) => set('grams', v)}
-                keyboardType="numeric"
-                placeholder="50"
-              />
-              <FormField
-                label="Meters"
-                badge={badgeFor('meters')}
-                value={form.meters}
-                onChangeText={(v) => set('meters', v)}
-                keyboardType="numeric"
-                placeholder="250"
-              />
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <ThemedText type="subtitle">How is it cared for?</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Worth recording now — the ball band tends to go missing.
-              </ThemedText>
-              <SelectField
-                label="Washing"
-                badge={badgeFor('washing')}
-                options={WASHING_OPTIONS}
-                value={form.washing}
-                onChange={(v) => set('washing', v)}
-              />
-              <FormField
-                label="Strands held together"
-                value={form.strands}
-                onChangeText={(v) => set('strands', v)}
-                keyboardType="numeric"
-                placeholder="1"
-              />
-              <FormField
-                label="Product link (optional)"
-                badge={badgeFor('link')}
-                value={form.link}
-                onChangeText={(v) => set('link', v)}
-                placeholder="https://…"
-              />
-            </>
-          )}
-
-          {step === 4 && (
-            <>
-              <ThemedText type="subtitle">How do you work it?</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Record a gauge for the craft you use.
-              </ThemedText>
-              <SelectField
-                label="Craft"
-                options={CRAFT_OPTIONS}
-                value={form.craftType}
-                onChange={(v) => set('craftType', v)}
-              />
-              <SelectField
-                badge={badgeFor('thickness')}
-                label={form.craftType === 'crochet' ? 'Hook size' : 'Needle size'}
-                options={toolSizeOptions(form.thickness, form.craftType)}
-                value={form.thickness}
-                onChange={(v) => set('thickness', v)}
-              />
-              <GaugeField
-                badge={badgeFor('gauge')}
-                value={form.gauge}
-                onChange={(g) => set('gauge', g)}
-                hint="What the ball band says, or what you got on a swatch."
-              />
-            </>
-          )}
-
-          <PillButton style={styles.nextBtn} onPress={handleNext}>
-            <ThemedText type="smallBold" themeColor="white">
-              {isLast ? 'Save material' : step === 0 ? 'Skip — type it in' : 'Next'}
-            </ThemedText>
-          </PillButton>
-        </View>
+            </PillButton>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -523,6 +534,10 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
+  },
+  // The padding lives on the scrolling content rather than the frame around it, so the scrollbar
+  // runs down the edge of the screen instead of down the middle of the margin.
+  scrollContent: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
   },

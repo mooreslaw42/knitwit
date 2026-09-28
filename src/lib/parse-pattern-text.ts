@@ -52,32 +52,205 @@ const group = (
   note: '',
 });
 
-// `Row 3 (RS):`, `Rows 5-8:`, `Round 2:` — captures number, optional end-of-range, optional
-// parenthetical (which usually carries the side), and the instruction body.
-const ROW_HEADER =
-  /^\s*(?:rows?|rnds?|rounds?)\s+(\d+)\s*(?:[-–—to]+\s*(\d+))?\s*(?:\(([^)]*)\))?\s*[:.]\s*(.*)$/i;
+// ---- Reading a row header ----
+//
+// Patterns number their rows in every notation going, and all of them have to be read: a header
+// the rule misses is not a row with a problem, it is a row that does not exist. A pattern written
+// in the commonest shorthand of all — "R21: k2, p2" — used to parse to *nothing*, and all the
+// knitter was told was that no rows had been found.
+
+// How the row word itself can be written. The bare "R" only counts when a number follows it, which
+// is what stops it eating "Rep…", "Rib…" or "Round the neckline…".
+const ROW_WORD = String.raw`(?:rows?|rnds?|rounds?|r)`;
+
+// What can sit between the header and the instruction: a colon, full stop, bracket or equals sign;
+// a dash, which has to be followed by a space so it can't be read as a range; or nothing but
+// whitespace, as in "r21 k2, p2". Captured, because the loose form has to be checked (see below).
+const SEPARATOR = String.raw`(\s*[:.)\]=]+\s*|\s*[-–—]\s+|\s+)`;
+
+// `Row 3 (RS):`, `Rows 5-8:`, `R5–R8:`, `Rnd2.`, `Rows 1 and 2:`, `R21 k2, p2`. Captures the
+// number, the optional end-of-range, the optional parenthetical (which usually carries the side),
+// the separator, and the instruction body.
+const ROW_HEADER = new RegExp(
+  String.raw`^${ROW_WORD}\s*(\d+)` +
+    String.raw`(?:\s*(?:[-–—]|to|and|&|\+)\s*(?:${ROW_WORD}\s*)?(\d+))?` +
+    String.raw`(?:\s*[([]([^)\]]*)[)\]])?` +
+    SEPARATOR +
+    String.raw`(.*)$`,
+  'i',
+);
 
 // The other common convention, and the one most European patterns use: `1st row (WS row): …`,
-// `2nd row (RS row): …`. Same capture order as ROW_HEADER, minus the range — an ordinal header
-// names a single row.
-const ORDINAL_ROW_HEADER =
-  /^\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?|rounds?)\s*(?:\(([^)]*)\))?\s*[:.]\s*(.*)$/i;
+// `2nd row (RS row): …`. An ordinal header names a single row, so it has no range — the empty
+// group keeps the capture order identical to ROW_HEADER's.
+const ORDINAL_ROW_HEADER = new RegExp(
+  String.raw`^(\d+)(?:st|nd|rd|th)\s*(?:rows?|rnds?|rounds?)()` +
+    String.raw`(?:\s*[([]([^)\]]*)[)\]])?` +
+    SEPARATOR +
+    String.raw`(.*)$`,
+  'i',
+);
 
-// `Work 1st – 4th row a total of 7 (8) 8 (8) 9 times.` / `Repeat 1st – 2nd row … 4 times.`
-// The block being repeated was just defined above it, so these lines multiply what came before
-// rather than adding anything of their own.
-const BLOCK_REPEAT_TIMES =
-  /^\s*(?:work|repeat|rep)\s+(\d+)(?:st|nd|rd|th)\s*(?:[-–—]|to)\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?)\b[^.]*?\b(?:a\s+total\s+of\s+)?([\d()\s,]+?)\s*times/i;
+// A plainly numbered list — what a pattern typed into a note or lifted out of a table looks like:
+// "1: k2, p2", "1) knit", "1-4: knit". Only a colon or a bracket counts as the separator here:
+// "1. Cast on 20 sts." is a numbered prose step far more often than it is a row, and a bare number
+// followed by nothing but a space is not a header at all.
+const BARE_NUMBER_HEADER =
+  /^(\d+)(?:\s*[-–—]\s*(\d+))?(?:\s*[([]([^)\]]*)[)\]])?(\s*[:)]\s*)(.*)$/;
+
+// A side marker doesn't always sit in brackets ahead of the colon: "Row 1 RS: knit" and
+// "Row 1: (RS) knit" are both ordinary, and in the first it is all that stands between the number
+// and the instruction.
+const LEADING_SIDE =
+  /^[([]?\s*(rs|ws|right\s*side|wrong\s*side)(?:\s*rows?)?\s*[)\]]?\s*[:.,\-–—]?\s*/i;
+
+type RowHeader = {
+  from: number;
+  to: number;
+  parenthetical: string | undefined;
+  body: string;
+};
+
+// Does this body open with something that could be an instruction? Only asked of the loose
+// "r21 k2, p2" form, which has no punctuation to prove it is a row at all — without the check,
+// prose like "Round 2 is worked in the round." would become a row that only fails later.
+function looksLikeStitches(body: string, craft: ParseCraft): boolean {
+  const first = splitTokens(body)[0];
+  if (!first) return false;
+  // A repeat or a bracketed group may well be refused further down, but it is unmistakably an
+  // instruction, and a refused row keeps the knitter's wording where an ignored line loses it.
+  if (/^[*[(\d]/.test(first) || /^rep(?:eat)?\b/i.test(first)) return true;
+  return parseToken(first, craft) !== null;
+}
+
+function matchRowHeader(line: string, craft: ParseCraft): RowHeader | null {
+  const m =
+    line.match(ROW_HEADER) ?? line.match(ORDINAL_ROW_HEADER) ?? line.match(BARE_NUMBER_HEADER);
+  if (!m) return null;
+
+  const from = parseInt(m[1], 10);
+  let parenthetical = m[3];
+  let body = m[5];
+
+  // Take a side marker off the front of the instruction, wherever the pattern chose to put it.
+  const side = body.match(LEADING_SIDE);
+  if (side) {
+    parenthetical = parenthetical || side[1];
+    body = body.slice(side[0].length);
+  }
+
+  // The loose form has nothing but a space to say it is a header, so its instruction has to look
+  // like one. A punctuated header is taken at its word: an instruction that can't be charted is
+  // then refused with its wording kept, which is the whole point of the row surviving.
+  if (!/\S/.test(m[4]) && side == null && !looksLikeStitches(body, craft)) return null;
+
+  return {
+    from,
+    to: m[2] ? parseInt(m[2], 10) : from,
+    parenthetical,
+    body: body.trim(),
+  };
+}
+
+// Rows run together on one line the moment a pattern is copied out of a PDF ("Row 1: knit. Row 2:
+// purl."), and the layout it came from leaves non-breaking spaces and bullets behind. All of that
+// is straightened out before any line is read: a joined line parses as one row whose instruction
+// can't be charted, which costs exactly as much as a missed header.
+const JOINED_ROWS = new RegExp(
+  String.raw`([.;:)])\s+(?=${ROW_WORD}\s*\d+(?:\s*(?:[-–—]|to)\s*(?:${ROW_WORD}\s*)?\d+)?\s*(?:[([][^)\]]*[)\]])?\s*[:.)])`,
+  'gi',
+);
+
+function normalizedLines(text: string): string[] {
+  return (
+    text
+      // Every kind of space a word processor or PDF might have used, read as a plain one.
+      .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+      .replace(JOINED_ROWS, '$1\n')
+      .split(/\r?\n/)
+      // A bullet or dash left over from the layout, not part of the instruction. `*` is left
+      // alone: it opens a repeat.
+      .map((line) => line.trim().replace(/^[•·‣▪◦‧⁃–—-]\s+/, '').trim())
+  );
+}
+
+// How a repeat line says how many: "… 4 times", "… a total of 7 (8) 8 times", "… twice more",
+// "… x 4". Three capture groups — word count, numeral count, count after an "x" — of which
+// exactly one ever matches. A numeral has to be followed by "times", or "until it measures 24 cm"
+// would read as a repeat count of 24.
+const TIMES = String.raw`(?:[^.]*?(?:\b(once|twice|thrice|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b\s*(?:more\s*)?(?:times?)?|([\d()\s,]+?)\s*(?:more\s+)?times)|\s*(?:rows?|rnds?)?\s*[x×]\s*(\d+))`;
+
+// `Work 1st – 4th row a total of 7 (8) 8 (8) 9 times.`, `Repeat rows 1-2 4 times.`,
+// `Rep R1–R2 x 4.` The block being repeated was just defined above, so these lines multiply what
+// came before rather than adding anything of their own. Group order: verb, first row, last row,
+// then the count — written either before "times" or after an "x".
+const BLOCK_REPEAT_TIMES = new RegExp(
+  String.raw`^(work|repeat|rep)\b\s*(?:${ROW_WORD}\s*)?(\d+)(?:st|nd|rd|th)?\s*(?:[-–—]|to|and|&)\s*(?:${ROW_WORD}\s*)?(\d+)(?:st|nd|rd|th)?` +
+    TIMES,
+  'i',
+);
+
+// `Rep last 2 rows 4 times.` / `Work the last 6 rows twice more.` — the same instruction with the
+// block named by position rather than by number, which is how most English-language patterns put
+// it. Group order matches BLOCK_REPEAT_TIMES minus the range: verb, block length, count.
+const BLOCK_REPEAT_LAST = new RegExp(
+  String.raw`^(work|repeat|rep)\b[^.]*?\blast\s+(\d+)\s+(?:rows?|rnds?|rounds?)` + TIMES,
+  'i',
+);
 
 // `Repeat 1st – 2nd row until you have worked a total of 23 (25) 25 rows.` — the same thing
 // expressed as a row count rather than a repeat count.
-const BLOCK_REPEAT_UNTIL =
-  /^\s*(?:work|repeat|rep)\s+(\d+)(?:st|nd|rd|th)\s*(?:[-–—]|to)\s*(\d+)(?:st|nd|rd|th)\s+(?:rows?|rnds?)\b[^.]*?\btotal\s+of\s+([\d()\s,]+?)\s*rows/i;
+const BLOCK_REPEAT_UNTIL = new RegExp(
+  String.raw`^(?:work|repeat|rep)\b\s*(?:${ROW_WORD}\s*)?(\d+)(?:st|nd|rd|th)?\s*(?:[-–—]|to|and|&)\s*(?:${ROW_WORD}\s*)?(\d+)(?:st|nd|rd|th)?` +
+    String.raw`[^.]*?\btotal\s+of\s+([\d()\s,]+?)\s*rows`,
+  'i',
+);
+
+// A small repeat count is as often written as a word as a numeral: "twice more", "work it three
+// times".
+const WORD_NUMBERS: Record<string, number> = {
+  once: 1,
+  twice: 2,
+  thrice: 3,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+// The count off a repeat line, from whichever of its alternatives matched: a word, a per-size run,
+// or the number after an "x".
+function repeatCount(candidates: (string | undefined)[]): SizedNumber | null {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const word = WORD_NUMBERS[candidate.trim().toLowerCase()];
+    if (word != null) return word;
+    const run = parseSizeRun(candidate);
+    if (run != null) return run;
+  }
+  return null;
+}
+
+// How many passes over the block a repeat line is asking for. "A total of 7 times" is seven passes
+// in all, and so is "work … 7 times" — the pattern is telling you the whole of what to work. A
+// plain "repeat rows 1-2 four times" is four passes *on top of* the one just written out, which is
+// what a knitter reading down the page does with it. Getting this backwards makes a section a whole
+// repeat too long or too short, so the wording decides rather than a house rule.
+function passesFor(line: string, verb: string, times: number): number {
+  return /\btotal\b/i.test(line) || /^work/i.test(verb) ? times : times + 1;
+}
 
 // `Cast on 6 (6) 7 (7) 9 sts using 3 mm needles.` — a section's starting stitch count, stated in
 // prose rather than in a field. Worth picking up: it's what the whole chart counts from.
 const CAST_ON_LINE =
-  /^\s*(?:cast\s+on|co)\s+([\d()\s,]+?)\s*(?:sts?|stitches)\b/i;
+  /^\s*(?:\d+[.)]\s*)?(?:cast\s+on|co)\s+([\d()\s,]+?)\s*(?:sts?|stitches)\b/i;
 
 // `You now have 13 (14) 15 sts on your needles.` — the pattern checking itself mid-prose, the same
 // job as a trailing "(48 sts)". Free accuracy check, so it's worth reading.
@@ -113,17 +286,43 @@ const CROCHET_NAMED: { re: RegExp; type: string }[] = [
 ];
 
 // Longest/most specific first: `k2tog` must never fall through to the generic `k<number>` rule.
+// Spacing is optional throughout — "k2tog", "k2 tog" and "K 2 tog" are the same instruction typed
+// by three different people.
 const NAMED: { re: RegExp; type: string }[] = [
-  { re: /^k2tog(?:tbl)?$/i, type: 'k2tog' },
-  { re: /^p2tog$/i, type: 'p2tog' },
+  { re: /^k\s*2\s*tog(?:\s*tbl)?$/i, type: 'k2tog' },
+  { re: /^p\s*2\s*tog(?:\s*tbl)?$/i, type: 'p2tog' },
   { re: /^ssk$/i, type: 'ssk' },
+  // "sl 1, k1, psso" and its abbreviations are an ssk by another name: the same two stitches
+  // worked into one, leaning the same way. Written with commas it arrives here as one token
+  // because JOINED_DECREASES glued it back together first.
+  { re: /^(?:skp|skpo|sl\s*1,?\s*k\s*1,?\s*psso)$/i, type: 'ssk' },
   { re: /^kfb$/i, type: 'kfb' },
+  // No entry of their own, but the same stitch count in and out as the entry they map to, which is
+  // what the running count is built on. The chart glyph is the one thing that's approximate, and a
+  // knitter who cares can change it — the alternative is refusing an ordinary row outright.
+  { re: /^ssp$/i, type: 'p2tog' },
+  { re: /^pfb$/i, type: 'kfb' },
   { re: /^m1l$/i, type: 'm1l' },
   { re: /^m1r$/i, type: 'm1r' },
-  { re: /^m1$/i, type: 'm1l' }, // unspecified lean: pick left, the knitter can flip it
-  { re: /^(?:yo|yfwd|yon)$/i, type: 'yo' },
+  { re: /^m1p?$/i, type: 'm1l' }, // unspecified lean: pick left, the knitter can flip it
+  { re: /^(?:yo|yfwd|yon|yrn|yf)$/i, type: 'yo' },
   { re: /^(?:pm|place\s+marker)$/i, type: 'pm' },
+  // "inc"/"dec" name the shaping without naming the stitch. The count is what the chart is for, so
+  // the commonest stitch for each is used and the knitter can swap it.
+  { re: /^inc(?:rease)?\s*1?$/i, type: 'kfb' },
+  { re: /^dec(?:rease)?\s*1?$/i, type: 'k2tog' },
 ];
+
+// "sl 1, k1, psso" is a single decrease written as three comma-separated instructions, so splitting
+// the row on commas takes it apart into pieces that mean nothing on their own. It is glued back
+// together before the split, and NAMED reads the result.
+const JOINED_DECREASES = /\bsl\s*1\s*,\s*k\s*1\s*,\s*psso\b/gi;
+
+// Instructions about the fabric rather than the stitches: they consume nothing and add nothing, so
+// the chart is identical with or without them. Leaving one out costs nothing — the row keeps its
+// original wording either way — where refusing a whole row over a trailing "turn" costs the row.
+const NO_OP =
+  /^(?:turn(?:\s+(?:work|your\s+work))?|do\s+not\s+turn|dnt|break\s+(?:the\s+)?yarn|cut\s+(?:the\s+)?yarn|fasten\s*off|weave\s+in.*|join\s+to\s+work\s+in\s+the\s+round)$/i;
 
 function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
   const t = raw.trim().replace(/[.;]+$/, '').trim();
@@ -157,9 +356,11 @@ function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
   }
 
   // Work across everything left, however the pattern phrases it: "knit to end", "k to end of row",
-  // "purl all sts", "knit across", bare "knit". The trailing "sts"/"stitches" is common in
-  // descriptive patterns ("Purl all sts.") and would otherwise sink the whole row.
-  const END = /^(?:to\s+(?:the\s+)?end(?:\s+of\s+(?:the\s+)?rows?)?|across|all)(?:\s+(?:sts?|stitches))?$/i;
+  // "purl all sts", "knit across", "knit around" (a round rather than a row), bare "knit". The
+  // trailing "sts"/"stitches" is common in descriptive patterns ("Purl all sts.") and would
+  // otherwise sink the whole row.
+  const END =
+    /^(?:to\s+(?:the\s+)?end(?:\s+of\s+(?:the\s+)?(?:rows?|rnds?|rounds?))?|across|around|all)(?:\s+(?:the\s+)?(?:sts?|stitches|way))?$/i;
   const verb = t.match(/^(k|knit|p|purl)\b/i);
   if (verb) {
     const rest = t.slice(verb[0].length).trim();
@@ -171,22 +372,37 @@ function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
     }
   }
 
-  // "sl1" / "sl 2" / "slip"
-  const slip = t.match(/^(?:sl|slip)\s*(\d+)?$/i);
+  // "sl1" / "sl 2" / "slip", with or without the modifier that says how to slip it — "sl1 wyif",
+  // "slip 1 purlwise", "sl 1 as if to knit". Which way the stitch is slipped changes nothing about
+  // the count, but a pattern that says so would otherwise have its whole row refused.
+  const slip = t.match(
+    /^(?:sl|slip)\s*(\d+)?(?:\s*(?:sts?|stitches))?(?:[\s,]*(?:wyif|wyib|wyb|p(?:ur)?lwise|pwise|k(?:nit)?wise|kwise|as\s+if\s+to\s+(?:knit|purl)|purlwise|knitwise))*$/i,
+  );
   if (slip) return group('slip', 'exact', slip[1] ? parseInt(slip[1], 10) : 1);
 
-  // "ktbl" / "ktbl2"
-  const tbl = t.match(/^ktbl\s*(\d+)?$/i);
-  if (tbl) return group('ktbl', 'exact', tbl[1] ? parseInt(tbl[1], 10) : 1);
+  // "ktbl" / "ktbl2" / "k1 tbl" / "k tbl" — the number sits on either side of the abbreviation.
+  const tbl = t.match(/^k\s*(\d+)?\s*tbl\s*(\d+)?$/i);
+  if (tbl) {
+    const count = tbl[1] ?? tbl[2];
+    return group('ktbl', 'exact', count ? parseInt(count, 10) : 1);
+  }
+
+  // "BO all sts" / "cast off remaining sts" — the end of a piece, rather than a few stitches bound
+  // off mid-row.
+  const offAll = t.match(
+    /^(?:bo|bind\s*off|cast\s*off)\s+(?:all|rem(?:aining)?|the\s+rem(?:aining)?|rest)(?:\s+(?:of\s+the\s+)?(?:sts?|stitches))?$/i,
+  );
+  if (offAll) return group('bo', 'all', null);
 
   // "BO 4" / "bind off 4" / "CO 6" / "cast on 6"
-  const off = t.match(/^(?:bo|bind\s*off|cast\s*off)\s*(\d+)?$/i);
+  const off = t.match(/^(?:bo|bind\s*off|cast\s*off)\s*(\d+)?(?:\s*(?:sts?|stitches))?$/i);
   if (off) return group('bo', 'exact', off[1] ? parseInt(off[1], 10) : 1);
-  const on = t.match(/^(?:co|cast\s*on)\s*(\d+)?$/i);
+  const on = t.match(/^(?:co|cast\s*on)\s*(\d+)?(?:\s*(?:sts?|stitches))?$/i);
   if (on) return group('co', 'exact', on[1] ? parseInt(on[1], 10) : 1);
 
-  // Plain runs: "k2", "p10", "knit 3", a per-size run "k2 (3) 4", and bare "k"/"p" meaning one.
-  const run = t.match(/^(k|knit|p|purl)\s*([\d()\s,]*)$/i);
+  // Plain runs: "k2", "p10", "knit 3", "knit 2 sts", a per-size run "k2 (3) 4", and bare "k"/"p"
+  // meaning one.
+  const run = t.match(/^(k|knit|p|purl)\s*([\d()\s,]*?)\s*(?:sts?|stitches)?$/i);
   if (run) {
     const type = /^(k|knit)$/i.test(run[1]) ? 'knit' : 'purl';
     return group(type, 'exact', parseSizeRun(run[2]) ?? 1);
@@ -299,20 +515,18 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
     pending = [];
   };
 
-  // Append `copies` passes over the rows numbered `from`..`to` in the pending block, renumbering
+  // Emit `total` rows by cycling `block`, after whatever pending rows sat outside it, renumbering
   // as they land. Fresh ids throughout: two rows must never share one.
-  const expand = (from: number, to: number, copies: number, cycleTo?: number) => {
-    const block = pending.filter((p) => p.ordinal >= from && p.ordinal <= to);
+  type Pending = (typeof pending)[number];
+  const emit = (block: Pending[], kept: Pending[], total: number) => {
     if (block.length === 0) {
       flush();
       return false;
     }
-    const kept = pending.filter((p) => p.ordinal < from || p.ordinal > to);
     for (const p of kept) {
       rows.push(p.row);
       expectedCounts.push(p.expected);
     }
-    const total = cycleTo ?? block.length * copies;
     for (let i = 0; i < Math.min(total, 400); i++) {
       const src = block[i % block.length];
       rows.push({
@@ -329,22 +543,51 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
     return true;
   };
 
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
+  // The block named by number — "rows 1-2", "1st – 4th row".
+  const expand = (from: number, to: number, passes: number, cycleTo?: number) => {
+    const block = pending.filter((p) => p.ordinal >= from && p.ordinal <= to);
+    const kept = pending.filter((p) => p.ordinal < from || p.ordinal > to);
+    return emit(block, kept, cycleTo ?? block.length * passes);
+  };
+
+  // The block named by position — "rep last 2 rows 4 times".
+  const expandLast = (count: number, passes: number) => {
+    const n = Math.max(1, Math.min(count, pending.length));
+    const cut = pending.length - n;
+    return emit(pending.slice(cut), pending.slice(0, cut), n * passes);
+  };
+
+  for (const trimmed of normalizedLines(text)) {
     if (!trimmed) continue;
 
     // A repeat instruction multiplies the block above it, so it's handled before anything else.
-    const repeatTimes = trimmed.match(BLOCK_REPEAT_TIMES);
+    // The row-count form ("until you have worked a total of 23 rows") is tried first: it says
+    // exactly how long the section ends up, where a repeat count has to be multiplied out.
     const repeatUntil = trimmed.match(BLOCK_REPEAT_UNTIL);
-    if (repeatTimes || repeatUntil) {
-      const m = (repeatUntil ?? repeatTimes)!;
-      const from = parseInt(m[1], 10);
-      const to = parseInt(m[2], 10);
-      const run = parseSizeRun(m[3]);
-      const first = run == null ? 1 : sizeValue(run, 0);
-      const ok = repeatUntil
-        ? expand(from, to, 0, Math.max(1, first))
-        : expand(from, to, Math.max(1, first));
+    const repeatTimes = repeatUntil ? null : trimmed.match(BLOCK_REPEAT_TIMES);
+    const repeatLast = repeatUntil || repeatTimes ? null : trimmed.match(BLOCK_REPEAT_LAST);
+    if (repeatTimes || repeatUntil || repeatLast) {
+      // Every one of these counts is written per size as often as not: "a total of 7 (8) 8 times".
+      const run = repeatCount(
+        repeatUntil
+          ? [repeatUntil[3]]
+          : repeatTimes
+            ? repeatTimes.slice(4, 7)
+            : repeatLast!.slice(3, 6),
+      );
+      const first = Math.max(1, run == null ? 1 : sizeValue(run, 0));
+      let ok: boolean;
+      if (repeatUntil) {
+        ok = expand(parseInt(repeatUntil[1], 10), parseInt(repeatUntil[2], 10), 0, first);
+      } else if (repeatTimes) {
+        ok = expand(
+          parseInt(repeatTimes[2], 10),
+          parseInt(repeatTimes[3], 10),
+          passesFor(trimmed, repeatTimes[1], first),
+        );
+      } else {
+        ok = expandLast(parseInt(repeatLast![2], 10), passesFor(trimmed, repeatLast![1], first));
+      }
       if (!ok) {
         ignoredLines.push(trimmed);
       } else if (Array.isArray(run)) {
@@ -379,28 +622,28 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
       continue;
     }
 
-    const header = trimmed.match(ROW_HEADER) ?? trimmed.match(ORDINAL_ROW_HEADER);
+    const header = matchRowHeader(trimmed, craft);
     if (!header) {
       ignoredLines.push(trimmed);
       continue;
     }
 
-    // The ordinal form has no range, so its capture groups sit one to the left. Normalise.
-    const isOrdinal = header.length === 4;
-    const from = parseInt(header[1], 10);
-    const to = isOrdinal ? from : header[2] ? parseInt(header[2], 10) : from;
-    const parenthetical = isOrdinal ? header[2] : header[3];
-    const rawBody = (isOrdinal ? header[3] : header[4]).trim();
-    let body = rawBody;
+    const { from, to, parenthetical } = header;
+    const rawBody = header.body;
+    let body = rawBody.replace(JOINED_DECREASES, 'skp');
 
     // Numbering restarting at 1 means a new block began, and whatever was pending was never
     // repeated — emit it as written.
     if (from === 1 && pending.length > 0) flush();
 
-    // Pull off a stated stitch count before tokenising, so it isn't mistaken for a stitch.
+    // Pull off a stated stitch count before tokenising, so it isn't mistaken for a stitch — unless
+    // the "n sts" at the end *is* the last instruction: "purl 4 sts", "knit to last 2 sts". Those
+    // read as stitches and a stated count never does, which is the whole of the difference.
     let expected: number | null = null;
     const stated = body.match(STATED_COUNT);
-    if (stated) {
+    // Brackets settle it — "(12 sts)" is a pattern counting itself, never an instruction.
+    const tail = splitTokens(body).at(-1) ?? '';
+    if (stated && (stated[0].includes('(') || parseToken(tail, craft) === null)) {
       expected = parseInt(stated[1], 10);
       body = body.slice(0, stated.index).trim().replace(/[.,;]+$/, '');
     }
@@ -419,6 +662,10 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
           'Repeats like "rep from *" depend on the live stitch count — left unparsed so nothing is invented.';
       } else {
         for (const token of splitTokens(body)) {
+          // "turn", "break yarn" and the like are about the fabric, not the stitches: nothing to
+          // chart, and nothing lost by charting nothing, since the wording stays on the row.
+          if (NO_OP.test(token.trim().replace(/[.;]+$/, ''))) continue;
+
           // Trimmed and de-punctuated first. BRACKET_REPEAT is anchored at both ends, so a
           // leading space or the full stop that ends a sentence — "…] x 3." — made it miss, in
           // knitting just as much as in crochet.
@@ -483,7 +730,9 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
   if (rows.length === 0) {
     issues.push({
       rowIndex: null,
-      message: 'No rows found. Rows should start with "Row 1:" or "1st row:".',
+      message:
+        'No rows found. A row needs to start with its number — "Row 1:", "R1:", "1st row:" or ' +
+        '"Rnd 1:" all work.',
     });
   }
 

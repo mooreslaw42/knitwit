@@ -193,14 +193,21 @@ export function SectionStitchEditor({
 
   const convert = () => {
     const result = parseSectionText(description, craft);
-    const issues = [
-      ...result.issues,
-      ...reconcileRowCounts(result.rows, result.expectedCounts, startCount),
-    ];
-    setAskError(null);
     // Descriptive patterns state the cast-on in prose ("Cast on 6 (6) 7 sts using 3mm needles")
     // rather than in a field. If the text said so, take it — it's what the chart counts from, and
     // leaving it at 0 makes every row after it wrong.
+    //
+    // It has to be used for the check on this pass too, not just written into the field: `setCastOn`
+    // lands on the next render, while `startCount` still holds whatever the field said before the
+    // parse. Checking rows that begin with 20 stitches against a cast-on of 0 reports every one of
+    // them as contradicting the pattern — the one thing the check exists to mean something by.
+    const start =
+      result.castOn == null ? startCount : Math.max(0, sizeValue(result.castOn, sizePreview));
+    const issues = [
+      ...result.issues,
+      ...reconcileRowCounts(result.rows, result.expectedCounts, start),
+    ];
+    setAskError(null);
     if (result.castOn != null) setCastOn(formatSizeRun(result.castOn));
     setPreview({
       rows: result.rows.map(toEditRow),

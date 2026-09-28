@@ -74,6 +74,11 @@ export function matchTechnique(
 
   for (const t of catalogue) {
     if (normalise(t.name) === q) return t;
+    // The short form is what a pattern actually writes, and it is exactly the case a knitter needs
+    // looked up: "w&t" in an imported row should find Wrap and turn. Exact only — a two-letter
+    // abbreviation inside a sentence matches half the language, which is why the contained pass
+    // below never considers one.
+    if (t.abbr && normalise(t.abbr) === q) return t;
     if (t.aliases.some((a) => normalise(a) === q)) return t;
   }
   // "German short rows (see page 4)" should still find German short rows. Longest name first, so
@@ -97,6 +102,7 @@ export type ResolvedTechnique = {
   name: string;
   craft: TechniqueCraft;
   family: TechniqueFamily;
+  abbr: string;
   summary: string;
   video: string;
   link: string;
@@ -109,13 +115,16 @@ export function resolveTechnique(
   catalogue: Record<string, CatalogueTechnique>,
 ): ResolvedTechnique {
   const entry = catalogue[id];
-  if (entry) return { ...entry, isCustom: false };
+  // `abbr` is defaulted here rather than trusted: a catalogue cached by an older version of the app
+  // has no such field, and it is read on every screen that names a technique.
+  if (entry) return { ...entry, abbr: entry.abbr ?? '', isCustom: false };
   if (mine?.custom) {
     return {
       id,
       name: mine.custom.name,
       craft: mine.custom.craft,
       family: 'other',
+      abbr: mine.custom.abbr ?? '',
       summary: '',
       video: '',
       link: '',
@@ -129,9 +138,19 @@ export function resolveTechnique(
     name: id.replace(/-/g, ' '),
     craft: 'both',
     family: 'other',
+    abbr: '',
     summary: '',
     video: '',
     link: '',
     isCustom: false,
   };
+}
+
+// "Slip slip knit (ssk)" — how a technique reads wherever it is named beside other things: a pill
+// on a section, a row in the library, a line in a summary. The full name first, because that is
+// what it is called; the short form after, because that is what the pattern in the knitter's hand
+// says. Just the name when there is no short form, rather than an empty pair of brackets.
+export function techniqueLabel(technique: { name: string; abbr?: string }): string {
+  const abbr = technique.abbr?.trim();
+  return abbr ? `${technique.name} (${abbr})` : technique.name;
 }

@@ -17,6 +17,8 @@ import {
   sectionRowCounts,
   sectionStatus,
   sizeValue,
+  skeinsLabel,
+  projectMaterialIds,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
 import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
@@ -400,5 +402,61 @@ describe('matchesCraft', () => {
     expect(matchesCraft('knit', 'both')).toBe(false);
     expect(matchesCraft('crochet', 'both')).toBe(false);
     expect(matchesCraft('both', 'both')).toBe(true);
+  });
+});
+
+describe('skeinsLabel', () => {
+  it('says how many, per size, the way the pattern was written', () => {
+    expect(skeinsLabel([5, 6, 7])).toBe('5 (6) 7 skeins');
+    expect(skeinsLabel(4)).toBe('4 skeins');
+  });
+
+  // "1 skeins" on a printed pattern is the kind of small wrongness that makes a knitter doubt the
+  // numbers beside it.
+  it('uses the singular when it is one for every size', () => {
+    expect(skeinsLabel(1)).toBe('1 skein');
+    expect(skeinsLabel([1, 1, 1])).toBe('1 (1) 1 skein');
+    expect(skeinsLabel([1, 2])).toBe('1 (2) skeins');
+  });
+
+  it('says nothing at all when the pattern did not', () => {
+    expect(skeinsLabel(null)).toBe('');
+    expect(skeinsLabel(undefined)).toBe('');
+  });
+
+  // A printed pattern is translated whole, down to the word "skeins".
+  it('takes the word from whoever is printing it', () => {
+    expect(skeinsLabel([5, 6], { skein: 'bol', skeins: 'bollen' })).toBe('5 (6) bollen');
+    expect(skeinsLabel(1, { skein: 'bol', skeins: 'bollen' })).toBe('1 bol');
+  });
+});
+
+describe('projectMaterialIds', () => {
+  const withYarn = (over: Partial<Project>): Project => ({ ...project([]), ...over });
+
+  it('lists the yarn the pattern was matched to before the yarn only a section names', () => {
+    const p = withYarn({
+      slotMaterials: { sA: 'm1', sB: 'm2' },
+      sections: [section({ materialIds: ['m3'] }), section({ materialIds: ['m2'] })],
+    });
+    expect(projectMaterialIds(p)).toEqual(['m1', 'm2', 'm3']);
+  });
+
+  it('names each yarn once however many sections use it', () => {
+    const p = withYarn({
+      sections: [section({ materialIds: ['m1', 'm2'] }), section({ materialIds: ['m1'] })],
+    });
+    expect(projectMaterialIds(p)).toEqual(['m1', 'm2']);
+  });
+
+  // A slot matched before casting on is yarn the project needs even if no section has been given
+  // it yet — which is exactly when knowing how much to buy matters.
+  it('keeps a matched slot no section has reached', () => {
+    const p = withYarn({ slotMaterials: { sA: 'm9' }, sections: [section({ materialIds: [] })] });
+    expect(projectMaterialIds(p)).toEqual(['m9']);
+  });
+
+  it('copes with a project that has neither', () => {
+    expect(projectMaterialIds(withYarn({ sections: [section({ materialIds: [] })] }))).toEqual([]);
   });
 });

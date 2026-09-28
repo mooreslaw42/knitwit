@@ -90,11 +90,11 @@ const stash: Stash = {
   catalogue: {
     q1: {
       id: 'q1', name: 'German short rows', craft: 'knit', family: 'shaping',
-      summary: '', aliases: [], video: '', link: '',
+      abbr: 'GSR', summary: '', aliases: [], video: '', link: '',
     },
     q2: {
       id: 'q2', name: 'Tubular cast-on', craft: 'knit', family: 'cast-on',
-      summary: '', aliases: [], video: '', link: '',
+      abbr: '', summary: '', aliases: [], video: '', link: '',
     },
   },
 };
@@ -163,6 +163,23 @@ describe('stash slots', () => {
       'Drops — Sage Green',
     ]);
     expect(p.materials.map((m) => m.short)).toEqual(['A', 'B']);
+  });
+
+  // A pattern saved from a project is a record of what was actually knitted, and how much yarn it
+  // took is part of that. The pattern it makes has one size — the one on the needles — so the
+  // project's plain number is the whole answer.
+  it('carries how many skeins the project used back onto the slot', () => {
+    const p = projectToPattern(
+      project({
+        sections: [section({ materialIds: ['m1'] }), section({ name: 'Front', materialIds: ['m2'] })],
+        materialSkeins: { m1: 6 },
+      }),
+      stash,
+      null,
+    );
+    expect(p.materials[0].skeins).toBe(6);
+    // The yarn the knitter never counted is left saying nothing, rather than saying zero.
+    expect(p.materials[1]).not.toHaveProperty('skeins');
   });
 
   it('gives two sections on the same yarn one slot, not two', () => {

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Card, DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Card, ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { SharePattern } from '@/components/share-pattern';
 import { GaugeField } from '@/components/gauge-field';
@@ -24,7 +24,7 @@ import {
   scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
-import { patternSectionMarkers } from '@/lib/knitwit-helpers';
+import { patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
@@ -326,7 +326,12 @@ export default function PatternDetailScreen() {
               <Field
                 label="Yarn"
                 value={(pattern.materials ?? [])
-                  .map((m) => `${m.short ? `${m.short} · ` : ''}${m.label}`)
+                  .map((m) => {
+                    // The quantity belongs on the same line as the colour it is a quantity of;
+                    // read as a list, that is what a knitter takes to the yarn shop.
+                    const needed = skeinsLabel(m.skeins);
+                    return `${m.short ? `${m.short} · ` : ''}${m.label}${needed ? ` — ${needed}` : ''}`;
+                  })
                   .join('\n')}
               />
               <Field
@@ -384,8 +389,14 @@ export default function PatternDetailScreen() {
                 </View>
               )}
 
-              <DeleteButton
-                onPress={() => {
+              {/* The biggest of the four, so it says what survives as well as what doesn't: a
+                  project knitted from this pattern copied everything it needed and carries on
+                  without it. */}
+              <ConfirmButton
+                label="Delete this pattern"
+                question="Delete this pattern? Its sections, charts and notes go with it and can't be brought back. Projects made from it keep their own copy and carry on."
+                confirmLabel="Yes, delete it"
+                onConfirm={() => {
                   deletePattern(id);
                   goBackOr(router, '/library');
                 }}

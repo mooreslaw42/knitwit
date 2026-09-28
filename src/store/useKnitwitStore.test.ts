@@ -242,6 +242,102 @@ describe('createProject', () => {
     expect(project.slotTools).toEqual({ p1t1: 't3' });
   });
 
+  // How much yarn to buy is per size — a 4XL eats more than an XS — so the pattern states a run and
+  // the project, which is knitted in exactly one size, banks the one number that applies to it.
+  describe('skeins', () => {
+    const store = () => useKnitwitStore.getState();
+
+    const patternWithSkeins = () =>
+      store().savePattern(null, {
+        ...store().patterns.p1,
+        sizes: ['S', 'M', 'L'],
+        materials: [
+          { id: 'p1m1', label: 'Main colour', short: 'A', skeins: [5, 6, 8] },
+          { id: 'p1m2', label: 'Contrast', short: 'B', skeins: 1 },
+        ],
+      });
+
+    it('resolves the pattern per-size count to the size being knitted', () => {
+      const key = store().createProject({
+        name: 'Cardi',
+        startedOn: null,
+        craft: 'knit',
+        patternId: patternWithSkeins(),
+        totalRows: 10,
+        sizeIndex: 1,
+        slotMaterials: { p1m1: 'm3', p1m2: 'm1' },
+      });
+      expect(store().projects[key].materialSkeins).toEqual({ m3: 6, m1: 1 });
+    });
+
+    // Main and contrast both worked in the same Sage Green: two slots, one shopping list line.
+    it('adds up two slots that landed on the same yarn', () => {
+      const key = store().createProject({
+        name: 'Cardi',
+        startedOn: null,
+        craft: 'knit',
+        patternId: patternWithSkeins(),
+        totalRows: 10,
+        sizeIndex: 2,
+        slotMaterials: { p1m1: 'm3', p1m2: 'm3' },
+      });
+      expect(store().projects[key].materialSkeins).toEqual({ m3: 9 });
+    });
+
+    it('banks nothing for a slot the knitter never matched, or a pattern that never said', () => {
+      const plain = store().createProject({
+        name: 'Cardi',
+        startedOn: null,
+        craft: 'knit',
+        patternId: 'p1', // the seeded pattern states no skeins
+        totalRows: 10,
+        slotMaterials: { p1m1: 'm3' },
+      });
+      expect(store().projects[plain].materialSkeins).toEqual({});
+
+      const unmatched = store().createProject({
+        name: 'Cardi',
+        startedOn: null,
+        craft: 'knit',
+        patternId: patternWithSkeins(),
+        totalRows: 10,
+      });
+      expect(store().projects[unmatched].materialSkeins).toEqual({});
+    });
+
+    it('lets the knitter set what they actually bought, and clear it again', () => {
+      const key = store().createProject({
+        name: 'Improvised',
+        startedOn: null,
+        craft: 'knit',
+        patternId: null,
+        totalRows: 10,
+      });
+      store().setMaterialSkeins(key, 'm1', 7);
+      expect(store().projects[key].materialSkeins).toEqual({ m1: 7 });
+
+      // Null is not zero: one means "none needed", the other "I haven't worked it out".
+      store().setMaterialSkeins(key, 'm1', null);
+      expect(store().projects[key].materialSkeins).toEqual({});
+      store().setMaterialSkeins(key, 'm1', 0);
+      expect(store().projects[key].materialSkeins).toEqual({ m1: 0 });
+    });
+
+    it('never stores a negative or a fraction of a skein', () => {
+      const key = store().createProject({
+        name: 'Improvised',
+        startedOn: null,
+        craft: 'knit',
+        patternId: null,
+        totalRows: 10,
+      });
+      store().setMaterialSkeins(key, 'm1', -3);
+      expect(store().projects[key].materialSkeins).toEqual({ m1: 0 });
+      store().setMaterialSkeins(key, 'm1', 2.4);
+      expect(store().projects[key].materialSkeins).toEqual({ m1: 2 });
+    });
+  });
+
   it('leaves an unmapped slot section without a concrete stash item', () => {
     const key = useKnitwitStore
       .getState()

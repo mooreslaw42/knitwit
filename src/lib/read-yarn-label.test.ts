@@ -1,4 +1,5 @@
 import {
+  describeFilled,
   lookUpYarn,
   missingCount,
   missingFields,
@@ -219,5 +220,46 @@ describe('looking a yarn up', () => {
       { task: 'enrich', brand: 'Rowan Felted Tweed', colorName: 'Ancient', missing: ['grams', 'meters'] },
       expect.objectContaining({ timeoutMs: expect.any(Number) }),
     );
+  });
+});
+
+// Reading a band into a yarn that was typed in by hand overwrites what is there, so the screen has
+// to be able to say what moved. The wizard marks each field with a badge; a form that is only
+// sometimes filled from a photograph says it in one line instead.
+describe('saying what a reading filled in', () => {
+  it('names the fields the way the form does', () => {
+    expect(describeFilled(['brand', 'colorName'])).toBe('brand and colour');
+    expect(describeFilled(['colorLot', 'composition', 'thickness'])).toBe(
+      'dye lot, fibre and needle size',
+    );
+  });
+
+  it('names one field on its own', () => {
+    expect(describeFilled(['gauge'])).toBe('tension');
+  });
+
+  // A full band fills ten fields, and listing all ten reads like a stack trace.
+  it('counts the tail once the list gets long', () => {
+    expect(
+      describeFilled([
+        'brand',
+        'colorName',
+        'colorLot',
+        'composition',
+        'weight',
+        'grams',
+        'meters',
+      ]),
+    ).toBe('brand, colour, dye lot and 4 more');
+  });
+
+  it('says nothing when the band said nothing', () => {
+    expect(describeFilled([])).toBe('');
+  });
+
+  // `filled` comes from whatever the reader returned; a field with no name on this form (nothing
+  // sends one today) must not put "undefined" in front of a knitter.
+  it('skips a field it has no name for', () => {
+    expect(describeFilled(['brand', 'photo'])).toBe('brand');
   });
 });

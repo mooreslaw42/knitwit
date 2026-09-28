@@ -91,6 +91,37 @@ export async function readYarnLabel(
   };
 }
 
+// What each field is called on the form, for telling a knitter what a reading changed. Only the
+// fields a band can actually say are here; nothing else ever reaches this.
+const FIELD_NAMES: Partial<Record<keyof Material, string>> = {
+  brand: 'brand',
+  colorName: 'colour',
+  colorLot: 'dye lot',
+  composition: 'fibre',
+  weight: 'yarn weight',
+  grams: 'grams',
+  meters: 'metres',
+  thickness: 'needle size',
+  washing: 'washing',
+  gauge: 'tension',
+};
+
+const joinWords = (names: string[]): string =>
+  names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+// "brand, colour and 4 more" — what a reading filled in, in the form's own words.
+//
+// A knitter reading a band into a yarn they had already typed needs to know what just moved under
+// them, and a wizard's per-field badges are not available on a form that is only sometimes filled
+// by a photograph. Naming all ten reads like a stack trace, so past a handful the count stands in
+// for the tail.
+export function describeFilled(fields: (keyof Material)[], shown = 3): string {
+  const names = fields.map((f) => FIELD_NAMES[f]).filter((n): n is string => Boolean(n));
+  if (names.length === 0) return '';
+  if (names.length <= shown + 1) return joinWords(names);
+  return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
+}
+
 // ---------------------------------------------------------------------------
 // Looking up what the band did not say.
 //

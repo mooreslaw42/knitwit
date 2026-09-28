@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DeleteButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
@@ -118,9 +118,15 @@ export default function ToolEditScreen() {
             </ThemedText>
           </PillButton>
 
+          {/* Asked for the same way as deleting a yarn, and worded the same way: deleting a tool
+              reaches past this screen, because every project section that says it uses these
+              needles stops saying so. */}
           {!isNew && (
-            <DeleteButton
-              onPress={() => {
+            <ConfirmButton
+              label="Delete this tool"
+              question="Delete this tool? It goes for good, and any project section you'd said uses it will stop listing it."
+              confirmLabel="Yes, delete it"
+              onConfirm={() => {
                 deleteTool(id);
                 goBackOr(router, '/library');
               }}
