@@ -271,6 +271,10 @@ export const STITCHES: Record<string, StitchDef> = {
   // is why crochet needed no new maths.
   ch: { label: 'Chain', abbr: 'ch', symbol: '○', delta: 1, takes: 0, kind: 'stitch', craft: 'crochet' },
   slst: { label: 'Slip stitch', abbr: 'sl st', symbol: '•', delta: 0, takes: 1, kind: 'stitch', craft: 'crochet' },
+  // Skipping a stitch of the row below: it is passed over and nothing is worked into it, so the
+  // new row comes out one shorter. Not the knitter's `slip`, which keeps its stitch and its count —
+  // the two words look alike and mean opposite things to the running count.
+  skip: { label: 'Skip a stitch', abbr: 'sk', symbol: '⌀', delta: -1, takes: 1, kind: 'action', craft: 'crochet' },
   sc: { label: 'Single crochet', abbr: 'sc', symbol: '×', delta: 0, takes: 1, kind: 'stitch', craft: 'crochet' },
   hdc: { label: 'Half double crochet', abbr: 'hdc', symbol: 'T', delta: 0, takes: 1, kind: 'stitch', craft: 'crochet' },
   dc: { label: 'Double crochet', abbr: 'dc', symbol: '† ', delta: 0, takes: 1, kind: 'stitch', craft: 'crochet' },

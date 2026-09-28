@@ -28,6 +28,7 @@ export const STITCH_TYPES = [
   // Crochet
   'ch',
   'slst',
+  'skip',
   'sc',
   'hdc',
   'dc',
