@@ -320,6 +320,20 @@ export function CrochetChart({
                   textAnchor="end">
                   {d.index + 1}
                 </SvgText>
+                {/* A row the parser could not chart is still a row, and the diagram gave it a
+                    blank band with a number beside it and no hint why. Said plainly instead: the
+                    wording is on the row list below, and this is the only place that says the
+                    picture is incomplete rather than the fabric. */}
+                {d.stitches.length === 0 ? (
+                  <SvgText
+                    x={14}
+                    y={baselines[i] - 5}
+                    fontSize={10}
+                    fill={Colors.inkSoft}
+                    textAnchor="start">
+                    not charted
+                  </SvgText>
+                ) : null}
                 {/* The row runs on past here. Drawn at the far end of the last stitch, on
                     whichever side the row was being worked towards, so it reads as "and onwards"
                     rather than as a stitch of its own. */}

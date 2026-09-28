@@ -338,6 +338,41 @@ describe('createProject', () => {
     });
   });
 
+  // A pattern section whose row count was never filled in, but whose stitches were charted, used
+  // to produce a project that said "Row 1 of 1" for a 23-row piece.
+  it('never stamps a project section shorter than the chart it came from', () => {
+    const store = () => useKnitwitStore.getState();
+    const rows = Array.from({ length: 23 }, (_, i) => ({
+      id: `cr${i}`,
+      label: `Row ${i + 1}`,
+      side: 'RS' as const,
+      marker: false,
+      instruction: 'sc',
+      stitches: [
+        {
+          id: `g${i}`,
+          type: 'sc',
+          span: 'exact' as const,
+          count: 10,
+          materialSlot: null,
+          note: '',
+        },
+      ],
+    }));
+    const patternId = store().savePattern(null, {
+      ...store().patterns.p1,
+      sections: [{ ...store().patterns.p1.sections[0], totalRows: 1, rows }],
+    });
+    const key = store().createProject({
+      name: 'Blanket',
+      startedOn: null,
+      craft: 'crochet',
+      patternId,
+      totalRows: 10,
+    });
+    expect(store().projects[key].sections[0].totalRows).toBe(23);
+  });
+
   it('leaves an unmapped slot section without a concrete stash item', () => {
     const key = useKnitwitStore
       .getState()

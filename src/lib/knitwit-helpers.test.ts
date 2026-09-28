@@ -18,6 +18,7 @@ import {
   sectionStatus,
   sizeValue,
   skeinsLabel,
+  atLeastCharted,
   projectMaterialIds,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
@@ -458,5 +459,29 @@ describe('projectMaterialIds', () => {
 
   it('copes with a project that has neither', () => {
     expect(projectMaterialIds(withYarn({ sections: [section({ materialIds: [] })] }))).toEqual([]);
+  });
+});
+
+// A section with 23 rows charted and a row count of 1 leaves the counter saying "Row 1 of 1" and
+// offering to bind off a piece that has 23 rows in it — which is exactly what it did.
+describe('atLeastCharted', () => {
+  it('raises a row count that is shorter than the chart', () => {
+    expect(atLeastCharted(1, 23)).toBe(23);
+    expect(atLeastCharted(0, 23)).toBe(23);
+  });
+
+  // A pattern may say "60 rows" and chart only the 8-row repeat. That is not a mistake, and
+  // charting must not overwrite it.
+  it('leaves a row count that is longer than the chart alone', () => {
+    expect(atLeastCharted(60, 8)).toBe(60);
+  });
+
+  it('raises every size, and leaves the sizes that were already long enough', () => {
+    expect(atLeastCharted([1, 30, 40], 23)).toEqual([23, 30, 40]);
+  });
+
+  it('changes nothing when there is no chart', () => {
+    expect(atLeastCharted(12, 0)).toBe(12);
+    expect(atLeastCharted([4, 6], 0)).toEqual([4, 6]);
   });
 });

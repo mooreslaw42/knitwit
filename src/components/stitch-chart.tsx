@@ -182,6 +182,14 @@ export function StitchChart({
                 }
                 style={[styles.line, done && styles.lineDone, current && styles.lineCurrent]}>
                 <View style={[styles.grid, { width: gridWidth }]}>
+                  {/* A row the parser could not chart is still a row. Blank, with a number beside
+                      it and nothing else, it reads as a gap in the fabric rather than a gap in
+                      what the app understood. */}
+                  {d.cells.length === 0 && (
+                    <ThemedText type="small" themeColor="inkSoft" style={styles.uncharted}>
+                      not charted
+                    </ThemedText>
+                  )}
                   {d.clipped && (
                     <View style={[styles.cell, ws && styles.cellWs, styles.clipCell]}>
                       <ThemedText style={styles.symbol}>…</ThemedText>
@@ -253,6 +261,7 @@ export function StitchChart({
 }
 
 const styles = StyleSheet.create({
+  uncharted: { paddingLeft: Spacing.two, alignSelf: 'center' },
   // Worked rows recede rather than vanish: the chart is still the map of the whole piece, and the
   // boundary between faded and solid is what shows at a glance how far up it you are.
   lineDone: { opacity: 0.3 },
