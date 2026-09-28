@@ -7,6 +7,7 @@ import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { atLeastCharted } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -56,7 +57,15 @@ export default function SectionStitchesScreen() {
               savePattern(id, {
                 ...pattern,
                 sections: pattern.sections.map((s, idx) =>
-                  idx === sectionIndex ? { ...s, ...draft } : s,
+                  idx === sectionIndex
+                    ? {
+                        ...s,
+                        ...draft,
+                        // Charting 23 rows and leaving the row count at 1 makes every project
+                        // stamped from this section a one-row piece.
+                        totalRows: atLeastCharted(s.totalRows, draft.rows.length),
+                      }
+                    : s,
                 ),
               });
               goBackOr(router, `/pattern/${id}`);

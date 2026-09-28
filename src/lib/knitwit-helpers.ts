@@ -252,6 +252,20 @@ export function formatClock(sec: number): string {
   return (h ? h + ':' : '') + mm + ':' + String(r).padStart(2, '0');
 }
 
+// A section is at least as long as the rows it has charted.
+//
+// The row count and the chart are separate fields — a pattern can say "60 rows" and chart only the
+// 8-row repeat, which is why charting does not simply overwrite the count. But the reverse, a
+// section with 23 rows drawn and a count of 1, is never what anyone meant: it leaves the counter
+// saying "Row 1 of 1" and offering to bind off a piece that has 23 rows in it.
+export function atLeastCharted(totalRows: SizedNumber, charted: number): SizedNumber {
+  if (charted <= 0) return totalRows;
+  if (typeof totalRows === 'number') return Math.max(totalRows, charted);
+  // Per size: every size is at least as long as the chart, and a size that was already longer
+  // keeps its own number.
+  return totalRows.map((n) => Math.max(n, charted));
+}
+
 // ---- Yarn quantities ----
 
 // "6 skeins", "5 (6) 7 skeins", or nothing at all when the pattern doesn't say.

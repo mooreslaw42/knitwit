@@ -662,7 +662,9 @@ export const useKnitwitStore = create<KnitwitState>()(
             ? patternSections.map((ps) =>
                 newProjectSection({
                 name: ps.name,
-                totalRows: Math.max(1, sizeValue(ps.totalRows, sizeIndex) || 1),
+                // …and never shorter than the chart it is being stamped from, so a pattern whose
+                // row count was never filled in doesn't produce a one-row project.
+                totalRows: Math.max(1, sizeValue(ps.totalRows, sizeIndex) || 1, ps.rows.length),
                 row: 0,
                 complete: false,
                 seconds: 0,
@@ -876,6 +878,8 @@ export const useKnitwitStore = create<KnitwitState>()(
             description,
             castOn: Math.max(0, Math.round(castOn) || 0),
             rows,
+            // The counter counts to this. A section with rows charted is at least that long.
+            totalRows: Math.max(s.totalRows, rows.length),
           })),
         ),
 
