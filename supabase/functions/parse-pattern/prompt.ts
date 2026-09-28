@@ -56,6 +56,7 @@ Used only when the request says the craft is crochet or both. \`takes\` is how m
 |---|---|---|---|
 | \`ch\` | chain | 0 | +1 |
 | \`slst\` | slip stitch | 1 | 0 |
+| \`skip\` | skip a stitch of the row below — "sk 2", "skip the first stitch" | 1 | −1 |
 | \`sc\` | single crochet (US) | 1 | 0 |
 | \`hdc\` | half double crochet (US) | 1 | 0 |
 | \`dc\` | double crochet (US) | 1 | 0 |

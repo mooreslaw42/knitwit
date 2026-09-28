@@ -27,6 +27,7 @@ const UNIT = 14;
 const HEIGHTS: Record<string, number> = {
   ch: 0.7,
   slst: 0.5,
+  skip: 0.5,
   sc: 1,
   scinc: 1,
   sc2tog: 1,
@@ -161,6 +162,19 @@ function StitchSymbol({ type, colour }: { type: string; colour: string }) {
             </G>
           ))}
         </G>
+      );
+    // A stitch passed over: the base it was worked from, with nothing standing on it.
+    case 'skip':
+      return (
+        <Line
+          x1={-3.5}
+          y1={-h / 2}
+          x2={3.5}
+          y2={-h / 2}
+          stroke={stroke}
+          strokeWidth={w}
+          strokeLinecap="round"
+        />
       );
     case 'pm':
       return <Circle cx={0} cy={-h / 2} r={3.5} stroke={stroke} strokeWidth={w} fill="none" />;

@@ -252,6 +252,12 @@ function passesFor(line: string, verb: string, times: number): number {
 const CAST_ON_LINE =
   /^\s*(?:\d+[.)]\s*)?(?:cast\s+on|co)\s+([\d()\s,]+?)\s*(?:sts?|stitches)\b/i;
 
+// `Chain 32` / `ch 32 (34) 36` on a line of its own — crochet's cast-on under another name, and
+// what every row after it counts from. Anchored at the end so a row's own "ch 2, turn" is not
+// mistaken for one: that has words after the number, and this may not.
+const FOUNDATION_CHAIN_LINE =
+  /^\s*(?:\d+[.)]\s*)?(?:chain|ch)\s+([\d()\s,]+?)\s*(?:chains?|sts?|stitches)?\s*\.?$/i;
+
 // `You now have 13 (14) 15 sts on your needles.` — the pattern checking itself mid-prose, the same
 // job as a trailing "(48 sts)". Free accuracy check, so it's worth reading.
 const RUNNING_COUNT_LINE =
@@ -263,8 +269,11 @@ const STATED_COUNT = /\(?\b(\d+)\s*(?:sts?|stitches)\b\)?\s*[.]?\s*$/i;
 // Count-dependent repeats ("rep from * to last 2 sts") need the live stitch count to expand, which
 // also differs per size — that's phase 5b/5c work, so we refuse them here instead of guessing.
 const STAR_REPEAT = /\brep(?:eat)?\s+from\s+\*/i;
-// Fixed-multiplier repeats are count-independent, so expanding them is always safe.
-const BRACKET_REPEAT = /^\[([^\]]+)\]\s*(?:x\s*)?(\d+)\s*(?:times?)?$/i;
+// Fixed-multiplier repeats are count-independent, so expanding them is always safe. Written with
+// either kind of bracket and with the count on either side: "[k2, p2] 3 times", "[k2,p2] x3",
+// "(dc, dc incr) x 4", "4x (dc, dc incr)" — the last is how most crochet patterns put it.
+const BRACKET_REPEAT = /^[[(]([^\])]+)[\])]\s*(?:x\s*)?(\d+)\s*(?:times?)?$/i;
+const REPEAT_FIRST = /^(\d+)\s*x\s*[[(]([^\])]+)[\])]$/i;
 
 // Crochet shorthand, read through the same token pipeline as knitting: a row is split on commas,
 // each token becomes a PatternStitchGroup, and the running count falls out of `takes`/`delta`
@@ -276,7 +285,7 @@ const BRACKET_REPEAT = /^\[([^\]]+)\]\s*(?:x\s*)?(\d+)\s*(?:times?)?$/i;
 const CROCHET_NAMED: { re: RegExp; type: string }[] = [
   { re: /^(?:sc2tog|sc\s*2\s*tog)$/i, type: 'sc2tog' },
   { re: /^(?:dc2tog|dc\s*2\s*tog)$/i, type: 'dc2tog' },
-  { re: /^(?:sl\s*st|slst|ss)$/i, type: 'slst' },
+  { re: /^(?:sl\s*st|slst|ss|slip\s*stitch)$/i, type: 'slst' },
   { re: /^(?:hdc|half\s+double\s+crochet)$/i, type: 'hdc' },
   { re: /^(?:dc|double\s+crochet)$/i, type: 'dc' },
   { re: /^(?:tr|treble(?:\s+crochet)?|triple\s+crochet)$/i, type: 'tr' },
@@ -284,6 +293,17 @@ const CROCHET_NAMED: { re: RegExp; type: string }[] = [
   { re: /^(?:ch|chain)$/i, type: 'ch' },
   { re: /^(?:shell|fan)$/i, type: 'shell' },
 ];
+
+// Every spelling of a crochet stitch, as one alternation, for the rules that need a name with
+// something attached to it — a count in front, a multiplier, the word "increase". Anchored at both
+// ends wherever it is used, so "dc" cannot win the first two letters of "double crochet".
+const CROCHET_NAME =
+  String.raw`sc\s*2\s*tog|sc2tog|dc\s*2\s*tog|dc2tog|slip\s*stitch|sl\s*st|slst|` +
+  String.raw`half\s+double\s+crochet|hdc|double\s+crochet|dc|treble(?:\s+crochet)?|triple\s+crochet|tr|` +
+  String.raw`single\s+crochet|sc|chain|ch|shell|fan|ss`;
+
+const crochetType = (name: string): string | null =>
+  CROCHET_NAMED.find((n) => n.re.test(name.trim().replace(/\s+/g, ' ')))?.type ?? null;
 
 // Longest/most specific first: `k2tog` must never fall through to the generic `k<number>` rule.
 // Spacing is optional throughout — "k2tog", "k2 tog" and "K 2 tog" are the same instruction typed
@@ -322,7 +342,7 @@ const JOINED_DECREASES = /\bsl\s*1\s*,\s*k\s*1\s*,\s*psso\b/gi;
 // the chart is identical with or without them. Leaving one out costs nothing — the row keeps its
 // original wording either way — where refusing a whole row over a trailing "turn" costs the row.
 const NO_OP =
-  /^(?:turn(?:\s+(?:work|your\s+work))?|do\s+not\s+turn|dnt|break\s+(?:the\s+)?yarn|cut\s+(?:the\s+)?yarn|fasten\s*off|weave\s+in.*|join\s+to\s+work\s+in\s+the\s+round)$/i;
+  /^(?:turn(?:\s+(?:the\s+)?(?:work|your\s+work))?|do\s+not\s+turn\b.*|dnt|continue\s+working\b.*|break\s+(?:the\s+)?yarn|cut\s+(?:the\s+)?yarn|fasten\s*off|weave\s+in\b.*|join\s+to\s+work\s+in\s+the\s+round)$/i;
 
 function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
   const t = raw.trim().replace(/[.;]+$/, '').trim();
@@ -413,7 +433,43 @@ function parseToken(raw: string, craft: ParseCraft): PatternStitchGroup | null {
 
 // One crochet token. Same shape of answer as the knitting rules above, so callers can't tell
 // which vocabulary read it.
+// "5x sc", "2x hdc", "7x SC" — the count in front with an x, which is how a great many crochet
+// patterns are written and none of the rules below could read.
+const CROCHET_TIMES = new RegExp(String.raw`^(\d+)\s*x\s*(${CROCHET_NAME})$`, 'i');
+
+// "skip 2", "sk 1", "skip the first stitch", "skip the next 2 sts". A skipped stitch is consumed
+// by the fabric and nothing is worked into it, so the row comes out shorter — which is why this
+// cannot be quietly read as the knitter's "slip".
+const CROCHET_SKIP =
+  /^(?:sk|skip)\s*(?:the\s+|over\s+)?(?:first|next|last)?\s*(\d+)?\s*(?:sts?|stitch(?:es)?)?$/i;
+
+// "dc incr", "sc increase" — two stitches worked into one, named by the stitch rather than by the
+// count. Only the two the catalogue has a symbol and a delta for; anything else is refused rather
+// than charted as something it isn't.
+const CROCHET_INCREASE = /^(sc|dc|single\s+crochet|double\s+crochet)\s*(?:incr?|increase)$/i;
+
 function parseCrochetToken(t: string): PatternStitchGroup | null {
+  // A skip first: "sk" would otherwise never be reached, and reading it as anything else costs
+  // the row its count.
+  if (/^(?:sk|skip)\b/i.test(t)) {
+    const skip = t.match(CROCHET_SKIP);
+    if (!skip) return null;
+    return group('skip', 'exact', skip[1] ? parseInt(skip[1], 10) : 1);
+  }
+
+  const times = t.match(CROCHET_TIMES);
+  if (times) {
+    const type = crochetType(times[2]);
+    if (type) return group(type, 'exact', parseInt(times[1], 10));
+  }
+
+  const increase = t.match(CROCHET_INCREASE);
+  if (increase) {
+    const base = crochetType(increase[1]);
+    if (base === 'sc' || base === 'dc') return group(base === 'sc' ? 'scinc' : 'dcinc', 'exact', 1);
+    return null;
+  }
+
   // "2 dc in next st" / "2 sc in each st" — an increase, and the commonest way crochet grows.
   //
   // "next" is one increase; "each" is one on every stitch of the row. Reading them the same way
@@ -448,14 +504,25 @@ function parseCrochetToken(t: string): PatternStitchGroup | null {
     if (type) return group(type, 'all', null);
   }
 
-  // "sc 6" / "6 sc" / "dc2" — a plain run, written either way round.
-  const run = t.match(/^(?:(\d+)\s*)?(sc2tog|dc2tog|sl\s*st|slst|ss|hdc|dc|tr|sc|ch|shell)\s*(\d*)$/i);
+  // "sc 6" / "6 sc" / "dc2" / "Chain 32" — a plain run, written either way round and with the
+  // stitch named in full or in shorthand.
+  const run = t.match(new RegExp(String.raw`^(?:(\d+)\s*)?(${CROCHET_NAME})\s*(\d*)$`, 'i'));
   if (run) {
-    const named = CROCHET_NAMED.find((n) => n.re.test(run[2].replace(/\s+/g, '')));
-    if (named) {
+    const type = crochetType(run[2]);
+    if (type) {
       const count = run[1] || run[3];
-      return group(named.type, 'exact', count ? parseInt(count, 10) : 1);
+      return group(type, 'exact', count ? parseInt(count, 10) : 1);
     }
+  }
+
+  // "slip stitch in row below", "sc in next st" — a single stitch with a note about where it
+  // goes. Where it goes changes nothing about the count, and refusing the row over it would.
+  const placed = t.match(
+    new RegExp(String.raw`^(${CROCHET_NAME})\s+(?:in|into)\s+(?:the\s+)?[a-z0-9\s-]+$`, 'i'),
+  );
+  if (placed) {
+    const type = crochetType(placed[1]);
+    if (type) return group(type, 'exact', 1);
   }
 
   for (const { re, type } of CROCHET_NAMED) {
@@ -464,15 +531,20 @@ function parseCrochetToken(t: string): PatternStitchGroup | null {
   return null;
 }
 
-// Split on commas/semicolons that aren't inside [] or *…*.
+// Split on commas/semicolons that aren't inside brackets or *…*.
+//
+// Round brackets count as well as square ones. Crochet groups its repeats in them —
+// "4x (dc, dc incr)" — and splitting on that comma tore the group into two halves that mean
+// nothing apart. Per-size runs like "k2 (3) 4" are unaffected: their brackets balance inside the
+// token, so the depth is back to zero by the time the next comma arrives.
 function splitTokens(body: string): string[] {
   const out: string[] = [];
   let depth = 0;
   let star = false;
   let buf = '';
   for (const ch of body) {
-    if (ch === '[') depth++;
-    else if (ch === ']') depth = Math.max(0, depth - 1);
+    if (ch === '[' || ch === '(') depth++;
+    else if (ch === ']' || ch === ')') depth = Math.max(0, depth - 1);
     else if (ch === '*') star = !star;
     if ((ch === ',' || ch === ';') && depth === 0 && !star) {
       out.push(buf);
@@ -602,8 +674,8 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
       continue;
     }
 
-    // "Cast on 6 (6) 7 sts" — the count the whole chart starts from, stated in prose.
-    const co = trimmed.match(CAST_ON_LINE);
+    // "Cast on 6 (6) 7 sts", or "Chain 32" — the count the whole chart starts from, stated in prose.
+    const co = trimmed.match(CAST_ON_LINE) ?? trimmed.match(FOUNDATION_CHAIN_LINE);
     if (co && castOn == null) {
       castOn = parseSizeRun(co[1]);
       ignoredLines.push(trimmed);
@@ -669,7 +741,13 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
           // Trimmed and de-punctuated first. BRACKET_REPEAT is anchored at both ends, so a
           // leading space or the full stop that ends a sentence — "…] x 3." — made it miss, in
           // knitting just as much as in crochet.
-          const bracket = token.trim().replace(/[.;]+$/, '').match(BRACKET_REPEAT);
+          const clean = token.trim().replace(/[.;]+$/, '');
+          const ahead = clean.match(REPEAT_FIRST);
+          // Same repeat either way round, so the two forms are normalised to one shape here
+          // rather than handled twice below.
+          const bracket = ahead
+            ? ([ahead[0], ahead[2], ahead[1]] as unknown as RegExpMatchArray)
+            : clean.match(BRACKET_REPEAT);
           if (bracket) {
             const inner = splitTokens(bracket[1]);
             const times = Math.max(1, Math.min(parseInt(bracket[2], 10) || 1, 200));
@@ -725,6 +803,22 @@ export function parseSectionText(text: string, craft: ParseCraft = 'knit'): Pars
     rows.forEach((row, i) => {
       row.label = `Row ${i + 1}`;
     });
+  }
+
+  // A crochet pattern in a section set to knitting reads as row after row of nothing, because the
+  // crochet vocabulary is never tried — and the refusals blame the stitches rather than the
+  // setting that caused them. Only asked when every row failed, so it costs a second parse in the
+  // one case that is already going badly.
+  if (craft === 'knit' && rows.length > 0 && rows.every((r) => r.stitches.length === 0)) {
+    const asCrochet = parseSectionText(text, 'crochet');
+    if (asCrochet.rows.some((r) => r.stitches.length > 0)) {
+      issues.unshift({
+        rowIndex: null,
+        message:
+          'These rows read as crochet, and this section is set to knitting — so none of the ' +
+          "stitches were recognised. Set the pattern's craft to crochet and convert again.",
+      });
+    }
   }
 
   if (rows.length === 0) {
