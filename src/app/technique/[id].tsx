@@ -44,6 +44,14 @@ export default function TechniqueScreen() {
   const technique = resolveTechnique(id, mine, catalogue);
   usePageTitle(technique.name);
 
+  // A slug that is in neither the catalogue nor the knitter's own list is not a technique — it is
+  // a typo, a stale link, or a deep link to something that no longer exists. Marking a status on
+  // one wrote it into the library under that slug, which is how "+ Add a technique" (pointing at a
+  // route that did not exist) produced a technique called "new". Only judged once the catalogue has
+  // actually arrived: before that, every real slug looks unknown.
+  const catalogueReady = Object.keys(catalogue).length > 0;
+  const unknown = catalogueReady && !catalogue[id] && !mine;
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
@@ -72,31 +80,49 @@ export default function TechniqueScreen() {
             </Card>
           ) : null}
 
-          <Card style={styles.card}>
-            <ThemedText type="small" themeColor="inkSoft">
-              Where you are with it
-            </ThemedText>
-            <View style={styles.statusRow}>
-              {STATUS_ORDER.map((s) => {
-                const on = mine?.status === s;
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => setTechniqueStatus(id, on ? null : s)}
-                    style={[styles.status, on && styles.statusOn]}>
-                    <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
-                      {STATUS_LABELS[s]}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {!mine ? (
+          {unknown ? (
+            <Card style={styles.card}>
+              <ThemedText type="smallBold">Not a technique Knitwit knows</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
-                Pick one to add this to your techniques.
+                Nothing in the catalogue has this name, and it isn&apos;t one of yours. Find it in
+                the library, or add it as your own.
               </ThemedText>
-            ) : null}
-          </Card>
+              <Pressable
+                hitSlop={6}
+                style={styles.unknownLink}
+                onPress={() => router.replace('/technique/new')}>
+                <ThemedText type="smallBold" themeColor="sageDeep">
+                  Add a technique of my own →
+                </ThemedText>
+              </Pressable>
+            </Card>
+          ) : (
+            <Card style={styles.card}>
+              <ThemedText type="small" themeColor="inkSoft">
+                Where you are with it
+              </ThemedText>
+              <View style={styles.statusRow}>
+                {STATUS_ORDER.map((s) => {
+                  const on = mine?.status === s;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() => setTechniqueStatus(id, on ? null : s)}
+                      style={[styles.status, on && styles.statusOn]}>
+                      <ThemedText type="smallBold" themeColor={on ? 'white' : 'inkSoft'}>
+                        {STATUS_LABELS[s]}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!mine ? (
+                <ThemedText type="small" themeColor="inkSoft">
+                  Pick one to add this to your techniques.
+                </ThemedText>
+              ) : null}
+            </Card>
+          )}
 
           {technique.video || technique.link ? (
             <Card style={styles.card}>
@@ -150,6 +176,7 @@ export default function TechniqueScreen() {
 }
 
 const styles = StyleSheet.create({
+  unknownLink: { alignSelf: 'flex-start', paddingVertical: Spacing.one },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -373,6 +373,68 @@ describe('createProject', () => {
     expect(store().projects[key].sections[0].totalRows).toBe(23);
   });
 
+  // "+ Add a technique to your library" pointed at a route that did not exist, so the link landed
+  // on the technique *detail* screen with "new" as the slug and wrote a technique called "new" into
+  // the library the moment a status was tapped.
+  describe('clearStrayTechniques', () => {
+    const store = () => useKnitwitStore.getState();
+
+    it('removes the technique the dead link made', () => {
+      useKnitwitStore.setState({
+        techniques: { new: { status: 'want', notes: '', addedOn: '2026-09-01' } },
+      });
+      store().clearStrayTechniques();
+      expect(store().techniques.new).toBeUndefined();
+    });
+
+    // Whatever the knitter thought it was, if they wrote on it, it is theirs.
+    it('keeps it when something was written against it', () => {
+      useKnitwitStore.setState({
+        techniques: { new: { status: 'want', notes: 'the one Nan showed me', addedOn: '2026-09-01' } },
+      });
+      store().clearStrayTechniques();
+      expect(store().techniques.new).toBeDefined();
+    });
+
+    it('keeps one the knitter added themselves', () => {
+      useKnitwitStore.setState({
+        techniques: {
+          new: {
+            status: 'known',
+            notes: '',
+            addedOn: '2026-09-01',
+            custom: { name: 'New thing', craft: 'knit' },
+          },
+        },
+      });
+      store().clearStrayTechniques();
+      expect(store().techniques.new).toBeDefined();
+    });
+
+    it('touches nothing on a library that never had one', () => {
+      const before = store().techniques;
+      store().clearStrayTechniques();
+      expect(store().techniques).toBe(before);
+    });
+  });
+
+  describe('addCustomTechnique', () => {
+    it('stores the name, craft and short form, and hands back the id', () => {
+      const id = useKnitwitStore.getState().addCustomTechnique('Nan\u2019s edging', 'crochet', ' NE ');
+      const made = useKnitwitStore.getState().techniques[id];
+      expect(made.custom).toEqual({ name: 'Nan\u2019s edging', craft: 'crochet', abbr: 'NE' });
+      expect(made.status).toBe('want');
+    });
+
+    it('leaves the short form off when there is none', () => {
+      const id = useKnitwitStore.getState().addCustomTechnique('Something', 'knit');
+      expect(useKnitwitStore.getState().techniques[id].custom).toEqual({
+        name: 'Something',
+        craft: 'knit',
+      });
+    });
+  });
+
   it('leaves an unmapped slot section without a concrete stash item', () => {
     const key = useKnitwitStore
       .getState()

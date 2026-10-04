@@ -181,6 +181,9 @@ type KnitwitState = {
   // invent a name for often has no short form either.
   addCustomTechnique: (name: string, craft: TechniqueCraft, abbr?: string) => string;
   deleteTechnique: (id: string) => void;
+  // Clears the technique a dead link used to create. See the implementation for why it is not a
+  // hydration repair.
+  clearStrayTechniques: () => void;
 
   setActiveSection: (projectKey: string, sectionIndex: number) => void;
   changeRow: (delta: number) => void;
@@ -1107,6 +1110,25 @@ export const useKnitwitStore = create<KnitwitState>()(
         const existing = techniques[id];
         if (!existing) return;
         set({ techniques: { ...techniques, [id]: { ...existing, notes } } });
+      },
+
+      // "+ Add a technique to your library" pointed at /technique/new, which had no screen. The
+      // link fell through to the detail route with "new" as the slug, drew a technique called
+      // "new", and wrote one into the library as soon as a status was tapped — on every device
+      // that followed it, and on the account behind them.
+      //
+      // Only that one id, and only when nothing has been written against it: a knitter who typed
+      // notes on the thing, whatever they thought it was, keeps it. Deliberately not part of the
+      // hydration repair — that runs before the sync watcher takes its baseline, so the removal
+      // would never be marked and the row would be pulled straight back down. It is called from
+      // the sync bootstrap instead, where a deletion is noticed and sent.
+      clearStrayTechniques: () => {
+        const { techniques, catalogue } = get();
+        const stray = techniques.new;
+        if (!stray || stray.custom || stray.notes.trim() || catalogue.new) return;
+        const next = { ...techniques };
+        delete next.new;
+        set({ techniques: next });
       },
 
       addCustomTechnique: (name, craft, abbr) => {

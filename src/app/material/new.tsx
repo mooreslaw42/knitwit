@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { putPhoto } from '@/lib/photo-store';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -104,7 +104,9 @@ export default function NewMaterialWizardScreen() {
 
     // The band is kept as the yarn's picture either way, so a scan that fails outright still
     // leaves the knitter better off than they started.
-    void putPhoto(picked.dataUrl).then((id) => setForm((f) => ({ ...f, photo: id })));
+    void putPhoto(picked.dataUrl)
+      .then((id) => setForm((f) => ({ ...f, photo: id })))
+      .catch(() => setScanError(PHOTO_STORAGE_FULL));
     setReading(true);
     try {
       const result = await readYarnLabel(picked.dataUrl);

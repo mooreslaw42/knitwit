@@ -12,7 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
-import { putPhoto } from '@/lib/photo-store';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { describeFilled, readYarnLabel } from '@/lib/read-yarn-label';
 import { WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
@@ -99,7 +99,12 @@ export default function MaterialEditScreen() {
     setReads(null);
     // Filed straight away, so saying no to the reading still leaves the knitter with the picture
     // they asked for.
-    set('photo', await putPhoto(picked.dataUrl));
+    try {
+      set('photo', await putPhoto(picked.dataUrl));
+    } catch {
+      setPhotoError(PHOTO_STORAGE_FULL);
+      return;
+    }
     setPending(picked.dataUrl);
   };
 

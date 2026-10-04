@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { putPhoto } from '@/lib/photo-store';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -71,8 +71,13 @@ export default function ProjectEditScreen() {
   const choosePhoto = async () => {
     const result = await pickImage();
     if (result.status === 'picked') {
-      setPhoto(await putPhoto(result.dataUrl));
-      setPhotoError(null);
+      try {
+        setPhoto(await putPhoto(result.dataUrl));
+        setPhotoError(null);
+      } catch {
+        // Out of room. Said plainly rather than leaving the tap looking like it did nothing.
+        setPhotoError(PHOTO_STORAGE_FULL);
+      }
     } else {
       setPhotoError(pickImageMessage(result.status));
     }

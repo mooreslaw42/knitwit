@@ -43,9 +43,17 @@ import is built.
 - Path alias `@/*` maps to `src/*` (see `tsconfig.json`).
 - Use `ThemedText`/`ThemedView` (`src/components/themed-*.tsx`) for anything that should follow
   the Knitwit palette/type scale, rather than hardcoding colors or fonts inline.
-- Screen scaffolds under `src/app/*.tsx` are currently placeholders (`PlaceholderScreen`) for
-  Library, Counter, Materials, Account — replace their contents with real features screen by
-  screen; don't restructure the route files themselves without reason.
+- Every screen is built — Library, Counter, Projects, Calculator, Account and the detail routes
+  under them. Don't restructure the route files without reason.
+- A route named `new` needs its own file. `material/new.tsx` and `technique/new.tsx` exist because
+  `[id].tsx` would otherwise catch `/material/new` and treat "new" as an id — which is exactly
+  what happened to techniques, and it wrote a technique called "new" into people's libraries.
+  `tool/[id].tsx` handles it the other way, with an `isNew` branch; either is fine, neither being
+  present is not.
+- Charts, the counter and the stitch editor read `section.rows` for the drawing and
+  `section.totalRows` for the count. They are separate fields on purpose (a pattern may chart an
+  8-row repeat of a 60-row section), but the count is never allowed below the chart — see
+  `atLeastCharted`.
 
 ## Commands
 

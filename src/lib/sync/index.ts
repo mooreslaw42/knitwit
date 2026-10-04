@@ -6,6 +6,7 @@ import { getSupabase } from '@/lib/supabase';
 import { markAllDirty, syncEntity } from '@/lib/sync/engine';
 import { ENTITIES } from '@/lib/sync/registry';
 import { watchAll } from '@/lib/sync/watch';
+import { useKnitwitStore } from '@/store/useKnitwitStore';
 import { setOutboxOwner } from '@/lib/sync/outbox';
 import { onMissingPhoto, onPhotoStored } from '@/lib/photo-store';
 import { downloadPhoto, markAllPhotosForUpload, markPhotoForUpload, pushPhotos } from '@/lib/sync/photos';
@@ -126,6 +127,11 @@ export function startSync(): () => void {
   onMissingPhoto(downloadPhoto);
 
   const unwatch = watchAll(scheduleSync);
+
+  // After the watcher, deliberately: this clears a row an old dead link created, and a deletion
+  // made before the watcher is listening is one the server never hears about — it would simply be
+  // pulled back down on the next sync. One line, and a no-op on every device that never had one.
+  useKnitwitStore.getState().clearStrayTechniques();
 
   // Coming back to the app is the other moment worth syncing on, and until now nothing did.
   //
