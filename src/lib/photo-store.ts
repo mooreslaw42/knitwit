@@ -38,7 +38,16 @@ function keyFor(id: string): string {
   return `${PHOTO_PREFIX}${id}`;
 }
 
-// Stores bytes and returns the id to keep on the record.
+// What to tell a knitter whose device has no room for another picture.
+//
+// `putPhoto` throws rather than returning null, because a photo that was not stored must not be
+// hung on a record as though it were — but every caller has to catch it. On the web the whole
+// store shares one ~5MB origin quota, which is about two dozen pictures, and the failure arrives
+// as a rejected write with no warning before it.
+export const PHOTO_STORAGE_FULL =
+  "There's no room on this device for another picture. Remove one you don't need and try again.";
+
+// Stores bytes and returns the id to keep on the record. Throws when there is no room — see above.
 export async function putPhoto(dataUrl: string): Promise<string> {
   const id = entityId('photo');
   await AsyncStorage.setItem(keyFor(id), dataUrl);

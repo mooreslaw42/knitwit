@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { putPhoto } from '@/lib/photo-store';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -80,7 +80,9 @@ export default function PatternDetailScreen() {
   const choosePhoto = async () => {
     const result = await pickImage();
     if (result.status === 'picked') {
-      void putPhoto(result.dataUrl).then((id) => setDraft((d) => (d ? { ...d, photo: id } : d)));
+      void putPhoto(result.dataUrl)
+        .then((id) => setDraft((d) => (d ? { ...d, photo: id } : d)))
+        .catch(() => setPhotoError(PHOTO_STORAGE_FULL));
       setPhotoError(null);
     } else {
       setPhotoError(pickImageMessage(result.status));

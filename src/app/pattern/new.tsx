@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { putPhoto } from '@/lib/photo-store';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -129,7 +129,9 @@ export default function NewPatternWizardScreen() {
     if (result.status === 'picked') {
       setForm((f) => ({ ...f, photo: null }));
       // Bytes to their own key, id on the record. See photo-store.ts.
-      void putPhoto(result.dataUrl).then((id) => setForm((f) => ({ ...f, photo: id })));
+      void putPhoto(result.dataUrl)
+        .then((id) => setForm((f) => ({ ...f, photo: id })))
+        .catch(() => setPhotoError(PHOTO_STORAGE_FULL));
       setPhotoError(null);
     } else {
       setPhotoError(pickImageMessage(result.status));
