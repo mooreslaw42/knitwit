@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isApplyingRemote, markAllDirty, resetWatermarkCache, syncEntity, type Entity } from '@/lib/sync/engine';
-import { mark, pending, resetOutboxCache } from '@/lib/sync/outbox';
+import { due, mark, pending, recordFailure, resetOutboxCache } from '@/lib/sync/outbox';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -279,5 +279,69 @@ describe('the first upload', () => {
     const { entity } = entityOver({ m1: { brand: 'Rowan' }, m2: { brand: 'DROPS' } });
     expect(await markAllDirty(entity)).toBe(2);
     expect(await pending('materials')).toHaveLength(2);
+  });
+});
+
+// Every waiting row of a table goes up in one batch, so one row the server will never accept —
+// a constraint it trips, a payload too large — fails that batch every time and takes every other
+// change to the table with it. The queue stops, for ever, and the app says nothing.
+describe('one bad row does not block the rest', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    resetOutboxCache();
+    resetWatermarkCache();
+    mockUpsert.mockReset();
+    mockSelect.mockReset();
+    mockEnsureSession.mockResolvedValue({ user: { id: 'u1' } });
+    mockCurrentUserId.mockReturnValue('u1');
+    mockSelect.mockResolvedValue(nothingToPull);
+  });
+
+  it('sends a much-failed row on its own, so the batch behind it gets through', async () => {
+    const { entity } = entityOver({ bad: { brand: 'Rejected' }, good: { brand: 'Fine' } });
+    await mark('materials', 'bad');
+    await mark('materials', 'good');
+
+    // Three failures against the bad row, the number after which it stops travelling with others.
+    for (let i = 0; i < 3; i++) {
+      await recordFailure([{ table: 'materials', id: 'bad', kind: 'upsert', attempts: i }], 0);
+    }
+
+    // The server takes anything that does not mention the bad row.
+    mockUpsert.mockImplementation((rows: { id: string }[]) =>
+      Promise.resolve(
+        rows.some((r) => r.id === 'bad') ? { error: { message: 'violates constraint' } } : ok,
+      ),
+    );
+
+    await syncEntity(entity);
+
+    // Two requests: the batch, and the suspect by itself.
+    const batches = mockUpsert.mock.calls.map(([rows]) => (rows as { id: string }[]).map((r) => r.id));
+    expect(batches).toContainEqual(['good']);
+    expect(batches).toContainEqual(['bad']);
+
+    // The good row is gone from the outbox; the bad one is still owed, with another failure on it.
+    const left = await pending('materials');
+    expect(left.map((e) => e.id)).toEqual(['bad']);
+    expect(left[0].attempts).toBe(4);
+  });
+
+  it('keeps batching while the failures still look like the network', async () => {
+    const { entity } = entityOver({ m1: { brand: 'A' }, m2: { brand: 'B' } });
+    await mark('materials', 'm1');
+    await mark('materials', 'm2');
+    mockUpsert.mockResolvedValue({ error: { message: 'offline' } });
+
+    await syncEntity(entity);
+
+    // One request holding both: nothing has failed often enough to be suspected yet.
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect((mockUpsert.mock.calls[0][0] as { id: string }[]).map((r) => r.id).sort()).toEqual([
+      'm1',
+      'm2',
+    ]);
+    // And both are held back from the next attempt rather than retried immediately.
+    expect(await due('materials', Date.now())).toEqual([]);
   });
 });

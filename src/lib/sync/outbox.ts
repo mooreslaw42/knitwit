@@ -35,10 +35,37 @@ const OUTBOX_KEY = 'knitwit-outbox';
 const UNCLAIMED = '__unclaimed';
 
 export type PendingKind = 'upsert' | 'delete';
-export type Pending = { table: string; id: string; kind: PendingKind };
+export type Pending = { table: string; id: string; kind: PendingKind; attempts: number };
+
+// ## Entries that keep failing
+//
+// A push sends every waiting row of a table as one batch, so a row the server will never accept —
+// one that trips a constraint, one too large for the request — fails the batch it is in, every
+// time, for ever. Nothing is lost exactly, and nothing gets through either: that table's queue is
+// stuck behind one row, and the knitter sees a device that simply stops syncing while the app says
+// nothing at all.
+//
+// So a failure is remembered. `attempts` counts them, `nextAt` holds the entry back for a while
+// (longer each time, to a ceiling), and the engine pushes a much-failed entry on its own so the
+// rows behind it can go up without it. Nothing is ever dropped: a bad entry waits, visibly, rather
+// than taking the good ones down with it.
+type Entry = { kind: PendingKind; attempts: number; nextAt: number };
 
 // `table/id` — one entry per thing, so marking the same yarn twice leaves one entry.
-type Stored = Record<string, PendingKind>;
+type Stored = Record<string, Entry>;
+
+// A minute, doubling, to half an hour. Long enough that a server having a bad hour is not hammered,
+// short enough that a knitter who closes the laptop and opens it again does not notice.
+const FIRST_BACKOFF_MS = 60_000;
+const MAX_BACKOFF_MS = 30 * 60_000;
+
+// After this many failures an entry is pushed by itself. Three, because the first two failures are
+// far more likely to be the network than the row.
+export const SUSPECT_AFTER = 3;
+
+export function backoffFor(attempts: number): number {
+  return Math.min(FIRST_BACKOFF_MS * 2 ** Math.max(0, attempts - 1), MAX_BACKOFF_MS);
+}
 
 function keyOf(table: string, id: string): string {
   return `${table}/${id}`;
@@ -70,7 +97,15 @@ async function load(): Promise<Stored> {
   if (cache) return cache;
   try {
     const raw = await AsyncStorage.getItem(storageKey(owner));
-    cache = raw ? (JSON.parse(raw) as Stored) : {};
+    // Outboxes written before entries carried a failure count hold a bare kind string. Read as a
+    // fresh entry rather than discarded — those are changes somebody made and has not sent yet.
+    const parsed = raw ? (JSON.parse(raw) as Record<string, PendingKind | Entry>) : {};
+    cache = Object.fromEntries(
+      Object.entries(parsed).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? { kind: value, attempts: 0, nextAt: 0 } : value,
+      ]),
+    );
   } catch {
     // An unreadable outbox is not worth failing over: the cost is re-sending things that were
     // already sent, and every write is an upsert keyed on id, so re-sending is harmless.
@@ -97,18 +132,51 @@ function persist(): Promise<void> {
 
 export async function mark(table: string, id: string, kind: PendingKind = 'upsert'): Promise<void> {
   const current = await load();
+  const existing = current[keyOf(table, id)];
   // A delete outranks an edit: if a yarn was changed and then deleted before either was sent, what
   // the server needs to hear is that it is gone.
-  if (current[keyOf(table, id)] === 'delete' && kind === 'upsert') return;
-  current[keyOf(table, id)] = kind;
+  if (existing?.kind === 'delete' && kind === 'upsert') return;
+  // A fresh edit to a row that has been failing starts the row over. The knitter has changed it
+  // since, so whatever the server objected to may well be gone.
+  current[keyOf(table, id)] = { kind, attempts: 0, nextAt: 0 };
   await persist();
 }
 
+// Everything this device still owes the server, backed off or not.
+//
+// Deliberately not filtered by the backoff. Pull asks this to find out which local rows are unsent,
+// so that a row the knitter has edited is never overwritten by the server's older copy — and a row
+// waiting out a backoff is exactly a row whose local copy is newer. Filtering here would hand the
+// knitter's unsent edit to the next pull to overwrite, which is the opposite of what an outbox is
+// for. Push asks `due` instead.
 export async function pending(table?: string): Promise<Pending[]> {
   const current = await load();
   return Object.entries(current)
-    .map(([key, kind]) => ({ ...parse(key), kind }))
+    .map(([key, entry]) => ({ ...parse(key), kind: entry.kind, attempts: entry.attempts }))
     .filter((entry) => !table || entry.table === table);
+}
+
+// What is waiting *and* ready to be tried again. Push's view of the same queue.
+export async function due(table?: string, now = Date.now()): Promise<Pending[]> {
+  const current = await load();
+  return Object.entries(current)
+    .filter(([, entry]) => entry.nextAt <= now)
+    .map(([key, entry]) => ({ ...parse(key), kind: entry.kind, attempts: entry.attempts }))
+    .filter((entry) => !table || entry.table === table);
+}
+
+// A push that failed. Each entry waits longer than the last, and once it has failed enough times
+// the engine stops batching it with the others.
+export async function recordFailure(failed: Pending[], now = Date.now()): Promise<void> {
+  const current = await load();
+  for (const entry of failed) {
+    const existing = current[keyOf(entry.table, entry.id)];
+    // Gone, or marked again mid-flight: the newer state wins and starts clean.
+    if (!existing || existing.kind !== entry.kind) continue;
+    const attempts = existing.attempts + 1;
+    current[keyOf(entry.table, entry.id)] = { ...existing, attempts, nextAt: now + backoffFor(attempts) };
+  }
+  await persist();
 }
 
 // Cleared only for what was actually sent, and only after it was sent. An entry marked again while
@@ -118,7 +186,7 @@ export async function clear(sent: Pending[]): Promise<void> {
   const current = await load();
   for (const entry of sent) {
     // Still the same kind? A row marked upsert, pushed, then deleted mid-flight must stay marked.
-    if (current[keyOf(entry.table, entry.id)] === entry.kind) {
+    if (current[keyOf(entry.table, entry.id)]?.kind === entry.kind) {
       delete current[keyOf(entry.table, entry.id)];
     }
   }
@@ -152,10 +220,10 @@ export async function setOutboxOwner(userId: string | null): Promise<void> {
 
   if (adopting && Object.keys(adopting).length > 0) {
     const mine = await load();
-    for (const [key, kind] of Object.entries(adopting)) {
+    for (const [key, entry] of Object.entries(adopting)) {
       // A delete already recorded for this account outranks an inherited edit, same rule as mark().
-      if (mine[key] === 'delete' && kind === 'upsert') continue;
-      mine[key] = kind;
+      if (mine[key]?.kind === 'delete' && entry.kind === 'upsert') continue;
+      mine[key] = entry;
     }
     await persist();
     try {
@@ -180,9 +248,15 @@ async function legacyEntries(): Promise<Stored> {
   try {
     const raw = await AsyncStorage.getItem(OUTBOX_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Stored;
+    const parsed = JSON.parse(raw) as Record<string, PendingKind | Entry>;
     await AsyncStorage.removeItem(OUTBOX_KEY);
-    return parsed;
+    // Same tolerance as load(): this one was written before entries carried a failure count.
+    return Object.fromEntries(
+      Object.entries(parsed).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? { kind: value, attempts: 0, nextAt: 0 } : value,
+      ]),
+    );
   } catch {
     return {};
   }

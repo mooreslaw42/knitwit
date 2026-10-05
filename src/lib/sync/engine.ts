@@ -2,7 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { currentUserId, ensureSession } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
-import { clear, mark, pending, type Pending } from '@/lib/sync/outbox';
+import {
+  clear,
+  due,
+  mark,
+  pending,
+  recordFailure,
+  SUSPECT_AFTER,
+  type Pending,
+} from '@/lib/sync/outbox';
 
 // Pushing what changed here, and pulling what changed elsewhere.
 //
@@ -152,9 +160,32 @@ async function push<T>(
   userId: string,
   supabase: ReturnType<typeof getSupabase>,
 ): Promise<number> {
-  const waiting = await pending(entity.table);
+  // `due`, not `pending`: an entry waiting out a backoff is still owed to the server, it is just
+  // not this sync's business. Pull still sees it through `pending`, which is what stops the server
+  // overwriting an unsent local edit.
+  const waiting = await due(entity.table);
   if (waiting.length === 0) return 0;
 
+  // A row the server will never accept fails the batch it travels in, every time, taking every
+  // other change to that table with it — for ever, and silently. So once an entry has failed
+  // enough times it travels alone: the batch behind it gets through, and the bad one keeps failing
+  // by itself where it harms nothing but its own backoff.
+  const suspect = waiting.filter((item) => item.attempts >= SUSPECT_AFTER);
+  const batch = waiting.filter((item) => item.attempts < SUSPECT_AFTER);
+
+  let total = 0;
+  for (const group of [batch, ...suspect.map((item) => [item])]) {
+    if (group.length > 0) total += await pushGroup(entity, userId, supabase, group);
+  }
+  return total;
+}
+
+async function pushGroup<T>(
+  entity: Entity<T>,
+  userId: string,
+  supabase: ReturnType<typeof getSupabase>,
+  waiting: Pending[],
+): Promise<number> {
   const local = entity.local();
   const upserts: Record<string, unknown>[] = [];
   const sent: Pending[] = [];
@@ -210,6 +241,9 @@ async function push<T>(
     // Left in the outbox on purpose. Offline, a dropped connection, a server having a bad minute —
     // all of them mean try again later, and nothing has been lost as long as the marks survive.
     console.warn(`sync: could not push ${entity.table}`, error.message);
+    // Counted, so an entry that keeps failing waits longer each time and is eventually sent on its
+    // own rather than blocking the table behind it.
+    await recordFailure(sent);
     return 0;
   }
 
