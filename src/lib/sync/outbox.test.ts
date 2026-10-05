@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  backoffFor,
   clear,
   count,
   currentOutboxOwner,
+  due,
   mark,
   pending,
+  recordFailure,
   resetOutboxCache,
   setOutboxOwner,
 } from '@/lib/sync/outbox';
@@ -26,7 +29,7 @@ describe('marking what changed', () => {
 
   it('remembers a change', async () => {
     await mark('materials', 'm1');
-    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'upsert' }]);
+    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }]);
   });
 
   // Five edits on a train are one thing to send, not five.
@@ -49,13 +52,15 @@ describe('marking what changed', () => {
   it('lets a delete outrank an edit', async () => {
     await mark('materials', 'm1', 'upsert');
     await mark('materials', 'm1', 'delete');
-    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'delete' }]);
+    expect(await pending('materials')).toEqual([
+      { table: 'materials', id: 'm1', kind: 'delete', attempts: 0 },
+    ]);
   });
 
   it('does not let a later edit downgrade a delete', async () => {
     await mark('materials', 'm1', 'delete');
     await mark('materials', 'm1', 'upsert');
-    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'delete' }]);
+    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'delete', attempts: 0 }]);
   });
 });
 
@@ -68,8 +73,10 @@ describe('clearing what was sent', () => {
   it('clears only what it is told about', async () => {
     await mark('materials', 'm1');
     await mark('materials', 'm2');
-    await clear([{ table: 'materials', id: 'm1', kind: 'upsert' }]);
-    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm2', kind: 'upsert' }]);
+    await clear([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }]);
+    expect(await pending('materials')).toEqual([
+      { table: 'materials', id: 'm2', kind: 'upsert', attempts: 0 },
+    ]);
   });
 
   // The race that loses work: a yarn is pushed, the knitter edits it while the request is in
@@ -78,12 +85,12 @@ describe('clearing what was sent', () => {
     await mark('materials', 'm1', 'upsert');
     // …pushed as an upsert, and meanwhile:
     await mark('materials', 'm1', 'delete');
-    await clear([{ table: 'materials', id: 'm1', kind: 'upsert' }]);
-    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'delete' }]);
+    await clear([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }]);
+    expect(await pending('materials')).toEqual([{ table: 'materials', id: 'm1', kind: 'delete', attempts: 0 }]);
   });
 
   it('shrugs off clearing something that was never there', async () => {
-    await clear([{ table: 'materials', id: 'ghost', kind: 'upsert' }]);
+    await clear([{ table: 'materials', id: 'ghost', kind: 'upsert', attempts: 0 }]);
     expect(await count()).toBe(0);
   });
 });
@@ -132,7 +139,7 @@ describe('whose outbox it is', () => {
 
     await setOutboxOwner('alice');
     expect(await pending('materials')).toEqual([
-      { table: 'materials', id: 'alice-yarn', kind: 'upsert' },
+      { table: 'materials', id: 'alice-yarn', kind: 'upsert', attempts: 0 },
     ]);
   });
 
@@ -145,7 +152,7 @@ describe('whose outbox it is', () => {
     await setOutboxOwner('alice');
 
     expect(await pending('materials')).toEqual([
-      { table: 'materials', id: 'made-offline', kind: 'upsert' },
+      { table: 'materials', id: 'made-offline', kind: 'upsert', attempts: 0 },
     ]);
   });
 
@@ -192,7 +199,7 @@ describe('whose outbox it is', () => {
     await setOutboxOwner('alice');
 
     expect(await pending('materials')).toEqual([
-      { table: 'materials', id: 'from-before', kind: 'upsert' },
+      { table: 'materials', id: 'from-before', kind: 'upsert', attempts: 0 },
     ]);
     // Taken once, not handed to the next account too.
     expect(await AsyncStorage.getItem('knitwit-outbox')).toBeNull();
@@ -203,5 +210,83 @@ describe('whose outbox it is', () => {
     await mark('materials', 'alice-yarn');
     await setOutboxOwner('alice');
     expect(await pending('materials')).toHaveLength(1);
+  });
+});
+
+// A push sends every waiting row of a table in one batch, so a row the server will never accept
+// fails the batch it is in — every time, taking every other change to that table with it. Nothing
+// was lost and nothing got through: the queue simply stopped, silently.
+describe('an entry that keeps failing', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    resetOutboxCache();
+  });
+
+  it('waits longer after each failure, up to a ceiling', () => {
+    expect(backoffFor(1)).toBe(60_000);
+    expect(backoffFor(2)).toBe(120_000);
+    expect(backoffFor(3)).toBe(240_000);
+    // However many times it has failed, it is still retried twice an hour.
+    expect(backoffFor(99)).toBe(30 * 60_000);
+  });
+
+  it('is held back from the next push, and comes due later', async () => {
+    const now = 1_000_000;
+    await mark('materials', 'm1');
+    await recordFailure([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }], now);
+
+    expect(await due('materials', now + 1_000)).toEqual([]);
+    expect(await due('materials', now + 61_000)).toEqual([
+      { table: 'materials', id: 'm1', kind: 'upsert', attempts: 1 },
+    ]);
+  });
+
+  // The regression this split exists to prevent. Pull asks `pending` to find out which local rows
+  // are unsent so the server's older copy cannot overwrite them — and a row waiting out a backoff
+  // is precisely a row whose local copy is newer. Hidden there, the knitter's unsent edit would be
+  // overwritten by the very sync that was meant to protect it.
+  it('is still owed to the server while it waits', async () => {
+    const now = 1_000_000;
+    await mark('materials', 'm1');
+    await recordFailure([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }], now);
+
+    expect(await count()).toBe(1);
+    expect(await pending('materials')).toEqual([
+      { table: 'materials', id: 'm1', kind: 'upsert', attempts: 1 },
+    ]);
+  });
+
+  it('counts failures up, so the engine can eventually send it alone', async () => {
+    const now = 0;
+    await mark('materials', 'm1');
+    for (let i = 0; i < 3; i++) {
+      const [entry] = await due('materials', now + i * 10 * 60_000);
+      await recordFailure([entry], now + i * 10 * 60_000);
+    }
+    const [entry] = await pending('materials');
+    expect(entry.attempts).toBe(3);
+  });
+
+  // The knitter edited it again, so whatever the server objected to may well be gone.
+  it('starts over when the row is changed again', async () => {
+    const now = 1_000_000;
+    await mark('materials', 'm1');
+    await recordFailure([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }], now);
+    await mark('materials', 'm1');
+
+    expect(await due('materials', now)).toEqual([
+      { table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 },
+    ]);
+  });
+
+  it('ignores a failure for something already sent or since changed', async () => {
+    const now = 1_000_000;
+    await mark('materials', 'm1', 'delete');
+    // The push that failed thought it was an upsert; the outbox has since recorded a delete.
+    await recordFailure([{ table: 'materials', id: 'm1', kind: 'upsert', attempts: 0 }], now);
+
+    expect(await due('materials', now)).toEqual([
+      { table: 'materials', id: 'm1', kind: 'delete', attempts: 0 },
+    ]);
   });
 });
