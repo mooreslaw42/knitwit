@@ -1,0 +1,71 @@
+name: Relock
+
+# Regenerates package-lock.json so `npm ci` accepts it on Linux.
+#
+# The lockfile this repo carries is written on macOS, and a macOS-written lock omits the Linux-only
+# @emnapi/core node (an optional wasm fallback pulled in transitively). `npm ci` on a Linux box then
+# aborts with "Missing: @emnapi/core from lock file" — which is why CI uses `npm install` and why
+# the EAS iOS build has to drop the lockfile on the worker (see scripts/eas-build-pre-install.sh).
+#
+# A lockfile generated *on Linux* is self-consistent for Linux, so `npm ci` passes there — and on
+# EAS, which also builds on Linux. This job regenerates it on EAS's own Node version, proves `npm ci`
+# accepts it, and commits it back. Once main carries a Linux-clean lock, the pre-install hook can be
+# removed and runtimeVersion can go back to the fingerprint policy (which needs both the worker and
+# the machine that runs `eas build` to install the same tree — impossible while the hook rewrites it).
+
+on:
+  workflow_dispatch:
+  # Only when the manifest changes — a lockfile-only push (including this job's own commit) must not
+  # retrigger it, or it would loop.
+  push:
+    branches: [main]
+    paths: ['package.json']
+
+concurrency:
+  group: relock-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relock:
+    name: Regenerate lockfile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 is what EAS's iOS images run (Node.js 22.x / npm 10.x), so the lock this produces is
+      # validated against the exact npm that will `npm ci` it on the build worker.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A clean resolve, not a heal: `npm install --package-lock-only` leaves the same missing node
+      # in place (npm won't materialise @emnapi/core unless it resolves the tree from scratch), so the
+      # lockfile has to be thrown away and rebuilt. Versions only move within the ranges package.json
+      # already allows.
+      - name: Regenerate package-lock.json
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --no-audit --no-fund
+
+      # The real test: if the regenerated lock is still not something `npm ci` accepts here, it won't
+      # be accepted on EAS either, and the job should fail loudly rather than commit a lock that
+      # doesn't fix anything.
+      - name: Verify npm ci accepts it
+        run: |
+          rm -rf node_modules
+          npm ci --no-audit --no-fund
+
+      - name: Commit the lockfile if it changed
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already clean on Linux — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Regenerate package-lock.json so npm ci accepts it on Linux"
+          git push
