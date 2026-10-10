@@ -1,6 +1,7 @@
 name: Relock
 
-# Regenerates package-lock.json so `npm ci` accepts it on Linux.
+# Regenerates package-lock.json so `npm ci` accepts it on Linux, and offers the result as a
+# downloadable artifact to drop into a PR.
 #
 # The lockfile this repo carries is written on macOS, and a macOS-written lock omits the Linux-only
 # @emnapi/core node (an optional wasm fallback pulled in transitively). `npm ci` on a Linux box then
@@ -9,14 +10,16 @@ name: Relock
 #
 # A lockfile generated *on Linux* is self-consistent for Linux, so `npm ci` passes there — and on
 # EAS, which also builds on Linux. This job regenerates it on EAS's own Node version, proves `npm ci`
-# accepts it, and commits it back. Once main carries a Linux-clean lock, the pre-install hook can be
-# removed and runtimeVersion can go back to the fingerprint policy (which needs both the worker and
-# the machine that runs `eas build` to install the same tree — impossible while the hook rewrites it).
+# accepts it, and uploads it as an artifact. Download it, commit it in a PR, let CI validate it, and
+# merge — then the pre-install hook can be removed and runtimeVersion can go back to the fingerprint
+# policy (which needs both the worker and the machine that runs `eas build` to install the same tree,
+# impossible while the hook rewrites it). Kept as an artifact rather than a push because main is
+# branch-protected; a regenerated lock belongs in a reviewable PR, not a direct commit.
 
 on:
   workflow_dispatch:
-  # Only when the manifest changes — a lockfile-only push (including this job's own commit) must not
-  # retrigger it, or it would loop.
+  # Only when the manifest changes — the lock this produces never lands here directly, so there is
+  # nothing for it to loop on, but there is also no point re-running on unrelated pushes.
   push:
     branches: [main]
     paths: ['package.json']
@@ -29,8 +32,6 @@ jobs:
   relock:
     name: Regenerate lockfile
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -51,21 +52,26 @@ jobs:
           npm install --no-audit --no-fund
 
       # The real test: if the regenerated lock is still not something `npm ci` accepts here, it won't
-      # be accepted on EAS either, and the job should fail loudly rather than commit a lock that
+      # be accepted on EAS either, and the job should fail loudly rather than hand over a lock that
       # doesn't fix anything.
       - name: Verify npm ci accepts it
         run: |
           rm -rf node_modules
           npm ci --no-audit --no-fund
 
-      - name: Commit the lockfile if it changed
+      # A one-line verdict in the run summary so it is obvious at a glance whether the lock moved and
+      # is worth downloading, without opening the artifact.
+      - name: Summarise
         run: |
           if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json already clean on Linux — nothing to commit."
-            exit 0
+            echo "package-lock.json is already clean on Linux — no change, nothing to merge." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "package-lock.json changed and now passes \`npm ci\` on Linux. Download the **package-lock** artifact, commit it in a PR, and merge." >> "$GITHUB_STEP_SUMMARY"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Regenerate package-lock.json so npm ci accepts it on Linux"
-          git push
+
+      - name: Upload the regenerated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          if-no-files-found: error
