@@ -313,6 +313,30 @@ export default function MaterialEditScreen() {
             </ThemedText>
           </PillButton>
 
+          {/* The quick way to a near-identical yarn: a second colourway of the same range, the same
+              yarn bought in a new dye lot. It leaves the yarn in hand untouched — nothing here is
+              saved — and opens a fresh copy of whatever is on the form right now to edit. Only for a
+              yarn that already exists, since there is nothing yet to copy when adding one. */}
+          {!isNew && (
+            <PillButton
+              variant="secondary"
+              style={styles.duplicateBtn}
+              onPress={() => {
+                const copyId = saveMaterial(null, {
+                  ...form,
+                  brand: form.brand || 'Unbranded',
+                  colorName: form.colorName || 'Unnamed color',
+                });
+                // replace, not push: the copy stands in for the original on the screen, so Back
+                // returns to the library rather than to editing the yarn it was copied from.
+                router.replace(`/material/${copyId}`);
+              }}>
+              <ThemedText type="smallBold" themeColor="ink">
+                Duplicate this yarn
+              </ThemedText>
+            </PillButton>
+          )}
+
           {/* Asked for the same way as deleting a project or a technique. Deleting a yarn reaches
               further than this screen — it also drops out of every project section that says it
               was knitted in — so it says so before it happens rather than after. */}
@@ -350,6 +374,9 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     marginTop: Spacing.two,
+  },
+  duplicateBtn: {
+    marginTop: Spacing.one,
   },
   hero: {
     height: 140,
