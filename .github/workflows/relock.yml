@@ -1,0 +1,77 @@
+name: Relock
+
+# Regenerates package-lock.json so `npm ci` accepts it on Linux, and offers the result as a
+# downloadable artifact to drop into a PR.
+#
+# The lockfile this repo carries is written on macOS, and a macOS-written lock omits the Linux-only
+# @emnapi/core node (an optional wasm fallback pulled in transitively). `npm ci` on a Linux box then
+# aborts with "Missing: @emnapi/core from lock file" — which is why CI uses `npm install` and why
+# the EAS iOS build has to drop the lockfile on the worker (see scripts/eas-build-pre-install.sh).
+#
+# A lockfile generated *on Linux* is self-consistent for Linux, so `npm ci` passes there — and on
+# EAS, which also builds on Linux. This job regenerates it on EAS's own Node version, proves `npm ci`
+# accepts it, and uploads it as an artifact. Download it, commit it in a PR, let CI validate it, and
+# merge — then the pre-install hook can be removed and runtimeVersion can go back to the fingerprint
+# policy (which needs both the worker and the machine that runs `eas build` to install the same tree,
+# impossible while the hook rewrites it). Kept as an artifact rather than a push because main is
+# branch-protected; a regenerated lock belongs in a reviewable PR, not a direct commit.
+
+on:
+  workflow_dispatch:
+  # Only when the manifest changes — the lock this produces never lands here directly, so there is
+  # nothing for it to loop on, but there is also no point re-running on unrelated pushes.
+  push:
+    branches: [main]
+    paths: ['package.json']
+
+concurrency:
+  group: relock-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relock:
+    name: Regenerate lockfile
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 is what EAS's iOS images run (Node.js 22.x / npm 10.x), so the lock this produces is
+      # validated against the exact npm that will `npm ci` it on the build worker.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A clean resolve, not a heal: `npm install --package-lock-only` leaves the same missing node
+      # in place (npm won't materialise @emnapi/core unless it resolves the tree from scratch), so the
+      # lockfile has to be thrown away and rebuilt. Versions only move within the ranges package.json
+      # already allows.
+      - name: Regenerate package-lock.json
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --no-audit --no-fund
+
+      # The real test: if the regenerated lock is still not something `npm ci` accepts here, it won't
+      # be accepted on EAS either, and the job should fail loudly rather than hand over a lock that
+      # doesn't fix anything.
+      - name: Verify npm ci accepts it
+        run: |
+          rm -rf node_modules
+          npm ci --no-audit --no-fund
+
+      # A one-line verdict in the run summary so it is obvious at a glance whether the lock moved and
+      # is worth downloading, without opening the artifact.
+      - name: Summarise
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already clean on Linux — no change, nothing to merge." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "package-lock.json changed and now passes \`npm ci\` on Linux. Download the **package-lock** artifact, commit it in a PR, and merge." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the regenerated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          if-no-files-found: error
