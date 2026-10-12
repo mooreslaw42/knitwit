@@ -20,6 +20,14 @@ per-craft gauge) can be ported into TypeScript types rather than redesigned. `re
 pattern.pdf` (gitignored) is a sample real-world pattern, useful as a fixture once AI pattern
 import is built.
 
+`brand-kit/` is the design source of truth for the Knitwit identity: master logo SVGs, the 40
+icons and 8 illustrations as loose SVGs, a `preview/brand-sheet.html` overview, and the Python
+generators in `source/` that drew all of them. Like `reference/`, it is neither served nor built,
+and it is excluded from `tsconfig.json` and ESLint — `source/handwritten/` holds generator inputs
+that import data modules which only exist after codegen. The app-facing output already lives in
+`assets/`, `public/` and `src/components/{logo,icons,illustrations,motion}/`; regenerating does
+not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENTATION.md`.
+
 ## Layout
 
 - `src/app/` — Expo Router file-based routes. Router root is `src/app` (see `expo.router` config),

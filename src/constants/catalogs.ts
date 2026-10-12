@@ -6,6 +6,7 @@ import type {
   TechniqueCraft,
   ToolType,
 } from '@/types/knitwit';
+import type { KnitIconName } from '@/components/icons/knit-icon-data';
 
 export const CATEGORY_LABELS: Record<PatternCategory, string> = {
   sweaters: 'Sweater & jumper',
@@ -184,15 +185,17 @@ export function toolSizeOptions(
   return options;
 }
 
-export const TOOL_ICONS: Record<ToolType, string> = {
-  straight: '➖',
-  circular: '⭕',
-  dpn: '▦',
-  interchangeable: '🔧',
-  'crochet-hook': '🪝',
-  'cable-needle': '➰',
-  'cable-pin': '📌',
-  other: '🧰',
+// Drawn icons rather than emoji: emoji look different on every platform, clash with the palette,
+// and a screen reader reads them out by their Unicode names ("curly loop", "hook").
+export const TOOL_ICONS: Record<ToolType, KnitIconName> = {
+  straight: 'needles-straight',
+  circular: 'needles-circular',
+  dpn: 'needles-dpn',
+  interchangeable: 'needles-interchangeable',
+  'crochet-hook': 'crochet-hook',
+  'cable-needle': 'cable-needle',
+  'cable-pin': 'cable-pin',
+  other: 'toolbox',
 };
 
 export const YARN_WEIGHTS = [

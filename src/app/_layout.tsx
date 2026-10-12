@@ -39,6 +39,9 @@ import { monitorAccount, reportProblem, startMonitoring } from "@/lib/monitoring
 import { startSync } from "@/lib/sync";
 
 SplashScreen.preventAutoHideAsync();
+// The splash and the app are both cream, so a short cross-fade reads as the logo settling into
+// the app rather than a cut. Fade is iOS-only; Android uses its own system splash animation.
+SplashScreen.setOptions({ duration: 400, fade: true });
 
 // Before the first render, deliberately: the crash worth catching most is the one that happens on
 // the way up, and a reporter started inside a component is not listening yet when that fires.

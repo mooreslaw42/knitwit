@@ -1,3 +1,4 @@
+import { AnimatedProgressBar } from '@/components/motion/AnimatedProgressBar';
 import { PhotoImage } from '@/components/photo';
 import { SelectControl } from '@/components/select-control';
 import { useState } from 'react';
@@ -33,14 +34,9 @@ export function Card({ style, ...props }: ViewProps) {
   return <View style={[styles.card, style]} {...props} />;
 }
 
-export function ProgressBar({ pct, color }: { pct: number; color: string }) {
-  const clamped = Math.max(0, Math.min(1, pct));
-  return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${clamped * 100}%`, backgroundColor: color }]} />
-    </View>
-  );
-}
+// Fills up smoothly when the value changes, and honours Reduce Motion — see
+// components/motion/AnimatedProgressBar.tsx. Same props as before, so no call site changes.
+export const ProgressBar = AnimatedProgressBar;
 
 // The same badge for a whole project. Butter for work in hand, sage for done, coral for frogged
 // — a frogged project isn't a failure, but it is the one that needs to look different from the
@@ -326,17 +322,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.large,
     padding: Spacing.four,
-  },
-  progressTrack: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    height: 6,
-    width: '100%',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: Radii.pill,
   },
   badge: {
     borderRadius: Radii.pill,

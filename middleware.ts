@@ -23,8 +23,10 @@ const GATE_PATH = '/__gate';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 export const config = {
-  // Everything except Vercel's internal paths.
-  matcher: '/((?!_vercel/).*)',
+  // Everything except Vercel's internal paths and the public brand files (favicons, app icons,
+  // web manifest, link-preview image). Those have to load on the login page itself and for the
+  // sites that fetch a link preview, neither of which has the cookie.
+  matcher: '/((?!_vercel/|brand/|favicon\\.ico).*)',
 };
 
 // The cookie holds a hash of the password, never the password itself, so a leaked cookie
@@ -63,6 +65,9 @@ function loginPage(status: number, message?: string): Response {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Knitwit — private beta</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <style>
   :root { --cream:#FDF6EF; --cream-deep:#F7EBDD; --blush-deep:#E58AA0; --ink:#4A3B38; --ink-soft:#8A7873; --white:#fff; }
   * { box-sizing: border-box; }
@@ -71,7 +76,8 @@ function loginPage(status: number, message?: string): Response {
          font-family: ui-rounded, "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   .card { background:var(--white); border-radius:24px; padding:32px 28px; width:100%; max-width:360px;
           box-shadow:0 20px 40px -18px rgba(74,59,56,.35); text-align:center; }
-  h1 { font-size:22px; margin:0 0 6px; }
+  h1 { margin:0 0 10px; display:flex; justify-content:center; }
+  h1 img { height:40px; width:auto; }
   p { font-size:14px; color:var(--ink-soft); margin:0 0 20px; line-height:1.45; }
   input { width:100%; padding:14px 16px; font-size:16px; font-family:inherit; color:var(--ink);
           background:var(--cream); border:none; border-radius:14px; margin-bottom:12px; }
@@ -84,7 +90,7 @@ function loginPage(status: number, message?: string): Response {
 </head>
 <body>
   <div class="card">
-    <h1>🧶 Knitwit</h1>
+    <h1><img src="/brand/knitwit-lockup.svg" alt="Knitwit" height="40"></h1>
     <p>This is a private beta. Enter the access password to continue.</p>
     ${message ? `<p class="err">${message}</p>` : ''}
     <form method="POST" action="${GATE_PATH}">

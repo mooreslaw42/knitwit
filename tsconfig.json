@@ -24,6 +24,9 @@
   // specifiers, neither of which this compiler knows about. They're typechecked by
   // `supabase functions serve` / `deno check` instead.
   "exclude": [
-    "supabase/functions"
+    "supabase/functions",
+    // The brand kit is design source, not app code. `source/handwritten/` holds the inputs the
+    // generator injects data into, so they import modules that only exist once it has run.
+    "brand-kit"
   ]
 }

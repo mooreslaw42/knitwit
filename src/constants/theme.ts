@@ -73,6 +73,10 @@ export const Radii = {
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
+// Below this window width the web nav bar shows icons only (labels stay for screen readers): six
+// labelled tabs and the logo no longer fit beside each other.
+export const CompactNavBelow = 760;
+
 // Cap on a free-text name the app later shows in a chip, a swatch caption or a card title.
 // Enforced where the text is entered and where it's imported, so nothing longer ever reaches a
 // layout that can't hold it. An imported yarn slot arrived at over a hundred characters — the

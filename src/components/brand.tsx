@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { KnitwitLogo } from '@/components/logo/KnitwitLogo';
 
 // The logo, which is a link home.
 //
@@ -14,13 +14,15 @@ import { ThemedText } from '@/components/themed-text';
 // `style` lands on the Link, not on the text inside it. The Link is the flex child of the header
 // row, so layout styles — margins, alignment — only do anything there. Putting them on the inner
 // text looks identical in the source and silently does nothing.
-export function Brand({ style }: { style?: StyleProp<TextStyle> }) {
+// `compact` swaps the full lockup for the swatch mark alone, for a header that has run out of room.
+export function Brand({ style, compact }: { style?: StyleProp<TextStyle>; compact?: boolean }) {
   return (
     <Link
       href="/"
       accessibilityLabel="Knitwit — go to the home page"
       style={[styles.link, style]}>
-      <ThemedText type="smallBold">🧶 Knitwit</ThemedText>
+      {/* Decorative: the link already carries the accessible name. */}
+      <KnitwitLogo variant={compact ? 'markSmall' : 'lockup'} height={compact ? 32 : 28} decorative />
     </Link>
   );
 }
