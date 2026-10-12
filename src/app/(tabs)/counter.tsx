@@ -1,9 +1,19 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
+import { EmptyState } from '@/components/illustrations/EmptyState';
+import { Illustration, type IllustrationName } from '@/components/illustrations/Illustration';
 import { PillButton } from '@/components/knitwit-ui';
+import { Confetti } from '@/components/motion/Confetti';
+import { haptics, type HapticKind } from '@/components/motion/haptics';
+import { enterCard, exitCard } from '@/components/motion/presets';
+import { PressableScale } from '@/components/motion/PressableScale';
+import { RowCount } from '@/components/motion/RowCount';
+import { TimerPulse } from '@/components/motion/TimerPulse';
 import { StitchChart, StitchRowStrip } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -101,12 +111,13 @@ export default function CounterScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-          <ThemedText type="subtitle" style={styles.emptyTitle}>
-            Nothing to count yet
-          </ThemedText>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.centerText}>
-            Start a project from the Home tab, then come back here to count your rows.
-          </ThemedText>
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              illustration="nothing-here"
+              title="Nothing to count yet"
+              message="Start a project from the Home tab, then come back here to count your rows."
+            />
+          </View>
         </SafeAreaView>
       </ThemedView>
     );
@@ -141,13 +152,19 @@ export default function CounterScreen() {
   const hideMain = atMarker || showCastOff || showComplete || noteFormOpen;
 
   const nextMarker = section.markers.find((m) => m > section.row);
-  let markerHint: string | null = null;
+  let markerHint: { icon: KnitIconName; text: string } | null = null;
   if (!section.complete && !noteFormOpen) {
     if (nextMarker !== undefined) {
-      markerHint = `📍 Stitch marker at row ${nextMarker} — ${nextMarker - section.row} to go`;
+      markerHint = {
+        icon: 'stitch-marker',
+        text: `Stitch marker at row ${nextMarker} — ${nextMarker - section.row} to go`,
+      };
     } else if (section.markers.length && section.row < section.totalRows) {
       const left = section.totalRows - section.row;
-      markerHint = `🎉 Final stretch — ${left} ${left === 1 ? 'row' : 'rows'} to go`;
+      markerHint = {
+        icon: 'celebrate',
+        text: `Final stretch — ${left} ${left === 1 ? 'row' : 'rows'} to go`,
+      };
     }
   }
 
@@ -177,11 +194,24 @@ export default function CounterScreen() {
               ← {section.name}
             </ThemedText>
           </Pressable>
-          <Pressable onPress={toggleTimer} style={styles.timerBtn}>
-            <ThemedText type="smallBold" themeColor="ink">
-              {isTimerRunning ? '⏸' : '▶'} {formatClock(liveSeconds)}
+          <PressableScale
+            onPress={toggleTimer}
+            haptic="select"
+            scaleTo={0.96}
+            style={styles.timerBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`${isTimerRunning ? 'Pause' : 'Start'} timer, ${formatClock(liveSeconds)}`}>
+            <TimerPulse running={isTimerRunning} />
+            <KnitIcon
+              name={isTimerRunning ? 'pause' : 'play'}
+              size={16}
+              color={Colors.ink}
+              accent={Colors.sage}
+            />
+            <ThemedText type="smallBold" themeColor="ink" style={styles.tabular}>
+              {formatClock(liveSeconds)}
             </ThemedText>
-          </Pressable>
+          </PressableScale>
           <PillButton
             style={styles.noteBtn}
             onPress={() => {
@@ -211,7 +241,7 @@ export default function CounterScreen() {
   const body = (
     <>
         {noteFormOpen && (
-          <AlertCard borderColor={Colors.coralDeep} icon="📝" title="Add a note">
+          <AlertCard borderColor={Colors.coralDeep} icon="note" title="Add a note">
             <TextInput
               value={noteText}
               onChangeText={setNoteText}
@@ -234,7 +264,11 @@ export default function CounterScreen() {
         )}
 
         {atMarker && (
-          <AlertCard borderColor={Colors.coralDeep} icon="📍" title="Place a stitch marker">
+          <AlertCard
+            borderColor={Colors.coralDeep}
+            icon="stitch-marker"
+            title="Place a stitch marker"
+            haptic="nudge">
             <ThemedText type="small" themeColor="inkSoft">
               Row {section.row}
             </ThemedText>
@@ -246,7 +280,11 @@ export default function CounterScreen() {
         )}
 
         {showCastOff && (
-          <AlertCard borderColor={Colors.coralDeep} icon="🧶" title="Cast off your stitches">
+          <AlertCard
+            borderColor={Colors.coralDeep}
+            icon="cast-off"
+            title="Cast off your stitches"
+            haptic="nudge">
             <ThemedText type="small" themeColor="inkSoft" style={styles.centerText}>
               You&apos;ve reached the last row — bind off to finish this section.
             </ThemedText>
@@ -260,8 +298,10 @@ export default function CounterScreen() {
         {showComplete && (
           <AlertCard
             borderColor={Colors.sageDeep}
-            icon="🎉"
-            title={allDone ? 'Project complete!' : 'Section complete!'}>
+            illustration="celebrate"
+            title={allDone ? 'Project complete!' : 'Section complete!'}
+            haptic="success">
+            <Confetti burstKey={`${activeProjectKey}|${activeSectionIndex}`} />
             <ThemedText type="small" themeColor="inkSoft" style={styles.centerText}>
               {allDone
                 ? `Every section of ${project.name} is done.`
@@ -317,21 +357,28 @@ export default function CounterScreen() {
                 ) : null}
               </View>
             )}
-            <ThemedText style={styles.cntNumber}>{section.row}</ThemedText>
+            <RowCount
+              value={section.row}
+              style={styles.cntNumber}
+              accessibilityLabel={`Row ${section.row} of ${section.totalRows}`}
+            />
             <ThemedText type="small" themeColor="inkSoft" style={styles.cntOf}>
               of {section.totalRows} rows
             </ThemedText>
             <View style={styles.btnRow}>
-              <Pressable
+              <PressableScale
                 onPress={() => changeRow(-1)}
                 disabled={section.row <= 0}
+                accessibilityRole="button"
+                accessibilityLabel="Previous row"
                 style={[styles.cntBtnMinus, section.row <= 0 && styles.disabled]}>
-                <ThemedText type="title" themeColor="inkSoft">
-                  –
-                </ThemedText>
-              </Pressable>
-              <Pressable
+                <KnitIcon name="minus" size={28} color={Colors.inkSoft} />
+              </PressableScale>
+              <PressableScale
                 onPress={() => changeRow(1)}
+                scaleTo={0.92}
+                accessibilityRole="button"
+                accessibilityLabel="Next row"
                 // Only locked while the bind-off prompt is still standing. Once it's been
                 // declined the knitter has said they aren't finished, so counting on has to work
                 // — the store grows the section to match.
@@ -340,28 +387,32 @@ export default function CounterScreen() {
                   styles.cntBtnPlus,
                   section.row >= section.totalRows && !castOffDismissed && styles.disabled,
                 ]}>
-                <ThemedText type="title" themeColor="white" style={styles.plusGlyph}>
-                  +
-                </ThemedText>
-              </Pressable>
+                <KnitIcon name="plus" size={64} color={Colors.white} />
+              </PressableScale>
             </View>
             <View style={styles.shortcuts}>
-              <Pressable
+              <PressableScale
                 onPress={() => changeRow(-5)}
                 disabled={section.row <= 0}
+                haptic="select"
+                accessibilityRole="button"
+                accessibilityLabel="Back 5 rows"
                 style={[styles.shortcutBtn, section.row <= 0 && styles.disabled]}>
                 <ThemedText type="smallBold" themeColor="inkSoft">
                   −5
                 </ThemedText>
-              </Pressable>
-              <Pressable
+              </PressableScale>
+              <PressableScale
                 onPress={() => changeRow(-10)}
                 disabled={section.row <= 0}
+                haptic="select"
+                accessibilityRole="button"
+                accessibilityLabel="Back 10 rows"
                 style={[styles.shortcutBtn, section.row <= 0 && styles.disabled]}>
                 <ThemedText type="smallBold" themeColor="inkSoft">
                   −10
                 </ThemedText>
-              </Pressable>
+              </PressableScale>
             </View>
           </View>
         )}
@@ -378,8 +429,9 @@ export default function CounterScreen() {
 
         {markerHint && !hideMain && (
           <View style={styles.markerHint}>
+            <KnitIcon name={markerHint.icon} size={18} color={Colors.sageDeep} accent={Colors.sage} />
             <ThemedText type="smallBold" themeColor="sageDeep">
-              {markerHint}
+              {markerHint.text}
             </ThemedText>
           </View>
         )}
@@ -442,22 +494,41 @@ export default function CounterScreen() {
 function AlertCard({
   borderColor,
   icon,
+  illustration,
   title,
+  haptic,
   children,
 }: {
   borderColor: string;
-  icon: string;
+  icon?: KnitIconName;
+  illustration?: IllustrationName;
   title: string;
+  /** Felt as the card appears, so a knitter notices without looking up from the needles. */
+  haptic?: HapticKind;
   children?: React.ReactNode;
 }) {
+  useEffect(() => {
+    if (haptic) haptics[haptic]();
+  }, [haptic]);
+
+  const tint = borderColor === Colors.sageDeep ? Colors.sage : Colors.coral;
   return (
-    <View style={[styles.alertCard, { borderColor }]}>
-      <ThemedText style={styles.alertIcon}>{icon}</ThemedText>
+    <Animated.View
+      entering={enterCard}
+      exiting={exitCard}
+      style={[styles.alertCard, { borderColor }]}>
+      {illustration ? (
+        <Illustration name={illustration} width={150} />
+      ) : icon ? (
+        <View style={[styles.alertIconBubble, { backgroundColor: tint + '55' }]}>
+          <KnitIcon name={icon} size={32} color={borderColor} accent={tint} />
+        </View>
+      ) : null}
       <ThemedText type="subtitle" style={styles.centerText}>
         {title}
       </ThemedText>
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -471,13 +542,16 @@ function AlertButton({
   variant: 'cancel' | 'set';
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
+      scaleTo={0.96}
+      haptic={variant === 'set' ? 'firm' : 'select'}
+      accessibilityRole="button"
       style={[styles.alertBtn, variant === 'set' ? styles.alertBtnSet : styles.alertBtnCancel]}>
       <ThemedText type="smallBold" themeColor={variant === 'set' ? 'white' : 'ink'}>
         {label}
       </ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -568,11 +642,17 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   timerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
     flexShrink: 0,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
   // Matches the "+ New pattern" pill used on the Library/Materials/Projects headers.
   noteBtn: {
@@ -632,10 +712,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusGlyph: {
-    fontSize: 52,
-    lineHeight: 56,
-  },
   disabled: {
     opacity: 0.4,
   },
@@ -656,6 +732,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.sageDeep,
   },
   markerHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
     paddingHorizontal: Spacing.three,
@@ -671,16 +750,22 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     gap: Spacing.two,
+    // Keeps the finishing confetti inside the card.
+    overflow: 'hidden',
   },
-  alertIcon: {
-    fontSize: 32,
+  alertIconBubble: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centerText: {
     textAlign: 'center',
   },
-  emptyTitle: {
-    textAlign: 'center',
-    marginTop: Spacing.six,
+  emptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
   },
   noteInput: {
     backgroundColor: Colors.cream,

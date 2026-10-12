@@ -1,22 +1,23 @@
 import { Link, usePathname } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Brand } from './brand';
+import { KnitIcon, type KnitIconName } from './icons/KnitIcon';
 import { ThemedText } from './themed-text';
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, CompactNavBelow, MaxContentWidth, Spacing } from '@/constants/theme';
 
 // The same navigation the tab screens get, for screens pushed onto the root stack (pattern and
 // project detail, the wizards, the section/row editors). Those sit outside the (tabs) group, so
 // without this they'd strand the user with only a back arrow.
 const NAV = [
-  { href: '/', label: 'Home' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/library', label: 'Library' },
-  { href: '/counter', label: 'Counter' },
-  { href: '/calculator', label: 'Calculator' },
-  { href: '/account', label: 'Account' },
-] as const;
+  { href: '/', label: 'Home', icon: 'home' },
+  { href: '/projects', label: 'Projects', icon: 'yarn' },
+  { href: '/library', label: 'Library', icon: 'library' },
+  { href: '/counter', label: 'Counter', icon: 'counter' },
+  { href: '/calculator', label: 'Calculator', icon: 'gauge' },
+  { href: '/account', label: 'Account', icon: 'account' },
+] as const satisfies readonly { href: string; label: string; icon: KnitIconName }[];
 
 // A detail screen still belongs to a section of the app — keep that tab lit while you're in it.
 function activeHref(pathname: string): string | null {
@@ -30,11 +31,13 @@ function activeHref(pathname: string): string | null {
 export default function AppHeader() {
   const pathname = usePathname();
   const active = activeHref(pathname);
+  // Same breakpoint as the tab screens' bar, so moving between them doesn't change the menu.
+  const compact = useWindowDimensions().width < CompactNavBelow;
 
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        <Brand />
+        <Brand compact={compact} />
         {/* The links sit in their own group pushed to the right, rather than trailing the logo.
             It leaves the middle of the bar clear, and the nav lands where a browser's own
             controls are — which is where the eye goes looking for it. */}
@@ -50,10 +53,19 @@ export default function AppHeader() {
               // Announces "you are here" to a screen reader, which the pink pill only says
               // visually.
               aria-current={isActive ? 'page' : undefined}
+              accessibilityLabel={compact ? item.label : undefined}
               style={[styles.link, isActive && styles.linkActive]}>
-              <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
-                {item.label}
-              </ThemedText>
+              <KnitIcon
+                name={item.icon}
+                size={compact ? 22 : 18}
+                color={isActive ? Colors.ink : Colors.inkSoft}
+                accent={isActive ? Colors.white : undefined}
+              />
+              {!compact && (
+                <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
+                  {item.label}
+                </ThemedText>
+              )}
               </Link>
             );
           })}
@@ -86,6 +98,9 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   link: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one + Spacing.half,
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,

@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KnitIcon } from '@/components/icons/KnitIcon';
+import { YarnSkein } from '@/components/illustrations/YarnSkein';
+import { yarnSwatchColor } from '@/components/illustrations/yarn-colors';
 import { PillButton, Thumb } from '@/components/knitwit-ui';
 import { TechniqueLibrary } from '@/components/technique-library';
 import { CardLink } from '@/components/card-link';
@@ -153,7 +156,11 @@ export default function LibraryScreen() {
                       onPress={() => toggleFavorite(id)}
                       hitSlop={8}
                       style={styles.heartBtn}>
-                      <ThemedText type="default">{pt.favorited ? '♥' : '♡'}</ThemedText>
+                      <KnitIcon
+                        name={pt.favorited ? 'bookmark-filled' : 'bookmark'}
+                        color={Colors.coralDeep}
+                        accent={pt.favorited ? undefined : Colors.coral}
+                      />
                     </Pressable>
                   </View>
                 ))}
@@ -177,7 +184,9 @@ export default function LibraryScreen() {
                     key={id}
                     style={styles.stashRow}
                     href={`/material/${id}`}>
-                    <Thumb photo={m.photo} />
+                    <Thumb photo={m.photo}>
+                      <YarnSkein color={yarnSwatchColor(m.colorName)} size={44} />
+                    </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">
                         {m.brand} — {m.colorName}
@@ -201,7 +210,12 @@ export default function LibraryScreen() {
                     style={styles.stashRow}
                     href={`/tool/${id}`}>
                     <Thumb>
-                      <ThemedText type="default">{TOOL_ICONS[t.type]}</ThemedText>
+                      <KnitIcon
+                        name={TOOL_ICONS[t.type]}
+                        size={26}
+                        color={Colors.lavenderDeep}
+                        accent={Colors.lavender}
+                      />
                     </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">

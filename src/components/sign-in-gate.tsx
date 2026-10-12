@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PillButton } from "@/components/knitwit-ui";
+import { KnitwitLogo } from "@/components/logo/KnitwitLogo";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import {
@@ -223,9 +224,17 @@ export function SignInGate() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <ThemedText type="title" heading={1} style={styles.title}>
-            Knitwit
-          </ThemedText>
+          {/* The logo is the page heading: one h1 named "Knitwit", with the artwork itself hidden
+              from screen readers so the name isn't read twice. */}
+          <View
+            accessible
+            accessibilityRole="header"
+            aria-level={1}
+            accessibilityLabel="Knitwit"
+            style={styles.logo}
+          >
+            <KnitwitLogo variant="lockupStacked" height={112} decorative />
+          </View>
 
           {sentTo ? (
             <>
@@ -465,7 +474,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
   },
-  title: { textAlign: "center" },
+  logo: { alignItems: "center", marginBottom: Spacing.two },
   input: {
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,

@@ -1,0 +1,29 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.71373,0.33725,0.12941,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "stitches.svg",
+          "name": "stitches"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
