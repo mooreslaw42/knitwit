@@ -1,5 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 
+import { invokeEdgeFunction } from '@/lib/edge-function';
+
 // Reading a pattern file the knitter uploaded. Plain text goes straight through; a PDF is read
 // through its text layer. There is deliberately no OCR — a scanned pattern is detected and
 // refused with an explanation, because a bad OCR pass produces plausible-looking nonsense and
@@ -44,6 +46,19 @@ export function looksLikeScan(text: string, pages: number): boolean {
   return text.trim().length < MIN_CHARS_PER_PAGE * Math.max(1, pages);
 }
 
+// What went wrong reading a PDF, said to a knitter rather than to a log. The old code answered
+// "it might be password-protected" to everything, which was wrong for the commonest case of all —
+// being on a phone, where reading a PDF could not work at all.
+export function extractMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  // The server's word for "pdf.js would not open this": encrypted, truncated, or not a PDF.
+  if (message === 'unreadable') {
+    return "Couldn't read that PDF. If it's password-protected, try pasting the text instead.";
+  }
+  if (message) return message;
+  return "Couldn't read that PDF. Try pasting the text instead.";
+}
+
 async function bytesOf(asset: DocumentPicker.DocumentPickerAsset): Promise<ArrayBuffer> {
   // On web the picker hands back the actual File; everywhere else there's a URI to fetch.
   const file = (asset as { file?: File }).file;
@@ -52,13 +67,25 @@ async function bytesOf(asset: DocumentPicker.DocumentPickerAsset): Promise<Array
   return await response.arrayBuffer();
 }
 
+// A big scanned-looking PDF can take a while on a cold function; a pattern is worth waiting for,
+// but not forever.
+const EXTRACT_TIMEOUT_MS = 60_000;
+
+// Reading a PDF happens on the server. pdf.js needs DOMMatrix, Path2D and OffscreenCanvas, which
+// the web has and Hermes does not — running it here worked in a browser and threw on every phone.
+// See supabase/functions/extract-pdf.
+// Exported because the Ravelry import charts an owned pattern's PDF through the same path — see
+// src/lib/ravelry/build-pattern-chart.ts. One reader, wherever the bytes came from.
 export async function extractPdf(bytes: ArrayBuffer): Promise<{ text: string; pages: number }> {
-  // Imported on demand: it's the largest dependency in the app, and most sessions never upload a
-  // PDF. unpdf bundles a pdfjs build that needs no worker setup, which is the usual sharp edge.
-  const { extractText, getDocumentProxy } = await import('unpdf');
-  const pdf = await getDocumentProxy(new Uint8Array(bytes));
-  const { text, totalPages } = await extractText(pdf, { mergePages: true });
-  return { text: Array.isArray(text) ? text.join('\n\n') : text, pages: totalPages };
+  const data = await invokeEdgeFunction('extract-pdf', bytes, {
+    timeoutMs: EXTRACT_TIMEOUT_MS,
+    timeoutMessage: 'Reading that PDF took too long. Try pasting the text instead.',
+  });
+  const body = data as { text?: unknown; pages?: unknown };
+  if (typeof body?.text !== 'string' || typeof body?.pages !== 'number') {
+    throw new Error('Malformed response.');
+  }
+  return { text: body.text, pages: body.pages };
 }
 
 export async function pickPatternFile(): Promise<PatternFile> {
@@ -107,12 +134,8 @@ export async function pickPatternFile(): Promise<PatternFile> {
   let extracted: { text: string; pages: number };
   try {
     extracted = await extractPdf(bytes);
-  } catch {
-    return {
-      status: 'refused',
-      name,
-      message: "Couldn't read that PDF. If it's password-protected, try pasting the text instead.",
-    };
+  } catch (error) {
+    return { status: 'refused', name, message: extractMessage(error) };
   }
 
   const text = tidyExtractedText(extracted.text);

@@ -1,4 +1,9 @@
-import { looksLikeScan, tidyExtractedText } from '@/lib/read-pattern-file';
+import { extractMessage, looksLikeScan, tidyExtractedText } from '@/lib/read-pattern-file';
+
+// Reading a PDF now goes through an Edge Function, so this module reaches Supabase and, under
+// Jest, AsyncStorage's missing native module. Same stub as the other suites that cross that line —
+// nothing here calls the network. (jest.mock is hoisted, so its position does not matter.)
+jest.mock('@/lib/supabase', () => ({ getSupabase: jest.fn() }));
 
 describe('tidyExtractedText', () => {
   it('collapses the stray spacing a PDF text layer produces, keeping line breaks', () => {
@@ -35,5 +40,23 @@ describe('looksLikeScan', () => {
     const onePageOfText = 'Row 1 (RS): K1, M1L, knit to last st, M1R, K1. '.repeat(3);
     expect(looksLikeScan(onePageOfText, 1)).toBe(false);
     expect(looksLikeScan(onePageOfText, 20)).toBe(true);
+  });
+});
+
+describe('extractMessage', () => {
+  it("turns the server's sentinel into something a knitter can act on", () => {
+    expect(extractMessage(new Error('unreadable'))).toContain('password-protected');
+  });
+
+  it('passes a real explanation straight through rather than burying it', () => {
+    // A timeout or a size refusal already says what happened; the old code replaced every one of
+    // them with a guess about encryption.
+    expect(extractMessage(new Error('That file is too big to read (over 12MB).'))).toBe(
+      'That file is too big to read (over 12MB).',
+    );
+  });
+
+  it('still says something when it is handed nothing useful', () => {
+    expect(extractMessage(undefined)).toMatch(/pasting the text/);
   });
 });

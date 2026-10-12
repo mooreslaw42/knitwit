@@ -1,0 +1,16 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:unpdf@^1.8.1": "1.8.1"
+  },
+  "npm": {
+    "unpdf@1.8.1": {
+      "integrity": "sha512-xkURhy2SoGpOIH0a1gLHNkASPIQYonadDJs2AQwPEfUakafeD9EA1WTWWsaR++gfTCXJpV27W7tU1nXuk82UKQ=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "npm:unpdf@^1.8.1"
+    ]
+  }
+}

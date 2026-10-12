@@ -27,7 +27,9 @@ export async function readErrorBody(error: unknown): Promise<string | null> {
 
 export async function invokeEdgeFunction(
   name: string,
-  body: Record<string, unknown>,
+  // Usually a JSON object. A file goes up as raw bytes instead — base64 would inflate it by a
+  // third and build the whole thing as a string first, which is a poor trade on a phone.
+  body: Record<string, unknown> | ArrayBuffer | Uint8Array,
   options: {
     timeoutMs: number;
     timeoutMessage: string;

@@ -40,7 +40,6 @@
     "react-native-url-polyfill": "^4.0.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1",
-    "unpdf": "^1.8.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -61,7 +60,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "typecheck:functions": "npx -y deno@latest check --config supabase/functions/parse-pattern/deno.json supabase/functions/parse-pattern/index.ts && npx -y deno@latest check supabase/functions/ravelry-userinfo/index.ts supabase/functions/ravelry-connect/index.ts supabase/functions/ravelry-import/index.ts",
+    "typecheck:functions": "npx -y deno@latest check --config supabase/functions/parse-pattern/deno.json supabase/functions/parse-pattern/index.ts && npx -y deno@latest check --config supabase/functions/extract-pdf/deno.json supabase/functions/extract-pdf/index.ts && npx -y deno@latest check supabase/functions/ravelry-userinfo/index.ts supabase/functions/ravelry-connect/index.ts supabase/functions/ravelry-import/index.ts",
     "test": "jest"
   },
   "jest": {
