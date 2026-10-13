@@ -65,3 +65,40 @@ export type RavelryNeedleRecord = {
   needle_type?: RavelryNeedleType | null;
   comment?: string | null;
 };
+
+// Categories nest: "Sleeveless Top" → parent "Tops" → parent "Clothing". The chain is walked
+// most-specific-first when deciding which Knitwit PatternCategory it is.
+export type RavelryPatternCategory = {
+  name?: string | null;
+  permalink?: string | null;
+  parent?: RavelryPatternCategory | null;
+};
+
+export type RavelryPatternNeedleSize = {
+  metric?: number | null; // in millimetres
+  hook?: boolean | null;
+  name?: string | null; // the US label, e.g. "US 2½ - 3.0 mm"
+};
+
+export type RavelryPattern = {
+  id: number;
+  permalink?: string | null; // → the Ravelry library page
+  name?: string | null;
+  notes?: string | null; // the designer's description, plain text
+  gauge?: number | null; // stitches per gauge_divisor
+  row_gauge?: number | null; // rows per gauge_divisor
+  gauge_divisor?: number | null; // the measured window, in inches (occasionally 10 for cm)
+  yardage_description?: string | null; // "656 - 1312 yards"
+  yarn_weight_description?: string | null; // "Fingering (14 wpi)"
+  sizes_available?: string | null; // freeform, e.g. "XS-4XL" — a range, not a clean list
+  difficulty_average?: number | null; // 1–10, lower is easier
+  difficulty_count?: number | null;
+  craft?: { name?: string | null } | null; // "Knitting" | "Crochet"
+  pattern_type?: { name?: string | null } | null; // "Tank/Camisole"
+  pattern_categories?: RavelryPatternCategory[] | null;
+  pattern_needle_sizes?: RavelryPatternNeedleSize[] | null;
+  pattern_author?: { name?: string | null } | null;
+  photos?: RavelryPhoto[] | null;
+  languages?: { name?: string | null }[] | null;
+  personal_attributes?: { favorited?: boolean | null } | null;
+};
