@@ -85,6 +85,17 @@ export type Craft = {
   gauge: Gauge | null;
 };
 
+// Where an entity came from when it was imported from Ravelry, and nothing more — enough to link
+// back, and enough that a re-import recognises the same thing and updates it in place instead of
+// making a second copy. Absent on everything a knitter made in Knitwit. Rides inside the entity's
+// JSONB like every other field, so it needs no column of its own. See docs/plans/ravelry-import.md.
+export type RavelrySource = {
+  id: string; // Ravelry's own id for the project / pattern / stash entry / needle
+  kind: 'project' | 'pattern' | 'stash' | 'needle';
+  url: string; // deep link back to the thing on Ravelry
+  importedAt: string; // ISO timestamp of the import that last wrote this entity
+};
+
 export type Material = {
   brand: string;
   colorName: string;
@@ -107,6 +118,7 @@ export type Material = {
   link: string;
   photo: string | null;
   crafts?: Partial<Record<CraftType, Craft>>;
+  ravelrySource?: RavelrySource;
 };
 
 // A user-kept reference note for a knitting/crochet technique — a cast-on, a decrease, a
@@ -177,6 +189,7 @@ export type Tool = {
   thickness: string;
   length: string;
   quantity: number; // how many of this tool the user owns
+  ravelrySource?: RavelrySource;
 };
 
 // Only ever added to. Every value here may be sitting in someone's saved pattern, in their
@@ -352,6 +365,7 @@ export type Pattern = {
   tools: PatternTool[];
   techniques: PatternTechnique[];
   sections: PatternSection[];
+  ravelrySource?: RavelrySource;
 };
 
 export type ProjectSection = {
@@ -448,6 +462,7 @@ export type Project = {
   // than by the pattern's slot so a project improvised without a pattern can hold it too.
   materialSkeins?: Record<string, number>;
   sections: ProjectSection[];
+  ravelrySource?: RavelrySource;
 };
 
 export type SectionStatus = 'not-started' | 'in-progress' | 'complete';
