@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 
+import { captureRavelryToken } from '@/lib/ravelry/connect-session';
 import { getSupabase } from '@/lib/supabase';
 
 // Who is signed in.
@@ -110,6 +111,10 @@ export function watchSession(): () => void {
       // raising it and let the knitter through with nothing changed.
       const recovering = event === 'PASSWORD_RECOVERY' || (state.recovering && Boolean(session));
       publish({ session, settled: true, recovering });
+      // A Ravelry sign-in or connect arrives as a SIGNED_IN session carrying the one-time provider
+      // refresh token. Catch it here — the single place every session passes through — and store it
+      // server-side. No-op for every other session (see captureRavelryToken).
+      captureRavelryToken(session);
     });
     return () => data.subscription.unsubscribe();
   } catch (error) {

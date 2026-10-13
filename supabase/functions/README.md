@@ -123,3 +123,31 @@ nested `{ user: { … } }` response. JWT verification is off for it in `config.t
 Ravelry's, not ours); it holds no secret and reads no table. No secrets to set — the Ravelry client
 secret lives in the provider's dashboard config, not here. Setup and open decisions:
 `docs/ravelry-sign-in.md`.
+
+## `ravelry-connect`
+
+Keeps the Ravelry **refresh token** Supabase hands over only once. On a Ravelry sign-in or connect,
+supabase-js puts `provider_refresh_token` on the session that comes back and stores it nowhere; the
+app (`src/lib/ravelry/connect-session.ts`, fired from the session watcher) sends it here the moment
+it sees it. This is Phase 0 of `docs/plans/ravelry-import.md` — nothing can read a knitter's library
+later without it.
+
+**Request** (`POST`, via `invokeEdgeFunction('ravelry-connect', …)`): `{ refresh_token, access_token? }`.
+The caller's JWT identifies whose row is written (verified against `/auth/v1/user`, never decoded on
+trust — same as `delete-account`); the optional access token is used once, best-effort, to ask
+Ravelry who this is for the "connected as …" label. Returns `{ ok, stored }`.
+
+The token is **enveloped** (AES-GCM) before it touches Postgres, so a row in `ravelry_connections`
+is ciphertext — see the table's migration, which also closes it to every client by RLS. Only the
+service role (this function) reads or writes it.
+
+| Secret | Required | Notes |
+|---|---|---|
+| `RAVELRY_TOKEN_KEY` | yes | 32 raw bytes, base64, for the envelope. **Supabase secret only.** Generate with `openssl rand -base64 32`. Rotating it orphans stored tokens — knitters reconnect once. |
+
+```bash
+supabase functions deploy ravelry-connect --project-ref <ref>
+```
+
+JWT verification is left on (the default): the caller is a signed-in knitter, and the row written is
+always their own.
