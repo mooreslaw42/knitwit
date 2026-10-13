@@ -113,3 +113,13 @@ timestamp) costs the cache for every import. Everything variable belongs in the 
   it shells out to `npx deno check` and needs no permanent Deno install.
 - **Dependency pinning.** Deno refuses npm versions published in the last 24 hours as a
   supply-chain guard, so the `@anthropic-ai/sdk` pin deliberately trails the newest release.
+
+## `ravelry-userinfo`
+
+The userinfo endpoint for the `custom:ravelry` auth provider. Supabase Auth calls it — never the
+app — with a Ravelry access token as the bearer; it asks Ravelry's `/current_user.json` who that is
+and returns flat claims with the numeric id as `sub`. Needed because Supabase cannot read Ravelry's
+nested `{ user: { … } }` response. JWT verification is off for it in `config.toml` (the bearer is
+Ravelry's, not ours); it holds no secret and reads no table. No secrets to set — the Ravelry client
+secret lives in the provider's dashboard config, not here. Setup and open decisions:
+`docs/ravelry-sign-in.md`.

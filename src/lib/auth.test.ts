@@ -1,9 +1,12 @@
 import {
   accountStateOf,
+  addRecoveryEmail,
   attachProvider,
   createAccount,
   deleteAccount,
   describeProviderReturn,
+  providerLabel,
+  recheckEmail,
   requestPasswordReset,
   setNewPassword,
 } from '@/lib/auth';
@@ -21,6 +24,7 @@ const mockUpdateUser = jest.fn();
 const mockSignUp = jest.fn();
 const mockResetPasswordForEmail = jest.fn();
 const mockInvoke = jest.fn();
+const mockRefreshSession = jest.fn();
 let mockSession: unknown = null;
 let mockAnonymous = true;
 
@@ -29,7 +33,8 @@ jest.mock('@/lib/supabase', () => ({
     auth: {
       linkIdentity: mockLinkIdentity,
       signInWithOAuth: mockSignInWithOAuth,
-      updateUser: (a: unknown) => mockUpdateUser(a),
+      updateUser: (a: unknown, b?: unknown) => (b === undefined ? mockUpdateUser(a) : mockUpdateUser(a, b)),
+      refreshSession: () => mockRefreshSession(),
       signUp: (a: unknown) => mockSignUp(a),
       resetPasswordForEmail: (a: unknown, b: unknown) => mockResetPasswordForEmail(a, b),
     },
@@ -47,6 +52,7 @@ jest.mock('@/lib/edge-function', () => ({
 }));
 jest.mock('@/lib/auth-return', () => ({
   authReturnUrl: () => 'https://knitwit.eu/account',
+  emailReturnUrl: () => 'https://knitwit.eu/account',
   skipBrowserRedirect: false,
   finishProviderFlow: (url: string | null) => mockFinishProviderFlow(url),
   providerReturnError: () => mockProviderReturnError(),
@@ -61,6 +67,8 @@ describe('reading the account', () => {
       email: null,
       providers: [],
       userId: null,
+      pendingEmail: null,
+      needsEmail: false,
     });
   });
 
@@ -104,6 +112,42 @@ describe('reading the account', () => {
       },
     } as never);
     expect(state.providers).toEqual(['apple', 'google']);
+  });
+
+  // The account Ravelry makes: signed in, not anonymous, and nothing to recover it with.
+  it('knows an account with no email needs one', () => {
+    const state = accountStateOf({
+      user: { id: 'u1', is_anonymous: false, email: '', identities: [{ provider: 'custom:ravelry' }] },
+    } as never);
+    expect(state.needsEmail).toBe(true);
+    expect(state.providers).toEqual(['custom:ravelry']);
+  });
+
+  // Asked for, not yet confirmed. Still held: an address nobody has proved is not a way back in.
+  it('still needs one while the address waits for its link', () => {
+    const state = accountStateOf({
+      user: { id: 'u1', is_anonymous: false, email: '', new_email: 'me@example.com', identities: [] },
+    } as never);
+    expect(state.needsEmail).toBe(true);
+    expect(state.pendingEmail).toBe('me@example.com');
+  });
+
+  // Anonymous accounts have their own wall; this must not put a second one in front of it.
+  it('does not ask an anonymous account for an email here', () => {
+    const state = accountStateOf({ user: { id: 'u1', is_anonymous: true } } as never);
+    expect(state.needsEmail).toBe(false);
+  });
+
+  it('does not ask an account that has one', () => {
+    const state = accountStateOf({
+      user: { id: 'u1', is_anonymous: false, email: 'me@example.com' },
+    } as never);
+    expect(state.needsEmail).toBe(false);
+  });
+
+  it('names Ravelry as Ravelry, not by its configuration id', () => {
+    expect(providerLabel('custom:ravelry')).toBe('Ravelry');
+    expect(providerLabel('apple')).toBe('Apple');
   });
 
   it('copes with a user that has no identities at all', () => {
@@ -173,6 +217,35 @@ describe('attaching a provider', () => {
       ok: false,
       message: 'Signing in with Apple or Google is not switched on for Knitwit yet.',
     });
+  });
+
+  // Ravelry is a custom provider in Supabase, so the name the app uses is not the one it is
+  // configured under.
+  it('asks for Ravelry by its configured id', async () => {
+    await attachProvider('ravelry');
+    expect(mockSignInWithOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'custom:ravelry' }),
+    );
+  });
+
+  // From the Account screen: Ravelry as a second way into the account already open.
+  it('links Ravelry to a signed-in account when asked to connect it', async () => {
+    mockAnonymous = false;
+    await attachProvider('ravelry', 'connect');
+    expect(mockLinkIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'custom:ravelry' }),
+    );
+    expect(mockSignInWithOAuth).not.toHaveBeenCalled();
+  });
+
+  it('names Ravelry when its login is already somebody else’s way in', async () => {
+    mockAnonymous = false;
+    mockLinkIdentity.mockResolvedValue({
+      data: null,
+      error: { message: 'Identity is already linked to another user' },
+    });
+    const result = await attachProvider('ravelry', 'connect');
+    expect(result).toHaveProperty('message', expect.stringContaining('Ravelry'));
   });
 
   // Backing out of Apple's sheet is a decision, not a fault, so nothing is said about it.
@@ -280,6 +353,74 @@ describe('creating an account', () => {
   });
 });
 
+
+// The email a Ravelry account is born without. Without it, losing the Ravelry login loses the
+// knitting, so the app does not let anybody past until it is confirmed.
+describe('adding an email to a Ravelry account', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Confirmation on: the address waits in new_email and `email` stays empty.
+    mockUpdateUser.mockResolvedValue({ data: { user: { email: '', new_email: 'me@example.com' } }, error: null });
+  });
+
+  // updateUser, not signUp: the same user, so the Ravelry identity stays where it is.
+  it('adds it to the account already signed in', async () => {
+    expect(await addRecoveryEmail('  me@example.com ')).toEqual({ ok: true, confirmEmail: true });
+    expect(mockUpdateUser).toHaveBeenCalledWith(
+      { email: 'me@example.com' },
+      { emailRedirectTo: 'https://knitwit.eu/account' },
+    );
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
+  it('says when it went straight on, with confirmation switched off', async () => {
+    mockUpdateUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } }, error: null });
+    expect(await addRecoveryEmail('me@example.com')).toEqual({ ok: true, confirmEmail: false });
+  });
+
+  // The way out of this is not "try again", it is "use that account" — so it is flagged, not just
+  // worded.
+  it('flags an address that already has an account', async () => {
+    mockUpdateUser.mockResolvedValue({
+      data: { user: null },
+      error: { code: 'email_exists', message: 'A user with this email address has already been registered' },
+    });
+    expect(await addRecoveryEmail('taken@example.com')).toEqual({
+      ok: false,
+      taken: true,
+      message: 'taken@example.com already has a Knitwit account.',
+    });
+  });
+
+  it('does not send anything for an empty field', async () => {
+    const result = await addRecoveryEmail('   ');
+    expect(result.ok).toBe(false);
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  // Supabase's rate-limit message contains the word "email", which used to be read as "that does
+  // not look like an email address" — telling somebody their perfectly good address was wrong.
+  it('says the limit was hit, not that the address is wrong', async () => {
+    mockUpdateUser.mockResolvedValue({ data: { user: null }, error: { message: 'email rate limit exceeded' } });
+    const result = await addRecoveryEmail('me@example.com');
+    expect(result).toHaveProperty('message', expect.stringContaining('Too many emails'));
+  });
+
+  // The link is often opened on another device, which tells this one nothing. Asking the server
+  // again is how the gate finds out.
+  it('finds out the link was followed by asking the server', async () => {
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { user: { email: 'me@example.com' } } },
+      error: null,
+    });
+    expect(await recheckEmail()).toBe(true);
+  });
+
+  it('keeps waiting when it has not been', async () => {
+    mockRefreshSession.mockResolvedValue({ data: { session: { user: { email: '' } } }, error: null });
+    expect(await recheckEmail()).toBe(false);
+  });
+});
 
 // Getting back in. With no anonymous fallback and no second door, this email is the only thing
 // between a forgotten password and an account nobody can open.

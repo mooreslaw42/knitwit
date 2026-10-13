@@ -404,6 +404,13 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+# Ravelry's userinfo adapter (see supabase/functions/ravelry-userinfo). Supabase Auth calls it with
+# a Ravelry access token as the bearer, which the gateway's JWT check would reject — so the check is
+# off for this one function. It holds no secret and reads no table; it can only return the profile
+# of the token it is given.
+[functions.ravelry-userinfo]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

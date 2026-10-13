@@ -12,6 +12,11 @@ export function authReturnUrl(): string {
   return `${window.location.origin}/account`;
 }
 
+// Back to the same page, where supabase-js redeems the code and the account updates in place.
+export function emailReturnUrl(): string | undefined {
+  return authReturnUrl();
+}
+
 export async function finishProviderFlow(_url: string | null): Promise<void> {
   // The page is already on its way to Apple.
 }
