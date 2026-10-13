@@ -151,3 +151,31 @@ supabase functions deploy ravelry-connect --project-ref <ref>
 
 JWT verification is left on (the default): the caller is a signed-in knitter, and the row written is
 always their own.
+
+## `ravelry-import`
+
+Reads a knitter's Ravelry on their behalf — everything Ravelry has to run server-side (the client
+secret, and Ravelry's no-CORS rule). It loads the stored refresh token, decrypts it, exchanges it
+for an access token at Ravelry's token endpoint (HTTP Basic with the app credentials, re-storing a
+rotated refresh token), and reads.
+
+First slice is `task: "probe"` (the default): it does the whole chain and returns only the counts —
+`{ ravelryUser, counts: { projects, stash, needles }, readStatus: {…} }` — so the read path can be
+confirmed end to end before any entity is mapped. A `200` with real counts means it works; a `403`
+in `readStatus` with `current_user` fine means the scope is still too narrow (see below). The
+per-entity tasks that return normalized payloads for `src/lib/ravelry/*` slot in where `probe` is.
+
+| Secret | Required | Notes |
+|---|---|---|
+| `RAVELRY_TOKEN_KEY` | yes | The same key `ravelry-connect` enveloped the token with. |
+| `RAVELRY_CLIENT_ID` | yes | The Ravelry app's OAuth2 client id, for the token exchange. **Supabase secret only.** |
+| `RAVELRY_CLIENT_SECRET` | yes | The Ravelry app's OAuth2 client secret. Same. |
+
+```bash
+supabase functions deploy ravelry-import --project-ref <ref>
+```
+
+**Scope:** the `custom:ravelry` provider must request `offline` and **not** `profile-only`. Ravelry
+has no granular read scopes — it is full access unless restricted — so `offline` alone yields a token
+whose consent screen reads "view and update my Ravelry notebook". `profile-only` returns only the
+profile, and every read here comes back `403`.

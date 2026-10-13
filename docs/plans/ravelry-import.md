@@ -79,20 +79,13 @@ Nothing below can read a single row of Ravelry data until this exists. **Confirm
 `provider_refresh_token` is captured and stored nowhere in the codebase today** (`src/lib/auth.ts`
 tracks only `signedIn/anonymous/email/providers/userId`; no `provider_token` handling anywhere).
 
-1. **Settle the scope question *first* — it is the single biggest unknown in this plan.** The
-   consent screen a knitter sees today grants only *profile-only* ("view my profile page"). Reading
-   projects, stash and library needs broader scopes, and we could **not confirm from Ravelry's
-   public documentation that its OAuth2 even offers granular project/stash read scopes** — the API
-   reference is login-gated, and Ravelry's older full-access path was OAuth1. Resolve this before
-   building anything else, because the answer reshapes the feature:
-   - **Documentation/support route:** read the OAuth2 scope list in the authenticated API docs, or
-     ask on the Ravelry API forum / email the maintainers.
-   - **Experiment route (cheapest definitive answer):** widen the `custom:ravelry` provider's scope
-     config in the Supabase dashboard, run the OAuth2 flow, and see what Ravelry's consent screen
-     offers and what an access token can then read.
-   - **Data-shape route (does not answer the scope question, but de-risks all the mapping below):**
-     a one-off authenticated `curl` with a Ravelry Pro app's personal API key — see
-     [the probe](#appendix-a-self-serve-data-shape-probe).
+1. **The scope question — resolved 2026-10-13.** Ravelry's OAuth2 has **no granular read scopes**;
+   it is full access *unless restricted*. Set the `custom:ravelry` provider to request **`offline`
+   and not `profile-only`**, and the consent screen reads **"view and update my Ravelry notebook"** —
+   full read (and write) access. `profile-only` yields only the profile, and every read comes back
+   `403`; a made-up scope like `library-read` is rejected outright with "Unexpected scope error".
+   Confirmed by running the OAuth flow against the live provider. Write access ("update") also means
+   the export phase is feasible later.
 2. **`ravelry_connections` table.** `user_id` (PK), encrypted `refresh_token`, Ravelry
    username + numeric id, granted scopes, `connected_at`, `token_updated_at`. RLS: **no client read
    at all** — only the Edge Function (service role) ever decrypts it. Encrypt at rest (Supabase
@@ -198,9 +191,8 @@ imported object carries `ravelrySource`, running it again reconciles instead of 
 
 ## Risks, ranked
 
-1. **Ravelry OAuth2 may not grant project/stash read scopes to end users.** If it doesn't, the whole
-   import needs a different auth path, and export is likely dead on arrival. This is why Phase 0
-   leads with the scope spike. *Unresolved — needs a live check.*
+1. ~~**Ravelry OAuth2 may not grant project/stash read scopes.**~~ **Resolved (2026-10-13):**
+   `offline` with no `profile-only` grants full notebook read+write. See Phase 0.
 2. **Photo URLs must be hotlinkable without auth.** The "URL + thumbnail, don't copy bytes" choice
    depends on Ravelry project and library photos being public CDN links. If any are auth-gated, the
    URL approach breaks for those and needs a fallback.
