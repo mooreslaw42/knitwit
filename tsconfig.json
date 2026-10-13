@@ -4,7 +4,10 @@
     "strict": true,
     // Jest's globals (describe/it/expect) are ambient, so they need naming explicitly —
     // without this, `tsc --noEmit` fails on every test file even though the tests run fine.
-    "types": ["jest"],
+    // "node" is here for one test that reads the SQL migrations off disk to check them against
+    // the TypeScript catalogues; naming a type package here is what keeps the rest of Node's
+    // globals out of app code, which has no business reaching for them.
+    "types": ["jest", "node"],
     "paths": {
       "@/*": [
         "./src/*"

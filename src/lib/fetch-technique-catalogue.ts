@@ -15,6 +15,7 @@ type Row = {
   craft?: unknown;
   family?: unknown;
   abbr?: unknown;
+  stitch_key?: unknown;
   summary?: unknown;
   aliases?: unknown;
   video?: unknown;
@@ -37,6 +38,7 @@ function toTechnique(row: Row): CatalogueTechnique | null {
       ? (family as TechniqueFamily)
       : 'other',
     abbr: str(row.abbr).trim(),
+    stitchKey: str(row.stitch_key).trim(),
     summary: str(row.summary),
     aliases: Array.isArray(row.aliases) ? row.aliases.filter((a): a is string => typeof a === 'string') : [],
     video: str(row.video),
@@ -44,20 +46,32 @@ function toTechnique(row: Row): CatalogueTechnique | null {
   };
 }
 
-const COLUMNS = 'id,name,craft,family,abbr,summary,aliases,video,link';
-// The same query for a project whose database has not been migrated yet. Selecting a column that
-// isn't there is an error, not an empty field, so asking for `abbr` against an older project would
-// cost the knitter the entire catalogue rather than one column of it — and the app ships to the web
-// and to TestFlight on its own schedule, so it will sometimes be the newer half.
-const COLUMNS_WITHOUT_ABBR = 'id,name,craft,family,summary,aliases,video,link';
+// Newest schema first, each fallback dropping the column the one above it added.
+//
+// Selecting a column that isn't there is an error, not an empty field, so asking for `stitch_key`
+// against a project that hasn't run the migration would cost the knitter the entire catalogue
+// rather than one column of it. The app ships to the web and to TestFlight on its own schedule,
+// so it will sometimes be the newer half. Written as a list rather than another special case
+// because this is now the second column to need it, and there will be a third.
+const COLUMN_SETS = [
+  'id,name,craft,family,abbr,stitch_key,summary,aliases,video,link',
+  'id,name,craft,family,abbr,summary,aliases,video,link',
+  'id,name,craft,family,summary,aliases,video,link',
+];
+
+// Postgres names the column it could not find, so a missing-column error is told apart from a
+// genuine failure by whether it mentions one we only just started asking for.
+const OPTIONAL_COLUMNS = /abbr|stitch_key/;
 
 export async function fetchTechniqueCatalogue(): Promise<CatalogueTechnique[]> {
   const query = (columns: string) =>
     getSupabase().from('technique_catalogue').select(columns).order('name');
 
-  let { data, error } = await query(COLUMNS);
-  if (error && /abbr/.test(error.message)) {
-    ({ data, error } = await query(COLUMNS_WITHOUT_ABBR));
+  let data: unknown = null;
+  let error: { message: string } | null = null;
+  for (const columns of COLUMN_SETS) {
+    ({ data, error } = await query(columns));
+    if (!error || !OPTIONAL_COLUMNS.test(error.message)) break;
   }
   if (error) throw new Error(error.message);
   return ((data ?? []) as Row[])
