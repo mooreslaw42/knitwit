@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PillButton } from "@/components/knitwit-ui";
 import { KnitwitLogo } from "@/components/logo/KnitwitLogo";
+import { ProviderMark } from "@/components/provider-mark";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import {
@@ -326,6 +327,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <ProviderMark name="apple" />
                   <ThemedText type="smallBold" themeColor="ink">
                     Apple
                   </ThemedText>
@@ -335,6 +337,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <ProviderMark name="google" />
                   <ThemedText type="smallBold" themeColor="ink">
                     Google
                   </ThemedText>
@@ -495,9 +498,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   provider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.five,
+    // Slightly tighter than before: the mark now carries part of the width the padding used to.
+    paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
   swap: { alignSelf: "center", paddingVertical: Spacing.two },
