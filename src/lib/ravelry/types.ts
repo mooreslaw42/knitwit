@@ -49,3 +49,19 @@ export type RavelryStash = {
   packs?: RavelryStashPack[] | null;
   user?: { username?: string | null } | null;
 };
+
+export type RavelryNeedleType = {
+  length?: number | null; // in inches
+  metric_name?: string | null; // "3.25"
+  name?: string | null; // US size: "3 ", "D", "00000", or null for sizes with no US equivalent
+  type_name?: string | null; // "circular" | "dp" | "hook" | "steel" | "straight" | …
+};
+
+// Ravelry keeps one record per physical needle a knitter owns; identical needles share a
+// needle_type_id, which is how duplicates are counted back into a quantity.
+export type RavelryNeedleRecord = {
+  id: number;
+  needle_type_id?: number | null;
+  needle_type?: RavelryNeedleType | null;
+  comment?: string | null;
+};
