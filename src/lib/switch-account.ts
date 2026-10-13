@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { buildBackup, backupFilename } from '@/lib/backup';
 import { saveTextFile } from '@/lib/save-file';
-import { attachProvider, signInExisting, type AuthResult } from '@/lib/auth';
+import { attachProvider, signInExisting, type AuthResult, type SignInProvider } from '@/lib/auth';
 import { skipBrowserRedirect } from '@/lib/auth-return';
 
 // Signing into an account that is not the one on this device.
@@ -105,7 +105,7 @@ export async function clearLocalAccountData(): Promise<void> {
 // The web never reaches the end of this function. `signInWithOAuth` navigates the page away, so
 // clearing happens on the way out rather than on the way back; there is no "after" to run in.
 export async function switchToProviderAccount(
-  provider: 'apple' | 'google',
+  provider: SignInProvider,
   options: { downloadBackupFirst: boolean },
 ): Promise<SwitchOutcome> {
   if (options.downloadBackupFirst) {

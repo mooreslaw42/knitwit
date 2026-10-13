@@ -34,6 +34,7 @@ import {
 } from "@/lib/session";
 import { accountStateOf } from "@/lib/auth";
 import { SignInGate } from "@/components/sign-in-gate";
+import { AddEmailGate } from "@/components/add-email-gate";
 import { SetNewPassword } from "@/components/set-new-password";
 import { monitorAccount, reportProblem, startMonitoring } from "@/lib/monitoring";
 import { startSync } from "@/lib/sync";
@@ -202,6 +203,17 @@ export default function RootLayout() {
     return (
       <ThemeProvider value={DefaultTheme}>
         <SignInGate />
+      </ThemeProvider>
+    );
+  }
+
+  // Past the wall, but with no way back in if the way they came is lost — an account Ravelry made,
+  // which arrives without an email. Held here until it has a confirmed address; see
+  // add-email-gate.tsx. Anything else would be the anonymous-account problem again, by another door.
+  if (account.needsEmail && !PUBLIC_ROUTES.includes(pathname)) {
+    return (
+      <ThemeProvider value={DefaultTheme}>
+        <AddEmailGate />
       </ThemeProvider>
     );
   }

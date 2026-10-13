@@ -1,7 +1,8 @@
-import type { Session, User } from '@supabase/supabase-js';
+import type { Provider, Session, User } from '@supabase/supabase-js';
 
 import {
   authReturnUrl,
+  emailReturnUrl,
   finishProviderFlow,
   providerReturnError,
   skipBrowserRedirect,
@@ -33,6 +34,16 @@ export type AccountState = {
   // Which providers are attached, for showing what a knitter signed in with.
   providers: string[];
   userId: string | null;
+  // An address asked for but not yet confirmed. Supabase keeps it apart from `email` until the link
+  // in the message is followed, so this is what the "check your inbox" screen names.
+  pendingEmail: string | null;
+  // Signed in, but with nothing to get back in with if the way they came is lost.
+  //
+  // Only Ravelry can produce this: Apple and Google always hand over an address, and an email
+  // account is one by definition. Ravelry exposes no email at all, so an account it creates starts
+  // out exactly as unrecoverable as the anonymous ones the wall was built to stop. The app holds
+  // such an account at add-email-gate.tsx until it has a confirmed address.
+  needsEmail: boolean;
 };
 
 export function accountStateOf(session: Session | null): AccountState {
@@ -43,7 +54,36 @@ export function accountStateOf(session: Session | null): AccountState {
     email: user?.email ?? null,
     providers: identitiesOf(user),
     userId: user?.id ?? null,
+    pendingEmail: user?.new_email || null,
+    needsEmail: Boolean(user) && user?.is_anonymous !== true && !user?.email,
   };
+}
+
+// The providers a knitter can press a button for, by the names the app uses.
+export type SignInProvider = 'apple' | 'google' | 'ravelry';
+
+// Ravelry is not one of Supabase's built-in providers. It is a custom OAuth2 provider configured in
+// the dashboard under this identifier — see docs/ravelry-sign-in.md.
+const PROVIDER_IDS: Record<SignInProvider, Provider> = {
+  apple: 'apple',
+  google: 'google',
+  ravelry: 'custom:ravelry',
+};
+
+export function providerLabel(provider: string): string {
+  switch (provider) {
+    case 'apple':
+      return 'Apple';
+    case 'google':
+      return 'Google';
+    case 'custom:ravelry':
+    case 'ravelry':
+      return 'Ravelry';
+    case 'email':
+      return 'email';
+    default:
+      return provider;
+  }
 }
 
 function identitiesOf(user: User | undefined): string[] {
@@ -141,10 +181,13 @@ export type ProviderIntent =
   | 'keep-this-account'
   // Sign in to whichever account the provider belongs to. Anything on the device belongs to a
   // different account and is the caller's problem to deal with first.
-  | 'sign-in';
+  | 'sign-in'
+  // Add this provider as a second way into the account already signed in — Ravelry on an account
+  // that has an email, from the Account screen.
+  | 'connect';
 
 export async function attachProvider(
-  provider: 'apple' | 'google',
+  provider: SignInProvider,
   intent: ProviderIntent = 'sign-in',
 ): Promise<AuthResult> {
   const account = currentAccount();
@@ -155,11 +198,14 @@ export async function attachProvider(
   // anonymous, which quietly turned a sign-in screen into an attach-to-this-device screen: pressing
   // Apple to get into an account you already have was answered with "that is already linked to a
   // different account", which is true, unhelpful, and not what the button said it would do.
-  const link = intent === 'keep-this-account' && account.anonymous;
+  const link =
+    (intent === 'keep-this-account' && account.anonymous) ||
+    (intent === 'connect' && account.signedIn && !account.anonymous);
+  const id = PROVIDER_IDS[provider];
 
   const { data, error } = link
-    ? await supabase.auth.linkIdentity({ provider, options })
-    : await supabase.auth.signInWithOAuth({ provider, options });
+    ? await supabase.auth.linkIdentity({ provider: id, options })
+    : await supabase.auth.signInWithOAuth({ provider: id, options });
 
   if (error) return { ok: false, message: readable(error.message) };
 
@@ -182,6 +228,59 @@ export async function attachProvider(
 export function describeProviderReturn(): string | null {
   const problem = providerReturnError();
   return problem === null ? null : readable(problem);
+}
+
+export type AddEmailResult =
+  // `confirmEmail`: a link has gone to the address and nothing changes until it is followed.
+  | { ok: true; confirmEmail: boolean }
+  // `taken`: the address already belongs to a different Knitwit account. Worth its own flag, because
+  // the way out is not "try again" — it is "go and use that account".
+  | { ok: false; message: string; taken: boolean };
+
+// Giving an account Ravelry made the email it was born without.
+//
+// `updateUser` on the session in hand, so the user id — and the Ravelry identity on it — stay put.
+// With no address on the account yet, Supabase sends a single confirmation to the new one and
+// applies it when the link is followed; it also adds an email identity, which is what makes
+// "I have forgotten my password" work for this knitter later.
+//
+// Unlike sign-up this does say when an address is taken. Supabase answers `email_exists` to any
+// signed-in caller regardless of what the app shows, so hiding it here would protect nothing and
+// would leave a knitter retyping an address that can never work.
+export async function addRecoveryEmail(email: string): Promise<AddEmailResult> {
+  const address = email.trim();
+  if (!address) return { ok: false, message: 'Type your email address first.', taken: false };
+
+  const redirect = emailReturnUrl();
+  const { data, error } = await getSupabase().auth.updateUser(
+    { email: address },
+    redirect ? { emailRedirectTo: redirect } : undefined,
+  );
+  if (error) {
+    const code = (error as { code?: string }).code;
+    const taken = code === 'email_exists' || /already been registered/i.test(error.message);
+    return {
+      ok: false,
+      message: taken
+        ? `${address} already has a Knitwit account.`
+        : readable(error.message),
+      taken,
+    };
+  }
+  // Applied straight away only when the project does not confirm addresses. Otherwise it waits in
+  // `new_email` until the link is followed.
+  return { ok: true, confirmEmail: data?.user?.email?.toLowerCase() !== address.toLowerCase() };
+}
+
+// Asking the server again whether the link has been followed.
+//
+// The confirmation is applied wherever the link is opened — a laptop, a different browser, the
+// phone's mail app — and none of those tell this device. Refreshing the session fetches the user as
+// the server now has it, and the session watcher passes that on, which is what lets the gate open.
+export async function recheckEmail(): Promise<boolean> {
+  const { data, error } = await getSupabase().auth.refreshSession();
+  if (error) return false;
+  return Boolean(data.session?.user.email);
 }
 
 // Getting back into an account whose password is gone.
@@ -259,13 +358,17 @@ export function readable(message: string): string {
     return 'That email already has a Knitwit account. Sign in to it instead.';
   }
   if (text.includes('invalid login')) return "That email and password don't match an account.";
+  // Before the email and password checks below, both of which it would otherwise fall into.
+  if (text.includes('rate limit')) {
+    return 'Too many emails have gone out from Knitwit in the last hour. Try again a little later.';
+  }
   if (text.includes('new password should be different')) {
     return 'That is the password you already had. Choose a different one.';
   }
   if (text.includes('password')) return 'That password is too short — six characters or more.';
   if (text.includes('email')) return "That doesn't look like an email address.";
   if (text.includes('identity is already linked') || text.includes('already linked')) {
-    return 'That Apple or Google account is already the way into a different Knitwit account. Sign in to that one instead.';
+    return 'That Apple, Google or Ravelry account is already the way into a different Knitwit account. Sign in to that one instead.';
   }
   if (text.includes('manual linking')) {
     // The dangerous one, and the reason it is called out rather than folded into the fallback:

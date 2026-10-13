@@ -1,11 +1,12 @@
 # Email
 
-Knitwit sends two messages. Both are load-bearing and neither is marketing.
+Knitwit sends three messages. All are load-bearing and none is marketing.
 
 | | when | what breaks without it |
 |---|---|---|
 | **Confirm your address** | signing up | anybody can register an address that is not theirs, and the real owner finds their email taken by an account they cannot enter |
 | **Set a new password** | "I have forgotten my password" | a forgotten password is an account nobody can open, with the knitting still inside it |
+| **Confirm your address** (the *Change email address* template) | after signing up with Ravelry, which has no email to give | the account stays held at the email step, and cannot be recovered if the Ravelry login is lost — see `ravelry-sign-in.md` |
 
 The second one used to be a convenience. Since the sign-in wall went up (`e7b3bc3`) there is no
 anonymous account to fall back on and no other way in, so that email is the only route back.

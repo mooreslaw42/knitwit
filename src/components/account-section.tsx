@@ -14,6 +14,7 @@ import {
   accountStateOf,
   attachProvider,
   describeProviderReturn,
+  providerLabel,
   saveAccount,
   type AccountState,
 } from "@/lib/auth";
@@ -118,6 +119,19 @@ export function AccountSection() {
     if (!result.ok) setNote(result.message);
   };
 
+  // A second way into the account already open, not a different account. On the web the page
+  // leaves for Ravelry and comes back here with the identity attached; a Ravelry login that is
+  // already somebody else's way in is refused, and `readable` says so.
+  const handleConnectRavelry = async () => {
+    setBusy(true);
+    setNote(null);
+    const result = await attachProvider("ravelry", "connect");
+    setBusy(false);
+    if (!result.ok) setNote(result.message);
+  };
+
+  const ravelryConnected = account.providers.includes("custom:ravelry");
+
   return (
     <View style={styles.wrap}>
       <ThemedText type="smallBold" style={styles.label}>
@@ -142,7 +156,8 @@ export function AccountSection() {
           <ReadOnlyField
             label={account.email ? "Email" : "Signed in with"}
             value={
-              account.email ?? (account.providers.join(", ") || "your account")
+              account.email ??
+              (account.providers.map(providerLabel).join(", ") || "your account")
             }
           />
         </>
@@ -245,6 +260,24 @@ export function AccountSection() {
             </ThemedText>
           </Pressable>
         </View>
+      ) : null}
+
+      {account.signedIn && !account.anonymous ? (
+        ravelryConnected ? (
+          <ReadOnlyField label="Ravelry" value="Connected" />
+        ) : (
+          <View style={styles.row}>
+            <Pressable
+              onPress={() => void handleConnectRavelry()}
+              style={styles.provider}
+              disabled={busy}
+            >
+              <ThemedText type="smallBold" themeColor="ink">
+                {busy ? "One moment…" : "Connect Ravelry"}
+              </ThemedText>
+            </Pressable>
+          </View>
+        )
       ) : null}
 
       {note ? (
