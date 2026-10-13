@@ -9,6 +9,7 @@ import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { GaugeField } from '@/components/gauge-field';
+import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
@@ -29,7 +30,27 @@ import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/them
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Pattern, PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
-const STEPS = ['Import', 'Basics', 'Gauge', 'Materials', 'Sections'] as const;
+const STEPS = ['Start', 'Basics', 'Gauge', 'Materials', 'Sections'] as const;
+
+// How the knitter said they'd begin. Null means they haven't picked yet, which is the first thing
+// the wizard asks — the step used to show every way in at once, so the upload control, the paste
+// box and the skip all competed for the same glance.
+type StartMode = 'upload' | 'write';
+
+const START_CHOICES: { mode: StartMode; icon: KnitIconName; title: string; blurb: string }[] = [
+  {
+    mode: 'upload',
+    icon: 'pattern',
+    title: 'Upload pattern',
+    blurb: 'A PDF or text file you already have. Knitwit reads it and fills in the rest.',
+  },
+  {
+    mode: 'write',
+    icon: 'edit',
+    title: 'Write pattern',
+    blurb: 'Paste or type the pattern text, and Knitwit reads it the same way.',
+  },
+];
 
 // The library colour-codes cards from this palette. There is no colour picker any more — a card
 // colour is assigned automatically when the pattern is created, so the grid still reads as varied.
@@ -111,6 +132,7 @@ export default function NewPatternWizardScreen() {
   const loadCatalogue = useKnitwitStore((state) => state.loadCatalogue);
 
   const [step, setStep] = useState(0);
+  const [mode, setMode] = useState<StartMode | null>(null);
   const [form, setForm] = useState<Pattern>(blankPattern);
   const [nameTouched, setNameTouched] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -228,6 +250,7 @@ export default function NewPatternWizardScreen() {
     // Nothing to carry forward — clear anything captured and move on to the manual details.
     setForm((f) => ({ ...f, sourceName: '', sourceText: '' }));
     setImported(null);
+    setMode(null);
     setStep((s) => s + 1);
   };
 
@@ -249,6 +272,14 @@ export default function NewPatternWizardScreen() {
   };
 
   const handleBack = () => {
+    // Backing out of a way in returns to the choice rather than leaving the wizard — picking the
+    // wrong one shouldn't cost the knitter the screen. What was already picked up is kept, so
+    // switching to pasting after an upload doesn't throw the text away.
+    if (step === 0 && mode !== null) {
+      setMode(null);
+      setFileError(null);
+      return;
+    }
     if (step > 0) setStep((s) => s - 1);
     else goBackOr(router, '/library');
   };
@@ -275,31 +306,64 @@ export default function NewPatternWizardScreen() {
             Step {step + 1} of {STEPS.length} · {STEPS[step]}
           </ThemedText>
 
-          {STEPS[step] === 'Import' && (
+          {STEPS[step] === 'Start' && mode === null && (
             <>
-              <ThemedText type="subtitle" heading={1}>Have a pattern already?</ThemedText>
+              <ThemedText type="subtitle" heading={1}>How do you want to start?</ThemedText>
               <ThemedText type="small" themeColor="inkSoft">
-                Upload it or paste it in to keep the original with your pattern. Otherwise just skip
-                — you can fill in the details yourself.
+                Knitwit keeps the original either way, so a read can always be run again.
               </ThemedText>
-              <View style={styles.field}>
-                <ThemedText type="smallBold" themeColor="inkSoft">
-                  Upload a file
-                </ThemedText>
-                <Pressable style={styles.uploadBtn} onPress={pickFile}>
-                  <ThemedText type="smallBold" themeColor="inkSoft" numberOfLines={1}>
-                    {form.sourceName ? `📄 ${form.sourceName}` : 'Choose a PDF or text file…'}
-                  </ThemedText>
+              {START_CHOICES.map((choice) => (
+                <Pressable
+                  key={choice.mode}
+                  style={styles.choice}
+                  accessibilityRole="button"
+                  onPress={() => setMode(choice.mode)}>
+                  <KnitIcon
+                    name={choice.icon}
+                    size={28}
+                    color={Colors.coralDeep}
+                    accent={Colors.coral}
+                  />
+                  <View style={styles.choiceText}>
+                    <ThemedText type="smallBold">{choice.title}</ThemedText>
+                    <ThemedText type="small" themeColor="inkSoft">
+                      {choice.blurb}
+                    </ThemedText>
+                  </View>
                 </Pressable>
-                {fileError && (
-                  <ThemedText type="small" themeColor="coralDeep">
-                    {fileError}
+              ))}
+              <PillButton variant="secondary" style={styles.skipBtn} onPress={skipImport}>
+                <ThemedText type="smallBold" themeColor="ink">
+                  Fill it in myself
+                </ThemedText>
+              </PillButton>
+            </>
+          )}
+
+          {STEPS[step] === 'Start' && mode !== null && (
+            <>
+              {mode === 'upload' && (
+                <View style={styles.field}>
+                  <ThemedText type="smallBold" themeColor="inkSoft">
+                    Upload a file
                   </ThemedText>
-                )}
-              </View>
+                  <Pressable style={styles.uploadBtn} onPress={pickFile}>
+                    <ThemedText type="smallBold" themeColor="inkSoft" numberOfLines={1}>
+                      {form.sourceName ? `📄 ${form.sourceName}` : 'Choose a PDF or text file…'}
+                    </ThemedText>
+                  </Pressable>
+                  {fileError && (
+                    <ThemedText type="small" themeColor="coralDeep">
+                      {fileError}
+                    </ThemedText>
+                  )}
+                </View>
+              )}
               <View style={styles.field}>
                 <ThemedText type="smallBold" themeColor="inkSoft">
-                  Or paste the pattern text
+                  {/* Reading a file drops its text here on purpose: a PDF whose text layer came
+                      out scrambled is obvious before it is fed to the model, not after. */}
+                  {mode === 'upload' ? 'What Knitwit read from the file' : 'The pattern text'}
                 </ThemedText>
                 <AutoGrowInput
                   value={form.sourceText}
@@ -307,7 +371,11 @@ export default function NewPatternWizardScreen() {
                     set('sourceText', v);
                     setImported(null);
                   }}
-                  placeholder="Paste the pattern here…"
+                  placeholder={
+                    mode === 'upload'
+                      ? 'Pick a file above, or paste the text here…'
+                      : 'Paste or type the pattern here…'
+                  }
                   minHeight={72}
                   style={styles.pasteBox}
                 />
@@ -561,11 +629,15 @@ export default function NewPatternWizardScreen() {
             </>
           )}
 
-          <PillButton style={styles.nextBtn} onPress={handleNext}>
-            <ThemedText type="smallBold" themeColor="white">
-              {isLast ? 'Save pattern' : STEPS[step] === 'Import' ? 'Continue' : 'Next'}
-            </ThemedText>
-          </PillButton>
+          {/* On the choice screen the cards are the action — a Next button there would be a
+              second, vaguer way to do the same thing. */}
+          {!(STEPS[step] === 'Start' && mode === null) && (
+            <PillButton style={styles.nextBtn} onPress={handleNext}>
+              <ThemedText type="smallBold" themeColor="white">
+                {isLast ? 'Save pattern' : STEPS[step] === 'Start' ? 'Continue' : 'Next'}
+              </ThemedText>
+            </PillButton>
+          )}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -623,6 +695,18 @@ const styles = StyleSheet.create({
     borderRadius: Radii.medium,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
+  },
+  choice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.three,
+    backgroundColor: Colors.white,
+    borderRadius: Radii.medium,
+    padding: Spacing.three,
+  },
+  choiceText: {
+    flex: 1,
+    gap: Spacing.one,
   },
   pasteBox: {
     backgroundColor: Colors.white,
