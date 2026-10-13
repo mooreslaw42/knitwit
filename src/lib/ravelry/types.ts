@@ -102,3 +102,37 @@ export type RavelryPattern = {
   languages?: { name?: string | null }[] | null;
   personal_attributes?: { favorited?: boolean | null } | null;
 };
+
+// A yarn used in a project. `stash_id` is set only when the knitter linked it to a stash entry —
+// that is the one id that can match an imported Material (keyed by stash id); `yarn_id` is the yarn
+// catalogue, kept for a looser fallback.
+export type RavelryProjectPack = {
+  stash_id?: number | null;
+  yarn_id?: number | null;
+  skeins?: number | null;
+};
+
+export type RavelryProjectNeedleSize = {
+  metric?: number | null; // millimetres
+};
+
+export type RavelryProject = {
+  id: number;
+  permalink?: string | null;
+  name?: string | null;
+  pattern_id?: number | null; // → the pattern this was made from, to link an imported card
+  craft_name?: string | null; // "Knitting" | "Crochet"
+  status_name?: string | null; // "In progress" | "Finished" | "Frogged" | "Hibernating" | …
+  started?: string | null; // "2026/10/01"
+  personal_source_name?: string | null;
+  notes?: string | null;
+  tag_names?: string[] | null;
+  size?: string | null; // freeform, e.g. "M"
+  gauge?: number | null; // the knitter's own, stitches per gauge_divisor
+  row_gauge?: number | null;
+  gauge_divisor?: number | null;
+  photos?: RavelryPhoto[] | null;
+  needle_sizes?: RavelryProjectNeedleSize[] | null;
+  packs?: RavelryProjectPack[] | null;
+  user?: { username?: string | null } | null;
+};
