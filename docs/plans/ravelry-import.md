@@ -196,7 +196,10 @@ imported object carries `ravelrySource`, running it again reconciles instead of 
 2. **Photo URLs must be hotlinkable without auth.** The "URL + thumbnail, don't copy bytes" choice
    depends on Ravelry project and library photos being public CDN links. If any are auth-gated, the
    URL approach breaks for those and needs a fallback.
-3. **Server-side PDF text extraction in Deno** (Phase 4) is a new capability for the edge runtime.
+3. **Getting the owned PDF out of Ravelry** (Phase 4) is the one part still unverified — the import
+   now reuses the app's existing client-side PDF extraction, so the only guess left is how Ravelry
+   exposes an owned pattern's PDF. The `pattern-pdf` task reads `pattern.pdf_url`; it needs a real
+   owned pattern to confirm, and is the single place to adjust if that is wrong.
 4. **Stash ↔ project yarn matching** is lossy — Ravelry's yarn model is richer and messier than
    Knitwit's, so expect some unresolved material slots on imported projects.
 

@@ -159,11 +159,19 @@ secret, and Ravelry's no-CORS rule). It loads the stored refresh token, decrypts
 for an access token at Ravelry's token endpoint (HTTP Basic with the app credentials, re-storing a
 rotated refresh token), and reads.
 
-First slice is `task: "probe"` (the default): it does the whole chain and returns only the counts —
-`{ ravelryUser, counts: { projects, stash, needles }, readStatus: {…} }` — so the read path can be
-confirmed end to end before any entity is mapped. A `200` with real counts means it works; a `403`
-in `readStatus` with `current_user` fine means the scope is still too narrow (see below). The
-per-entity tasks that return normalized payloads for `src/lib/ravelry/*` slot in where `probe` is.
+Three tasks:
+
+- `probe` (default) — does the whole chain and returns only counts
+  (`{ ravelryUser, counts, readStatus }`), to confirm the read path. A `200` with real counts means
+  it works; a `403` in `readStatus` with `current_user` fine means the scope is too narrow (below).
+- `pull` — the whole notebook: needles, and the details of every stash entry and project (lists
+  paginated in full, details fetched capped and four-at-a-time), plus the patterns those projects
+  and the library point at. Returns the raw payloads `src/lib/ravelry/*` maps. A notebook past the
+  `PULL_CAP` ceiling needs an incremental import, which is future work.
+- `pattern-pdf` — one owned pattern's PDF (`{ patternId }` → `{ owned, pdfBase64 }`), for the client
+  to extract and run through parse-pattern (Phase 4). **How Ravelry exposes an owned PDF is not yet
+  verified against a real owned pattern** — it reads `pattern.pdf_url`; adjust there if a real one
+  differs.
 
 | Secret | Required | Notes |
 |---|---|---|

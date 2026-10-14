@@ -191,10 +191,11 @@ function notNull<T>(value: T | null | undefined): value is T {
   return value != null;
 }
 
-// Bounded, politely concurrent map. Ravelry rate-limits, and a whole notebook is far more requests
-// than one burst should make — so at most `limit` are in flight, and the cap stops a first import
-// pulling thousands of details in a single function call. Pagination past the cap is future work.
-const PULL_CAP = 200;
+// Ravelry rate-limits, and a whole notebook is far more requests than one burst should make — so at
+// most `limit` details are in flight. The cap is a safety ceiling on one function call, not the page
+// size: lists are paginated in full up to it. A notebook past the cap needs an incremental import,
+// which is future work.
+const PULL_CAP = 1000;
 
 async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = [];
@@ -209,14 +210,34 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return results;
 }
 
+// Walk every page of a list endpoint, collecting the `id` of each item, up to the cap. The list
+// responses carry a paginator with `last_page`; stop there, or when a page comes back empty.
+async function listAllIds(
+  pathFor: (page: number) => string,
+  key: string,
+  token: string,
+): Promise<number[]> {
+  const ids: number[] = [];
+  for (let page = 1; ; page += 1) {
+    const body = await ravelryJson<
+      { paginator?: { last_page?: number; page_count?: number } } & Record<string, unknown>
+    >(pathFor(page), token);
+    const items = (body?.[key] as { id?: number }[] | undefined) ?? [];
+    for (const item of items) if (item.id != null) ids.push(item.id);
+    const lastPage = body?.paginator?.last_page ?? body?.paginator?.page_count ?? page;
+    if (items.length === 0 || page >= lastPage || ids.length >= PULL_CAP) break;
+  }
+  return ids.slice(0, PULL_CAP);
+}
+
 // The list endpoints are thin; the mapping needs the detail (a stash entry's yarn and packs, a
 // project's gauge and needles). So list, then fetch each detail, capped and pooled.
 async function pullStash(username: string, token: string): Promise<unknown[]> {
-  const list = await ravelryJson<{ stash?: { id: number }[] }>(
-    `/people/${username}/stash/list.json?page_size=100`,
+  const ids = await listAllIds(
+    (page) => `/people/${username}/stash/list.json?page_size=100&page=${page}`,
+    'stash',
     token,
   );
-  const ids = (list?.stash ?? []).map((s) => s.id).slice(0, PULL_CAP);
   const details = await mapPool(ids, 4, (id) =>
     ravelryJson<{ stash?: unknown }>(`/people/${username}/stash/${id}.json`, token).then(
       (d) => d?.stash ?? null,
@@ -229,11 +250,11 @@ async function pullProjects(
   username: string,
   token: string,
 ): Promise<{ projects: unknown[]; patternIds: number[] }> {
-  const list = await ravelryJson<{ projects?: { id: number }[] }>(
-    `/projects/${username}/list.json?page_size=100`,
+  const ids = await listAllIds(
+    (page) => `/projects/${username}/list.json?page_size=100&page=${page}`,
+    'projects',
     token,
   );
-  const ids = (list?.projects ?? []).map((p) => p.id).slice(0, PULL_CAP);
   const details = await mapPool(ids, 4, (id) =>
     ravelryJson<{ project?: unknown }>(`/projects/${username}/${id}.json`, token).then(
       (d) => d?.project ?? null,
@@ -246,13 +267,21 @@ async function pullProjects(
   return { projects, patternIds };
 }
 
-// The patterns to import: the ones projects were made from, plus the ones the knitter owns.
+// The patterns to import: the ones projects were made from, plus the ones the knitter owns. Library
+// volumes carry the pattern id directly, so this paginates them itself rather than through listAllIds.
 async function pullLibraryPatternIds(username: string, token: string): Promise<number[]> {
-  const library = await ravelryJson<{ volumes?: { pattern_id?: number | null }[] }>(
-    `/people/${username}/library/search.json?page_size=100`,
-    token,
-  );
-  return (library?.volumes ?? []).map((v) => v.pattern_id).filter(notNull);
+  const ids: number[] = [];
+  for (let page = 1; ; page += 1) {
+    const body = await ravelryJson<{
+      volumes?: { pattern_id?: number | null }[];
+      paginator?: { last_page?: number };
+    }>(`/people/${username}/library/search.json?page_size=100&page=${page}`, token);
+    const volumes = body?.volumes ?? [];
+    for (const volume of volumes) if (volume.pattern_id != null) ids.push(volume.pattern_id);
+    const lastPage = body?.paginator?.last_page ?? page;
+    if (volumes.length === 0 || page >= lastPage || ids.length >= PULL_CAP) break;
+  }
+  return ids.slice(0, PULL_CAP);
 }
 
 async function pullPatterns(ids: number[], token: string): Promise<unknown[]> {
@@ -282,11 +311,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!userId) return json({ error: 'Sign in again and then try.' }, 401);
 
   // `probe` (default) returns only counts, to confirm the path; `pull` returns the raw payloads the
-  // client maps with src/lib/ravelry/*.
+  // client maps with src/lib/ravelry/*; `pattern-pdf` returns one owned pattern's PDF to chart.
   let task = 'probe';
+  let patternId = 0;
   try {
-    const body = (await request.json()) as { task?: unknown };
+    const body = (await request.json()) as { task?: unknown; patternId?: unknown };
     if (typeof body.task === 'string') task = body.task;
+    if (typeof body.patternId === 'number') patternId = body.patternId;
   } catch {
     // No body, or not JSON — probe it is.
   }
@@ -311,6 +342,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // A rotated refresh token has to replace the old one or the next run fails with a token already spent.
   if (tokens.refreshToken && tokens.refreshToken !== refreshToken) {
     await storeRefreshToken(url, serviceKey, userId, await envelope(tokens.refreshToken, tokenKey));
+  }
+
+  // One owned pattern's PDF, so the client can chart it (Phase 4). Returned as bytes for the client
+  // to extract and run through parse-pattern, reusing the same path a pasted PDF takes.
+  //
+  // NOTE: how Ravelry exposes an owned pattern's PDF is not yet verified against a real owned
+  // pattern — this reads `pattern.pdf_url` and downloads it. If a knitter's owned pattern turns out
+  // to use a different field or a separate download endpoint, this is the one place to adjust.
+  if (task === 'pattern-pdf') {
+    if (!patternId) return json({ error: 'Which pattern?' }, 400);
+    const detail = await ravelryJson<{
+      pattern?: { pdf_url?: string | null; name?: string | null };
+    }>(`/patterns/${patternId}.json`, tokens.accessToken);
+    const pdfUrl = detail?.pattern?.pdf_url ?? '';
+    if (!pdfUrl) return json({ owned: false, reason: 'There is no PDF to chart for this pattern.' });
+
+    const pdf = await fetch(pdfUrl, {
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!pdf.ok) return json({ owned: false, reason: `The PDF would not download (${pdf.status}).` });
+    const bytes = new Uint8Array(await pdf.arrayBuffer());
+    if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') {
+      return json({ owned: false, reason: 'That download was not a PDF.' });
+    }
+    return json({ owned: true, name: detail?.pattern?.name ?? '', pdfBase64: toBase64(bytes) });
   }
 
   // Who this is on Ravelry — the list endpoints are keyed by username.
