@@ -91,9 +91,19 @@ export type RavelryPatternNeedleSize = {
   name?: string | null; // the US label, e.g. "US 2½ - 3.0 mm"
 };
 
+// One tag from Ravelry's fixed pattern vocabulary. A controlled list, not free text, which is what
+// makes it worth reading — but it mixes skills in with who the pattern is for, how it fits and what
+// shape it is: `female`, `adult`, `negative-ease`, `crew-neck`, `top-down`, `cables`. Only the
+// permalink is given on a pattern (no display name), so the permalink is what gets matched.
+export type RavelryPatternAttribute = {
+  id?: number | null;
+  permalink?: string | null; // "crew-neck", "top-down", "cables"
+};
+
 export type RavelryPattern = {
   id: number;
   permalink?: string | null; // → the Ravelry library page
+  url?: string | null; // the designer's own page for it, off Ravelry
   name?: string | null;
   notes?: string | null; // the designer's description, plain text
   gauge?: number | null; // stitches per gauge_divisor
@@ -106,6 +116,7 @@ export type RavelryPattern = {
   difficulty_count?: number | null;
   craft?: { name?: string | null } | null; // "Knitting" | "Crochet"
   pattern_type?: { name?: string | null } | null; // "Tank/Camisole"
+  pattern_attributes?: RavelryPatternAttribute[] | null;
   pattern_categories?: RavelryPatternCategory[] | null;
   pattern_needle_sizes?: RavelryPatternNeedleSize[] | null;
   pattern_author?: { name?: string | null } | null;

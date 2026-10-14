@@ -1,4 +1,4 @@
-import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
+import type { CatalogueTechnique, Material, Pattern, Project, Tool } from '@/types/knitwit';
 
 import { applyRavelryImport, type ImportTarget, type RavelryImportData } from './import';
 
@@ -6,7 +6,7 @@ const IMPORTED_AT = '2026-10-13T00:00:00.000Z';
 
 // A fake store with the same save semantics as the real one: an existing key updates, null makes a
 // new sequential key.
-function fakeTarget() {
+function fakeTarget(catalogue: CatalogueTechnique[] = []) {
   const materials: Record<string, Material> = {};
   const tools: Record<string, Tool> = {};
   const patterns: Record<string, Pattern> = {};
@@ -29,6 +29,7 @@ function fakeTarget() {
     getTools: () => tools,
     getPatterns: () => patterns,
     getProjects: () => projects,
+    getCatalogue: () => catalogue,
     saveMaterial: (id, data) => {
       const key = id ?? `m${(m += 1)}`;
       materials[key] = data;

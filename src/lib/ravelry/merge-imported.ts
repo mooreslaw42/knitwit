@@ -82,6 +82,7 @@ export function mergePattern(existing: Pattern, incoming: Pattern): Pattern {
     name: fromRavelry(incoming.name, existing.name),
     craft: incoming.craft,
     needleSize: fromRavelry(incoming.needleSize, existing.needleSize),
+    link: fromRavelry(incoming.link ?? '', existing.link ?? ''),
     photo: incoming.photo ?? existing.photo,
     gauge: incoming.gauge ?? existing.gauge,
     favorited: incoming.favorited,
