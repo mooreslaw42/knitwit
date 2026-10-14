@@ -242,16 +242,27 @@ async function ravelryPost(
 // Ravelry's own lists for craft and project status, so the ids come from Ravelry rather than from a
 // number somebody once saw in a fixture. Matched on name, case-insensitively, with the permalink as
 // a second chance ("in-progress" for "In progress").
+//
+// GET first, then POST. These two read like plain lists, but the published JS client calls both of
+// them with POST — so either it is wrong or Ravelry is unusual here, and there is no public
+// reference to settle it. Trying both costs one extra request on a path that would otherwise fail
+// outright, and a list endpoint has nothing to do twice.
 async function idByName(
   path: string,
   key: string,
   name: string,
   accessToken: string,
 ): Promise<number | null> {
-  const body = await ravelryJson<Record<string, { id?: number; name?: string; permalink?: string }[]>>(
-    path,
-    accessToken,
-  );
+  type Catalogue = Record<string, { id?: number; name?: string; permalink?: string }[]>;
+  let body = await ravelryJson<Catalogue>(path, accessToken);
+  if (!body?.[key]) {
+    const response = await fetch(`https://api.ravelry.com${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    body = response.ok ? ((await response.json()) as Catalogue) : null;
+  }
   const list = body?.[key] ?? [];
   const wanted = name.trim().toLowerCase();
   const slug = wanted.replace(/\s+/g, '-');

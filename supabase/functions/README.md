@@ -216,7 +216,9 @@ on success, so the same project cannot be sent twice.
 a Ravelry login and the open-source clients just forward whatever the caller passes. So `ravelryPost`
 tries the three shapes it could be and stops at the first accepted: flat JSON, JSON nested under
 `project`, then form-encoded. Only 400/415/422 ("I did not understand the parameters", nothing
-created) moves on to the next; 401/403/404/429 are returned as they came. The shape that worked is
+created) moves on to the next; 401/403/404/429 are returned as they came. For the same reason the
+two catalogue lookups try `GET` and then `POST` — they read like plain lists, but the published JS
+client calls both with `POST`, and nothing public settles it. The shape that worked is
 logged — `{"event":"ravelry-import","task":"create-project","ok":true,"shape":"…"}` — so the first
 real export settles it for good. **Collapse the ladder to the one that works once it is known.**
 
