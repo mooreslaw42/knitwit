@@ -353,21 +353,47 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (task === 'pattern-pdf') {
     if (!patternId) return json({ error: 'Which pattern?' }, 400);
     const detail = await ravelryJson<{
-      pattern?: { pdf_url?: string | null; name?: string | null };
+      pattern?: {
+        name?: string | null;
+        pdf_url?: string | null;
+        download_location?: { url?: string | null } | string | null;
+        pdf_in_library?: boolean | null;
+        downloadable?: boolean | null;
+      };
     }>(`/patterns/${patternId}.json`, tokens.accessToken);
-    const pdfUrl = detail?.pattern?.pdf_url ?? '';
-    if (!pdfUrl) return json({ owned: false, reason: 'There is no PDF to chart for this pattern.' });
+    const pattern = detail?.pattern;
 
-    const pdf = await fetch(pdfUrl, {
-      headers: { Authorization: `Bearer ${tokens.accessToken}` },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!pdf.ok) return json({ owned: false, reason: `The PDF would not download (${pdf.status}).` });
-    const bytes = new Uint8Array(await pdf.arrayBuffer());
-    if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') {
-      return json({ owned: false, reason: 'That download was not a PDF.' });
+    // Which field carries an owned pattern's PDF is unverified, so try the ones that could: the
+    // direct pdf_url, then download_location (string or { url }). Each is tried in turn.
+    const downloadLocation =
+      typeof pattern?.download_location === 'string'
+        ? pattern.download_location
+        : (pattern?.download_location?.url ?? '');
+    const candidates = [pattern?.pdf_url ?? '', downloadLocation].filter((u) =>
+      /^https?:\/\//.test(u),
+    );
+
+    if (candidates.length === 0) {
+      // Owned-but-no-link reads differently from simply not owned — say which, so the live test can
+      // tell a missing field from a pattern the knitter never bought.
+      const reason =
+        pattern?.pdf_in_library || pattern?.downloadable
+          ? 'Ravelry has this pattern’s PDF but exposed no download link to Knitwit.'
+          : 'There is no PDF to chart for this pattern.';
+      return json({ owned: false, reason });
     }
-    return json({ owned: true, name: detail?.pattern?.name ?? '', pdfBase64: toBase64(bytes) });
+
+    for (const candidate of candidates) {
+      const pdf = await fetch(candidate, {
+        headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!pdf.ok) continue;
+      const bytes = new Uint8Array(await pdf.arrayBuffer());
+      if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') continue;
+      return json({ owned: true, name: pattern?.name ?? '', pdfBase64: toBase64(bytes) });
+    }
+    return json({ owned: false, reason: 'The PDF could not be downloaded from Ravelry.' });
   }
 
   // Who this is on Ravelry — the list endpoints are keyed by username.
