@@ -7,7 +7,6 @@ import {
   applyPatterns,
   applyProjects,
   applyStash,
-  missingPatternIds,
   type ImportSummary,
   type ImportTarget,
 } from './import';
@@ -29,6 +28,9 @@ type Page<T> = { items?: T[]; ids?: number[]; hasMore?: boolean };
 // A notebook far past this is someone to talk to rather than a page to fetch; it only stops a bad
 // `hasMore` from looping for ever.
 const MAX_PAGES = 400;
+
+// How many pattern ids one request may ask details for; matches what the function will serve.
+const PATTERN_BATCH = 50;
 
 // getState() is read fresh on every call, not captured, so each save in the run is visible to the
 // reconcile lookups that follow it.
@@ -58,13 +60,24 @@ export async function runRavelryImport(
   const soFar: ImportSummary = { materials: 0, tools: 0, patterns: 0, projects: 0 };
   const report = () => onProgress?.({ ...soFar });
 
-  // Fetch the pattern details this batch needs and nothing it already has, so a pattern thirty
-  // projects share is only ever asked for once.
+  // Pattern details, fetched once per *run*.
+  //
+  // Deduping within the run is the point — a pattern thirty projects share should be asked for once,
+  // not thirty times. Deduping against the store would be a different thing entirely: it would mean a
+  // pattern imported last week never refreshes again, which is not what pressing Import should do.
+  const fetched = new Set<number>();
   const fillPatterns = async (ids: number[]): Promise<void> => {
-    const missing = missingPatternIds(storeTarget, ids);
-    if (missing.length === 0) return;
-    const page = await ask<RavelryPattern>({ task: 'patterns', ids: missing });
-    soFar.patterns += applyPatterns(page.items ?? [], storeTarget, at);
+    const want = [...new Set(ids)].filter((id) => !fetched.has(id));
+    if (want.length === 0) return;
+    for (const id of want) fetched.add(id);
+    // Asked for in batches, because one request should stay one bounded piece of work.
+    for (let from = 0; from < want.length; from += PATTERN_BATCH) {
+      const page = await ask<RavelryPattern>({
+        task: 'patterns',
+        ids: want.slice(from, from + PATTERN_BATCH),
+      });
+      soFar.patterns += applyPatterns(page.items ?? [], storeTarget, at);
+    }
   };
 
   // The needle drawer is small enough to come in one piece.

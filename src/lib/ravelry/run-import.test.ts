@@ -116,6 +116,21 @@ describe('runRavelryImport', () => {
     expect(seen).toEqual(expect.arrayContaining([1, 2]));
   });
 
+  it('refreshes patterns on a later run rather than skipping what it already has', async () => {
+    serve({ stash: [[]], library: [[2222222]], projects: [[]], patterns: [PATTERN] });
+
+    await runRavelryImport();
+    const afterFirst = invoke.mock.calls.filter(([, b]) => b.task === 'patterns').length;
+    await runRavelryImport();
+    const afterSecond = invoke.mock.calls.filter(([, b]) => b.task === 'patterns').length;
+
+    // Deduping is per run, not against the store — otherwise a pattern imported once would never
+    // pick up a change on Ravelry again.
+    expect(afterFirst).toBe(1);
+    expect(afterSecond).toBe(2);
+    expect(Object.keys(useKnitwitStore.getState().patterns)).toHaveLength(1); // still reconciled, not duplicated
+  });
+
   it('asks for a pattern’s details only once even when several projects share it', async () => {
     const other = { ...PROJECT, id: 4444444, permalink: 'p2', name: 'Another', pattern_id: 2222222 };
     serve({ stash: [[]], library: [[2222222]], projects: [[PROJECT, other]], patterns: [PATTERN] });
