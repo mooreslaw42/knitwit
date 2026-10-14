@@ -131,6 +131,37 @@ describe('runRavelryImport', () => {
     expect(Object.keys(useKnitwitStore.getState().patterns)).toHaveLength(1); // still reconciled, not duplicated
   });
 
+  it('retries a page once before giving up on it', async () => {
+    serve({ stash: [[STASH]], library: [[]], projects: [[]] });
+    const good = invoke.getMockImplementation() as jest.Mock;
+    let failed = false;
+    invoke.mockImplementation((name: string, body: Record<string, unknown>) => {
+      if (body.task === 'stash' && !failed) {
+        failed = true;
+        // What a cold start looks like from here: a failure that is not a failure.
+        return Promise.reject(new Error("Couldn't reach Ravelry."));
+      }
+      return good(name, body);
+    });
+
+    const summary = await runRavelryImport();
+
+    // The second attempt got the page, so the import carried on rather than ending at nothing.
+    expect(summary.materials).toBe(1);
+  });
+
+  it('gives up when a page fails twice, keeping what landed before it', async () => {
+    serve({ needles: [{ id: 1, needle_type_id: 69, needle_type: { metric_name: '3.25' } }] });
+    const good = invoke.getMockImplementation() as jest.Mock;
+    invoke.mockImplementation((name: string, body: Record<string, unknown>) =>
+      body.task === 'stash' ? Promise.reject(new Error('Ravelry is down.')) : good(name, body),
+    );
+
+    await expect(runRavelryImport()).rejects.toThrow('Ravelry is down.');
+    // The needles were applied before the stash failed, and they stay applied.
+    expect(Object.keys(useKnitwitStore.getState().tools)).toHaveLength(1);
+  });
+
   it('asks for a pattern’s details only once even when several projects share it', async () => {
     const other = { ...PROJECT, id: 4444444, permalink: 'p2', name: 'Another', pattern_id: 2222222 };
     serve({ stash: [[]], library: [[2222222]], projects: [[PROJECT, other]], patterns: [PATTERN] });
