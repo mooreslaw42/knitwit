@@ -179,13 +179,33 @@ Ravelry** flow: once connected, show counts (*N projects, M stash, K patterns*),
 choose what to pull, show progress, and tolerate partial failure (per-item, resumable). Because every
 imported object carries `ravelrySource`, running it again reconciles instead of duplicating.
 
+## Phase 6 — export, one project at a time (built 2026-10-14)
+
+The other direction, and deliberately much smaller. The write scope turned out to be the same one
+the import already has (`offline` grants read **and update**), so what was gating this is gone.
+
+- **Create only.** Never updates, never deletes. The worst it can do to a knitter's notebook is put
+  something in it.
+- **Per-project, per-press.** A "Send to Ravelry" button on the project screen
+  (`src/components/ravelry-project-card.tsx`), shown only to a knitter with Ravelry connected and
+  only for a project with no `ravelrySource`.
+- **Idempotent by the stamp.** On success the project is stamped with the Ravelry id and URL, which
+  both removes the button and makes the next import reconcile onto that row rather than bring the
+  project back as a second copy.
+- **The facts only.** `src/lib/ravelry/export-project.ts` sends name, craft, status, progress,
+  start date, notes, the knitter's measured gauge, size and personal source. **Not** labels —
+  Knitwit's labels are private groupings the knitter invented and Ravelry's tags are public, which
+  is not a conversion to make on someone's behalf. **Not** photos — a separate endpoint, and the
+  photo may be a Ravelry URL we imported in the first place.
+- Craft and status ids are resolved server-side against Ravelry's own `crafts.json` and
+  `project_statuses.json`, not hardcoded from a fixture.
+
 ## Deferred
 
-- **Export (Knitwit → Ravelry).** Gated on a **write-scope** check that may not exist at all, and it
-  writes to a knitter's real notebook — so it needs explicit per-action consent and strict
-  idempotency (store the created Ravelry project id, match on re-run). Create-new first;
-  update-existing is a further step. A Knitwit pattern with no Ravelry pattern id would land as a
-  pattern-less craft project on Ravelry.
+- **Updating an exported project.** The stamp makes it possible (`POST /projects/{user}/{id}.json`),
+  but it means deciding which side wins per field on a thing other people can see. Not yet.
+- **Exporting stash, needles or patterns.** Projects are what a knitter wants in their notebook;
+  the rest is inventory nobody else reads.
 - **Live two-way sync.** Builds on the provenance stamp plus a sync cursor and a per-field
   source-of-truth decision. Out of scope here.
 
@@ -200,7 +220,11 @@ imported object carries `ravelrySource`, running it again reconciles instead of 
    now reuses the app's existing client-side PDF extraction, so the only guess left is how Ravelry
    exposes an owned pattern's PDF. The `pattern-pdf` task reads `pattern.pdf_url`; it needs a real
    owned pattern to confirm, and is the single place to adjust if that is wrong.
-4. **Stash ↔ project yarn matching** is lossy — Ravelry's yarn model is richer and messier than
+4. **The shape `create.json` wants its parameters in** (Phase 6) is not publicly documented — the
+   API reference is behind a Ravelry login. The function tries flat JSON, JSON nested under
+   `project`, then form-encoded, advancing only on a status that means the parameters were not
+   understood, and logs which one worked. The first real export settles it; collapse the ladder then.
+5. **Stash ↔ project yarn matching** is lossy — Ravelry's yarn model is richer and messier than
    Knitwit's, so expect some unresolved material slots on imported projects.
 
 ## Appendix A — self-serve data-shape probe

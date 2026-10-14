@@ -193,8 +193,34 @@ ones before it are already saved) and gives the screen a real number to show.
 | `library` | `{ page }` | `{ ids, hasMore }` — owned pattern **ids**, so the client fetches only what it lacks |
 | `patterns` | `{ ids }` | `{ items }` — details for the ids asked for |
 
+A failed page is retried once by the client before it gives up: the first call after a deploy can
+cold-start slowly enough to look like an error.
+
 Order matters on the client: stash and patterns before projects, because a project's links are
 resolved by finding them already in the store.
+
+### `create-project` — the one write
+
+Files a Knitwit project as a **new** Ravelry project. `{ task: 'create-project', draft }` →
+`{ id, permalink, url, ravelryUser }`. `draft` is what `src/lib/ravelry/export-project.ts` built;
+its `craft_name` and `status_name` are resolved here against `/projects/crafts.json` and
+`/projects/project_statuses.json`, because hardcoding ids seen once in a fixture is how an export
+files everything as the wrong craft. Everything else passes straight through, so adding a field to
+the mapper needs no change here.
+
+Create only — it never updates and never deletes, so the worst it can do to a knitter's notebook is
+put something in it. The client offers it only for a project with no `ravelrySource`, and stamps one
+on success, so the same project cannot be sent twice.
+
+**How `create.json` wants its parameters is not documented publicly** — the API reference is behind
+a Ravelry login and the open-source clients just forward whatever the caller passes. So `ravelryPost`
+tries the three shapes it could be and stops at the first accepted: flat JSON, JSON nested under
+`project`, then form-encoded. Only 400/415/422 ("I did not understand the parameters", nothing
+created) moves on to the next; 401/403/404/429 are returned as they came. For the same reason the
+two catalogue lookups try `GET` and then `POST` — they read like plain lists, but the published JS
+client calls both with `POST`, and nothing public settles it. The shape that worked is
+logged — `{"event":"ravelry-import","task":"create-project","ok":true,"shape":"…"}` — so the first
+real export settles it for good. **Collapse the ladder to the one that works once it is known.**
 
 ### The rest
 
