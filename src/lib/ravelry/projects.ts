@@ -7,7 +7,7 @@
 // `stash_id` → the Material imported from that stash entry. Pure, clock passed in.
 
 import { deriveProjectColors } from '@/lib/knitwit-helpers';
-import type { Gauge, Project, ProjectStatus, TechniqueCraft } from '@/types/knitwit';
+import type { Gauge, Project, ProjectSection, ProjectStatus, TechniqueCraft } from '@/types/knitwit';
 import type { RavelryProject } from './types';
 
 export type ImportedProject = {
@@ -72,6 +72,32 @@ export function ravelryProjectToProject(
 ): ImportedProject {
   const photo = project.photos?.[0];
   const owner = project.user?.username ?? '';
+  const status = mapStatus(project.status_name);
+
+  // Ravelry tracks progress as a percentage, not rows, and a metadata-only pattern has no sections
+  // to copy — but the app addresses a project through its *current section* (projects.tsx reads
+  // sections[current].name), so a project with none crashes the list. An imported one therefore gets
+  // one placeholder section that renders and counts until the knitter adds real sections or charts
+  // the linked pattern. Deterministic id and timestamp keep the mapper pure.
+  const section: ProjectSection = {
+    id: `psec_rav_${project.id}`,
+    updatedAt: importedAt,
+    name: 'Whole project',
+    totalRows: 1,
+    row: status === 'finished' ? 1 : 0,
+    complete: status === 'finished',
+    seconds: 0,
+    rowNotes: [],
+    notes: '',
+    materialIds: [],
+    toolIds: [],
+    techniqueIds: [],
+    description: '',
+    stitchMultiple: null,
+    markers: [],
+    castOn: 0,
+    rows: [],
+  };
 
   return {
     project: {
@@ -95,9 +121,9 @@ export function ravelryProjectToProject(
       // Resolved by the orchestration from ravelryPatternId below.
       patternId: null,
       sizeIndex: 0,
-      status: mapStatus(project.status_name),
+      status,
       gauge: mapGauge(project),
-      sections: [],
+      sections: [section],
       ravelrySource: {
         id: String(project.id),
         kind: 'project',
