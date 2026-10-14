@@ -10,6 +10,7 @@
 
 import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
 
+import { mergeMaterial, mergePattern, mergeProject, mergeTool } from './merge-imported';
 import { ravelryNeedlesToTools } from './needles';
 import { ravelryPatternToPattern } from './patterns';
 import { ravelryProjectToProject } from './projects';
@@ -67,20 +68,29 @@ export function applyRavelryImport(
 ): ImportSummary {
   // Stash, needles and patterns first — a project's links are resolved by finding them in the store
   // after they have been saved.
+  //
+  // Everything here lands through a merge rather than a replace: reconciling onto a row the knitter
+  // has since edited must refresh Ravelry's facts without destroying their work. See merge-imported.ts.
   for (const stash of data.stash) {
     const key = existingKey(target.getMaterials(), String(stash.id));
-    target.saveMaterial(key, ravelryStashToMaterial(stash, importedAt));
+    const incoming = ravelryStashToMaterial(stash, importedAt);
+    const existing = key ? target.getMaterials()[key] : undefined;
+    target.saveMaterial(key, existing ? mergeMaterial(existing, incoming) : incoming);
   }
 
   const tools = ravelryNeedlesToTools(data.needles, importedAt);
   for (const tool of tools) {
     const ravelryId = tool.ravelrySource?.id;
-    target.saveTool(ravelryId ? existingKey(target.getTools(), ravelryId) : null, tool);
+    const key = ravelryId ? existingKey(target.getTools(), ravelryId) : null;
+    const existing = key ? target.getTools()[key] : undefined;
+    target.saveTool(key, existing ? mergeTool(existing, tool) : tool);
   }
 
   for (const pattern of data.patterns) {
     const key = existingKey(target.getPatterns(), String(pattern.id));
-    target.savePattern(key, ravelryPatternToPattern(pattern, importedAt));
+    const incoming = ravelryPatternToPattern(pattern, importedAt);
+    const existing = key ? target.getPatterns()[key] : undefined;
+    target.savePattern(key, existing ? mergePattern(existing, incoming) : incoming);
   }
 
   for (const rawProject of data.projects) {
@@ -101,7 +111,9 @@ export function applyRavelryImport(
     }
     if (Object.keys(skeins).length > 0) project.materialSkeins = skeins;
 
-    target.saveProject(existingKey(target.getProjects(), String(rawProject.id)), project);
+    const key = existingKey(target.getProjects(), String(rawProject.id));
+    const existing = key ? target.getProjects()[key] : undefined;
+    target.saveProject(key, existing ? mergeProject(existing, project) : project);
   }
 
   return {
