@@ -142,13 +142,6 @@ export function applyProjects(
   return items.length;
 }
 
-// Which of these Ravelry patterns the store has never seen. The paged import asks the server only
-// for the details it is missing, so a pattern shared by thirty projects is fetched once.
-export function missingPatternIds(target: ImportTarget, ids: number[]): number[] {
-  const patterns = target.getPatterns();
-  return [...new Set(ids)].filter((id) => existingKey(patterns, String(id)) === null);
-}
-
 // The whole notebook in one go. Still used by the single-shot `pull`, and the shape the tests pin.
 export function applyRavelryImport(
   data: RavelryImportData,
