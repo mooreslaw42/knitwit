@@ -61,39 +61,63 @@ function existingKey(record: Record<string, Stamped>, ravelryId: string): string
   return null;
 }
 
-export function applyRavelryImport(
-  data: RavelryImportData,
+// Each kind applies on its own, so the import can land a page at a time instead of one whole
+// notebook. Everything goes in through a merge rather than a replace: reconciling onto a row the
+// knitter has since edited must refresh Ravelry's facts without destroying their work — see
+// merge-imported.ts. Each returns how many it wrote, for the running total.
+
+export function applyStash(
+  items: RavelryStash[],
   target: ImportTarget,
   importedAt: string,
-): ImportSummary {
-  // Stash, needles and patterns first — a project's links are resolved by finding them in the store
-  // after they have been saved.
-  //
-  // Everything here lands through a merge rather than a replace: reconciling onto a row the knitter
-  // has since edited must refresh Ravelry's facts without destroying their work. See merge-imported.ts.
-  for (const stash of data.stash) {
+): number {
+  for (const stash of items) {
     const key = existingKey(target.getMaterials(), String(stash.id));
     const incoming = ravelryStashToMaterial(stash, importedAt);
     const existing = key ? target.getMaterials()[key] : undefined;
     target.saveMaterial(key, existing ? mergeMaterial(existing, incoming) : incoming);
   }
+  return items.length;
+}
 
-  const tools = ravelryNeedlesToTools(data.needles, importedAt);
+export function applyNeedles(
+  records: RavelryNeedleRecord[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  // Grouped first: Ravelry keeps one record per physical needle, Knitwit one tool with a quantity.
+  const tools = ravelryNeedlesToTools(records, importedAt);
   for (const tool of tools) {
     const ravelryId = tool.ravelrySource?.id;
     const key = ravelryId ? existingKey(target.getTools(), ravelryId) : null;
     const existing = key ? target.getTools()[key] : undefined;
     target.saveTool(key, existing ? mergeTool(existing, tool) : tool);
   }
+  return tools.length;
+}
 
-  for (const pattern of data.patterns) {
+export function applyPatterns(
+  items: RavelryPattern[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  for (const pattern of items) {
     const key = existingKey(target.getPatterns(), String(pattern.id));
     const incoming = ravelryPatternToPattern(pattern, importedAt);
     const existing = key ? target.getPatterns()[key] : undefined;
     target.savePattern(key, existing ? mergePattern(existing, incoming) : incoming);
   }
+  return items.length;
+}
 
-  for (const rawProject of data.projects) {
+// Projects go last of any batch: their links are resolved by finding the pattern and the stash yarn
+// already in the store, so those have to have been applied first.
+export function applyProjects(
+  items: RavelryProject[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  for (const rawProject of items) {
     const { project, ravelryPatternId, yarns } = ravelryProjectToProject(rawProject, importedAt);
 
     // Link to the pattern card, if one was imported from the same Ravelry pattern.
@@ -115,11 +139,26 @@ export function applyRavelryImport(
     const existing = key ? target.getProjects()[key] : undefined;
     target.saveProject(key, existing ? mergeProject(existing, project) : project);
   }
+  return items.length;
+}
 
+// Which of these Ravelry patterns the store has never seen. The paged import asks the server only
+// for the details it is missing, so a pattern shared by thirty projects is fetched once.
+export function missingPatternIds(target: ImportTarget, ids: number[]): number[] {
+  const patterns = target.getPatterns();
+  return [...new Set(ids)].filter((id) => existingKey(patterns, String(id)) === null);
+}
+
+// The whole notebook in one go. Still used by the single-shot `pull`, and the shape the tests pin.
+export function applyRavelryImport(
+  data: RavelryImportData,
+  target: ImportTarget,
+  importedAt: string,
+): ImportSummary {
   return {
-    materials: data.stash.length,
-    tools: tools.length,
-    patterns: data.patterns.length,
-    projects: data.projects.length,
+    materials: applyStash(data.stash, target, importedAt),
+    tools: applyNeedles(data.needles, target, importedAt),
+    patterns: applyPatterns(data.patterns, target, importedAt),
+    projects: applyProjects(data.projects, target, importedAt),
   };
 }

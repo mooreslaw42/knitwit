@@ -2,16 +2,33 @@ import { invokeEdgeFunction } from '@/lib/edge-function';
 import { stamp } from '@/lib/entity-id';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
-import { applyRavelryImport, type ImportSummary, type ImportTarget, type RavelryImportData } from './import';
+import {
+  applyNeedles,
+  applyPatterns,
+  applyProjects,
+  applyStash,
+  missingPatternIds,
+  type ImportSummary,
+  type ImportTarget,
+} from './import';
+import type { RavelryNeedleRecord, RavelryPattern, RavelryProject, RavelryStash } from './types';
 
-// Running an import: ask the server for the whole notebook, then hand it to the store.
+// Running an import, a page at a time.
 //
-// The two halves of the pipeline meet here. `ravelry-import`'s `pull` task does everything that has
-// to happen server-side — refresh the token, read Ravelry, return the raw payloads — and this builds
-// a target over the live store and lets applyRavelryImport map, reconcile and link them. The store's
-// own background sync carries the result up; this does not touch the network again.
+// The server hands back bounded slices rather than the whole notebook, and this walks them: ask,
+// apply what came back, ask again while there is more. That is what makes the import survive a real
+// account — a knitter with two hundred projects is hundreds of Ravelry requests and megabytes of
+// detail, which is far more than one function call should carry. Applying as we go also means a
+// failure half way leaves everything before it already saved, and gives the screen a number to show.
+//
+// Order matters: stash and patterns before projects, because a project's links are resolved by
+// finding them already in the store.
 
-type PullResponse = { ok?: boolean; connected?: boolean; data?: RavelryImportData };
+type Page<T> = { items?: T[]; ids?: number[]; hasMore?: boolean };
+
+// A notebook far past this is someone to talk to rather than a page to fetch; it only stops a bad
+// `hasMore` from looping for ever.
+const MAX_PAGES = 400;
 
 // getState() is read fresh on every call, not captured, so each save in the run is visible to the
 // reconcile lookups that follow it.
@@ -26,19 +43,61 @@ const storeTarget: ImportTarget = {
   saveProject: (id, data) => useKnitwitStore.getState().saveProject(id, data),
 };
 
-export async function runRavelryImport(): Promise<ImportSummary> {
-  const response = (await invokeEdgeFunction(
-    'ravelry-import',
-    { task: 'pull' },
-    {
-      // A whole notebook is a lot of Ravelry calls; give it room, but bounded.
-      timeoutMs: 120_000,
-      timeoutMessage: 'Importing from Ravelry took too long. Try again in a moment.',
-    },
-  )) as PullResponse;
+async function ask<T>(body: Record<string, unknown>): Promise<Page<T>> {
+  return (await invokeEdgeFunction('ravelry-import', body, {
+    // One page, so this is a generous ceiling rather than a budget for the whole notebook.
+    timeoutMs: 60_000,
+    timeoutMessage: 'Ravelry took too long to answer. What came across so far is saved — try again.',
+  })) as Page<T>;
+}
 
-  const data = response?.data;
-  if (!data) throw new Error('Ravelry returned nothing to import.');
+export async function runRavelryImport(
+  onProgress?: (soFar: ImportSummary) => void,
+): Promise<ImportSummary> {
+  const at = stamp();
+  const soFar: ImportSummary = { materials: 0, tools: 0, patterns: 0, projects: 0 };
+  const report = () => onProgress?.({ ...soFar });
 
-  return applyRavelryImport(data, storeTarget, stamp());
+  // Fetch the pattern details this batch needs and nothing it already has, so a pattern thirty
+  // projects share is only ever asked for once.
+  const fillPatterns = async (ids: number[]): Promise<void> => {
+    const missing = missingPatternIds(storeTarget, ids);
+    if (missing.length === 0) return;
+    const page = await ask<RavelryPattern>({ task: 'patterns', ids: missing });
+    soFar.patterns += applyPatterns(page.items ?? [], storeTarget, at);
+  };
+
+  // The needle drawer is small enough to come in one piece.
+  const needles = await ask<RavelryNeedleRecord>({ task: 'needles' });
+  soFar.tools = applyNeedles(needles.items ?? [], storeTarget, at);
+  report();
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const result = await ask<RavelryStash>({ task: 'stash', page });
+    soFar.materials += applyStash(result.items ?? [], storeTarget, at);
+    report();
+    if (!result.hasMore) break;
+  }
+
+  // Patterns the knitter owns, by id — details only for the ones not already here.
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const result = await ask<never>({ task: 'library', page });
+    await fillPatterns(result.ids ?? []);
+    report();
+    if (!result.hasMore) break;
+  }
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const result = await ask<RavelryProject>({ task: 'projects', page });
+    const projects = result.items ?? [];
+    // The patterns these projects were made from, first, so patternId resolves when they land.
+    await fillPatterns(
+      projects.map((p) => p.pattern_id).filter((id): id is number => typeof id === 'number'),
+    );
+    soFar.projects += applyProjects(projects, storeTarget, at);
+    report();
+    if (!result.hasMore) break;
+  }
+
+  return soFar;
 }
