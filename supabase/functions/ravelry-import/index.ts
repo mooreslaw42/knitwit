@@ -181,6 +181,88 @@ async function countFrom(
   return { status: response.status, count: body.paginator?.results ?? listed };
 }
 
+async function ravelryJson<T>(path: string, accessToken: string): Promise<T | null> {
+  const response = await ravelryGet(path, accessToken);
+  if (!response.ok) return null;
+  return (await response.json()) as T;
+}
+
+function notNull<T>(value: T | null | undefined): value is T {
+  return value != null;
+}
+
+// Bounded, politely concurrent map. Ravelry rate-limits, and a whole notebook is far more requests
+// than one burst should make — so at most `limit` are in flight, and the cap stops a first import
+// pulling thousands of details in a single function call. Pagination past the cap is future work.
+const PULL_CAP = 200;
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
+// The list endpoints are thin; the mapping needs the detail (a stash entry's yarn and packs, a
+// project's gauge and needles). So list, then fetch each detail, capped and pooled.
+async function pullStash(username: string, token: string): Promise<unknown[]> {
+  const list = await ravelryJson<{ stash?: { id: number }[] }>(
+    `/people/${username}/stash/list.json?page_size=100`,
+    token,
+  );
+  const ids = (list?.stash ?? []).map((s) => s.id).slice(0, PULL_CAP);
+  const details = await mapPool(ids, 4, (id) =>
+    ravelryJson<{ stash?: unknown }>(`/people/${username}/stash/${id}.json`, token).then(
+      (d) => d?.stash ?? null,
+    ),
+  );
+  return details.filter(notNull);
+}
+
+async function pullProjects(
+  username: string,
+  token: string,
+): Promise<{ projects: unknown[]; patternIds: number[] }> {
+  const list = await ravelryJson<{ projects?: { id: number }[] }>(
+    `/projects/${username}/list.json?page_size=100`,
+    token,
+  );
+  const ids = (list?.projects ?? []).map((p) => p.id).slice(0, PULL_CAP);
+  const details = await mapPool(ids, 4, (id) =>
+    ravelryJson<{ project?: unknown }>(`/projects/${username}/${id}.json`, token).then(
+      (d) => d?.project ?? null,
+    ),
+  );
+  const projects = details.filter(notNull);
+  const patternIds = projects
+    .map((p) => (p as { pattern_id?: number | null }).pattern_id)
+    .filter(notNull);
+  return { projects, patternIds };
+}
+
+// The patterns to import: the ones projects were made from, plus the ones the knitter owns.
+async function pullLibraryPatternIds(username: string, token: string): Promise<number[]> {
+  const library = await ravelryJson<{ volumes?: { pattern_id?: number | null }[] }>(
+    `/people/${username}/library/search.json?page_size=100`,
+    token,
+  );
+  return (library?.volumes ?? []).map((v) => v.pattern_id).filter(notNull);
+}
+
+async function pullPatterns(ids: number[], token: string): Promise<unknown[]> {
+  const unique = [...new Set(ids)].slice(0, PULL_CAP);
+  const details = await mapPool(unique, 4, (id) =>
+    ravelryJson<{ pattern?: unknown }>(`/patterns/${id}.json`, token).then((d) => d?.pattern ?? null),
+  );
+  return details.filter(notNull);
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
@@ -198,6 +280,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const userId = await callerId(request, url, anonKey);
   if (!userId) return json({ error: 'Sign in again and then try.' }, 401);
+
+  // `probe` (default) returns only counts, to confirm the path; `pull` returns the raw payloads the
+  // client maps with src/lib/ravelry/*.
+  let task = 'probe';
+  try {
+    const body = (await request.json()) as { task?: unknown };
+    if (typeof body.task === 'string') task = body.task;
+  } catch {
+    // No body, or not JSON — probe it is.
+  }
 
   const connection = await loadConnection(url, serviceKey, userId);
   // No stored token means Ravelry was never connected (or the connect never reached the server).
@@ -229,6 +321,33 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const who = (await whoResponse.json()) as { user?: { username?: string } };
   const username = who.user?.username ?? connection.ravelry_username;
   if (!username) return json({ error: 'No Ravelry username to read from.' }, 502);
+
+  if (task === 'pull') {
+    const needlesResponse = await ravelryJson<{ needle_records?: unknown[] }>(
+      `/people/${username}/needles/list.json`,
+      tokens.accessToken,
+    );
+    const needles = needlesResponse?.needle_records ?? [];
+    const stash = await pullStash(username, tokens.accessToken);
+    const { projects, patternIds } = await pullProjects(username, tokens.accessToken);
+    const libraryIds = await pullLibraryPatternIds(username, tokens.accessToken);
+    const patterns = await pullPatterns([...patternIds, ...libraryIds], tokens.accessToken);
+
+    console.log(
+      JSON.stringify({
+        event: 'ravelry-import',
+        task: 'pull',
+        ok: true,
+        counts: {
+          stash: stash.length,
+          needles: needles.length,
+          patterns: patterns.length,
+          projects: projects.length,
+        },
+      }),
+    );
+    return json({ ok: true, connected: true, ravelryUser: username, data: { stash, needles, patterns, projects } });
+  }
 
   const [projects, stash, needles] = await Promise.all([
     countFrom(`/projects/${username}/list.json?page_size=1`, 'projects', tokens.accessToken),
