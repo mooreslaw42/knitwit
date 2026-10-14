@@ -188,6 +188,79 @@ async function countFrom(
   return { status: response.status, count: body.paginator?.results ?? listed };
 }
 
+// Writing to Ravelry, which is the one thing here that is not a read.
+//
+// How `create.json` wants its parameters is **not documented publicly** — the API reference sits
+// behind a Ravelry login and the open-source clients simply forward whatever the caller passes. So
+// rather than guess once and file a knitter's project wrongly, this tries the three shapes it could
+// be, in order, and stops at the first that is accepted:
+//
+//   1. flat JSON            {"name":"…","craft_id":2}
+//   2. JSON under `project` {"project":{"name":"…"}}
+//   3. form-encoded flat    name=…&craft_id=2
+//
+// Only a status that means "I did not understand the parameters" (400/415/422) moves on to the next
+// shape — nothing was created, so there is nothing to double up. Anything else (401, 403, 404, 429)
+// is returned as it came, because retrying a refusal in a new costume is not going to help. The
+// shape that worked is logged, so the first real export tells us which one it is for good.
+const POST_SHAPES = ['json-flat', 'json-nested', 'form'] as const;
+const RETRY_STATUSES = new Set([400, 415, 422]);
+
+async function ravelryPost(
+  path: string,
+  params: Record<string, unknown>,
+  accessToken: string,
+): Promise<{ response: Response; shape: string }> {
+  let last: { response: Response; shape: string } | null = null;
+
+  for (const shape of POST_SHAPES) {
+    let headers: Record<string, string>;
+    let body: string;
+    if (shape === 'form') {
+      const form = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) form.set(key, String(value));
+      headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+      body = form.toString();
+    } else {
+      headers = { 'Content-Type': 'application/json' };
+      body = JSON.stringify(shape === 'json-nested' ? { project: params } : params);
+    }
+
+    const response = await fetch(`https://api.ravelry.com${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, ...headers },
+      body,
+      signal: AbortSignal.timeout(20_000),
+    });
+    last = { response, shape };
+    if (response.ok || !RETRY_STATUSES.has(response.status)) return last;
+  }
+
+  return last as { response: Response; shape: string };
+}
+
+// Ravelry's own lists for craft and project status, so the ids come from Ravelry rather than from a
+// number somebody once saw in a fixture. Matched on name, case-insensitively, with the permalink as
+// a second chance ("in-progress" for "In progress").
+async function idByName(
+  path: string,
+  key: string,
+  name: string,
+  accessToken: string,
+): Promise<number | null> {
+  const body = await ravelryJson<Record<string, { id?: number; name?: string; permalink?: string }[]>>(
+    path,
+    accessToken,
+  );
+  const list = body?.[key] ?? [];
+  const wanted = name.trim().toLowerCase();
+  const slug = wanted.replace(/\s+/g, '-');
+  const hit =
+    list.find((entry) => (entry.name ?? '').trim().toLowerCase() === wanted) ??
+    list.find((entry) => (entry.permalink ?? '').toLowerCase() === slug);
+  return hit?.id ?? null;
+}
+
 async function ravelryJson<T>(path: string, accessToken: string): Promise<T | null> {
   const response = await ravelryGet(path, accessToken);
   if (!response.ok) return null;
@@ -361,17 +434,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
   let patternId = 0;
   let page = 1;
   let ids: number[] = [];
+  let draft: Record<string, unknown> = {};
   try {
     const body = (await request.json()) as {
       task?: unknown;
       patternId?: unknown;
       page?: unknown;
       ids?: unknown;
+      draft?: unknown;
     };
     if (typeof body.task === 'string') task = body.task;
     if (typeof body.patternId === 'number') patternId = body.patternId;
     if (typeof body.page === 'number' && body.page >= 1) page = Math.floor(body.page);
     if (Array.isArray(body.ids)) ids = body.ids.filter((v): v is number => typeof v === 'number');
+    if (typeof body.draft === 'object' && body.draft !== null) {
+      draft = body.draft as Record<string, unknown>;
+    }
   } catch {
     // No body, or not JSON — probe it is.
   }
@@ -467,6 +545,74 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const who = (await whoResponse.json()) as { user?: { username?: string } };
   const username = who.user?.username ?? connection.ravelry_username;
   if (!username) return json({ error: 'No Ravelry username to read from.' }, 502);
+
+  // The one write: a Knitwit project filed as a new Ravelry project.
+  //
+  // Create only. It never updates and never deletes, so the worst this can do to a knitter's
+  // notebook is put something in it — and the client only offers it for a project Ravelry has never
+  // seen, stamping it on success so the button cannot send the same project twice.
+  if (task === 'create-project') {
+    const name = typeof draft.name === 'string' ? draft.name.trim() : '';
+    if (!name) return json({ error: 'A project needs a name before it can go to Ravelry.' }, 400);
+
+    // The two names the client sent become the ids Ravelry wants; everything else passes straight
+    // through, so adding a field to the mapper needs no change here.
+    const { craft_name: craftName, status_name: statusName, ...rest } = draft;
+    const params: Record<string, unknown> = { ...rest, name };
+
+    const craftId = await idByName(
+      '/projects/crafts.json',
+      'crafts',
+      typeof craftName === 'string' ? craftName : 'Knitting',
+      tokens.accessToken,
+    );
+    const statusId = await idByName(
+      '/projects/project_statuses.json',
+      'project_statuses',
+      typeof statusName === 'string' ? statusName : 'In progress',
+      tokens.accessToken,
+    );
+    // A missing id is left out rather than guessed: Ravelry's own default for the field beats a
+    // number we made up. Only the craft is worth refusing over, since it decides where the project
+    // even lives.
+    if (!craftId) return json({ error: 'Ravelry did not recognise the craft for this project.' }, 502);
+    params.craft_id = craftId;
+    if (statusId) params.project_status_id = statusId;
+
+    const { response, shape } = await ravelryPost(
+      `/projects/${username}/create.json`,
+      params,
+      tokens.accessToken,
+    );
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 400);
+      console.error(
+        JSON.stringify({ event: 'ravelry-import', task: 'create-project', status: response.status, shape, detail }),
+      );
+      return json(
+        { error: 'Ravelry would not take this project. Nothing was changed there.', status: response.status },
+        502,
+      );
+    }
+
+    const created = (await response.json()) as {
+      project?: { id?: number; permalink?: string | null };
+    };
+    const id = created.project?.id;
+    if (!id) return json({ error: 'Ravelry took the project but did not say where it went.' }, 502);
+    const permalink = created.project?.permalink ?? '';
+
+    // Which parameter shape Ravelry accepted — worth knowing once, since the API reference is not
+    // public and this is the only way to find out.
+    console.log(JSON.stringify({ event: 'ravelry-import', task: 'create-project', ok: true, shape, id }));
+    return json({
+      ok: true,
+      id,
+      permalink,
+      url: permalink ? `https://www.ravelry.com/projects/${username}/${permalink}` : '',
+      ravelryUser: username,
+    });
+  }
 
   // The paged tasks. Each is one bounded slice of work, so a real notebook arrives in pieces the
   // client applies as they land — resumable, and with something honest to show while it runs. The
