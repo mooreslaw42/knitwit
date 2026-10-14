@@ -31,14 +31,25 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-function importSummaryLine(s: ImportSummary): string {
-  const parts = [
+function countsLine(s: ImportSummary): string {
+  return [
     plural(s.materials, "yarn", "yarns"),
     plural(s.tools, "needle", "needles"),
     plural(s.patterns, "pattern", "patterns"),
     plural(s.projects, "project", "projects"),
-  ];
-  return `Imported ${parts.join(", ")} from Ravelry.`;
+  ].join(", ");
+}
+
+function importSummaryLine(s: ImportSummary): string {
+  return `Imported ${countsLine(s)} from Ravelry.`;
+}
+
+// A whole notebook arrives a page at a time, so there is a real number to show rather than a
+// spinner — and what it names is already saved, not pending.
+function importProgressLine(s: ImportSummary): string {
+  const total = s.materials + s.tools + s.patterns + s.projects;
+  if (total === 0) return "Importing from Ravelry…";
+  return `Importing from Ravelry… ${countsLine(s)} so far.`;
 }
 
 // The only part of accounts a knitter ever sees.
@@ -151,9 +162,9 @@ export function AccountSection() {
   // doubles. The counts come back plain; what landed is on the Library, Counter and Projects screens.
   const handleImport = async () => {
     setBusy(true);
-    setNote("Importing from Ravelry… this can take a moment.");
+    setNote(importProgressLine({ materials: 0, tools: 0, patterns: 0, projects: 0 }));
     try {
-      setNote(importSummaryLine(await runRavelryImport()));
+      setNote(importSummaryLine(await runRavelryImport((soFar) => setNote(importProgressLine(soFar)))));
     } catch (error) {
       setNote(
         error instanceof Error

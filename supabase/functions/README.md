@@ -172,15 +172,38 @@ secret, and Ravelry's no-CORS rule). It loads the stored refresh token, decrypts
 for an access token at Ravelry's token endpoint (HTTP Basic with the app credentials, re-storing a
 rotated refresh token), and reads.
 
-Three tasks:
+### The paged tasks
+
+The list endpoints are thin — the mapping needs each entry's *detail* — so a notebook costs one
+request per stash entry, per project and per pattern on top of the lists. Doing all of that in one
+call is what breaks on a real account: a couple of hundred projects is several hundred Ravelry
+requests and a multi-megabyte response in a single function, which runs out of wall clock, annoys the
+rate limiter, and loses everything if the last one fails.
+
+So the unit of work is a **page** — at most `PAGE_SIZE` details, four in flight, one bounded
+response — and the client (`src/lib/ravelry/run-import.ts`) asks until `hasMore` goes false,
+applying each page as it arrives. That makes the import resumable (a failed page is retried, the
+ones before it are already saved) and gives the screen a real number to show.
+
+| Task | Body | Returns |
+|---|---|---|
+| `needles` | — | `{ items, hasMore: false }` — the whole drawer; small enough never to page |
+| `stash` | `{ page }` | `{ items, hasMore }` — stash entries with their yarn and packs |
+| `projects` | `{ page }` | `{ items, hasMore }` — project details, each carrying its `pattern_id` |
+| `library` | `{ page }` | `{ ids, hasMore }` — owned pattern **ids**, so the client fetches only what it lacks |
+| `patterns` | `{ ids }` | `{ items }` — details for the ids asked for |
+
+Order matters on the client: stash and patterns before projects, because a project's links are
+resolved by finding them already in the store.
+
+### The rest
 
 - `probe` (default) — does the whole chain and returns only counts
   (`{ ravelryUser, counts, readStatus }`), to confirm the read path. A `200` with real counts means
   it works; a `403` in `readStatus` with `current_user` fine means the scope is too narrow (below).
-- `pull` — the whole notebook: needles, and the details of every stash entry and project (lists
-  paginated in full, details fetched capped and four-at-a-time), plus the patterns those projects
-  and the library point at. Returns the raw payloads `src/lib/ravelry/*` maps. A notebook past the
-  `PULL_CAP` ceiling needs an incremental import, which is future work.
+- `pull` — the whole notebook in one response, which is the paged walk run to the end and bounded by
+  `PULL_CAP`. Kept for a small account and for any client that has not updated yet; the paged tasks
+  are what a real notebook should use.
 - `pattern-pdf` — one owned pattern's PDF (`{ patternId }` → `{ owned, pdfBase64 }`), for the client
   to extract and run through parse-pattern (Phase 4). **How Ravelry exposes an owned PDF is not yet
   verified against a real owned pattern** — it reads `pattern.pdf_url`; adjust there if a real one
