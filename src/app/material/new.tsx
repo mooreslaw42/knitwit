@@ -416,6 +416,21 @@ export default function NewMaterialWizardScreen() {
                   keyboardType="numeric"
                   placeholder="250"
                 />
+                {/* Grams and meters are per skein; this is how many of them there are. Asked here
+                    because it is known at the moment of buying, which is when this wizard is used.
+                    Where it lives and whether it is used up are edits for later — the Edit screen
+                    has those. */}
+                <FormField
+                  label="Skeins you have"
+                  value={form.skeins == null ? '' : String(form.skeins)}
+                  onChangeText={(v) => {
+                    const cleaned = v.replace(/[^0-9.]/g, '');
+                    const n = Number(cleaned);
+                    set('skeins', cleaned && Number.isFinite(n) ? n : null);
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="2"
+                />
               </>
             )}
 

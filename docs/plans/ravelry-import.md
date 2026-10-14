@@ -200,6 +200,36 @@ the import already has (`offline` grants read **and update**), so what was gatin
 - Craft and status ids are resolved server-side against Ravelry's own `crafts.json` and
   `project_statuses.json`, not hardcoded from a fixture.
 
+## Phase 7 — the fields Ravelry showed were missing (2026-10-14)
+
+Reading the real responses field by field turned up data the mappers were dropping because Knitwit
+had nowhere to put it. All additive, and all free of SQL: every entity is an opaque `data jsonb`
+column (`20260916000000_accounts_and_sync_schema.sql`) and `sync/registry.ts` writes the object
+verbatim, so a new optional field syncs with no migration and no version bump.
+
+- **`Material.skeins`** — how many the knitter *owns*. Everything else named `skeins` in Knitwit is a
+  requirement (`Pattern.materials[].skeins`, `Project.materialSkeins`), so the app could say a
+  sweater wants six balls while having no idea you had two. From the stash entry's **head pack**, not
+  the sum: in the captured response a two-skein entry has two packs that both say `skeins: 2.0`, the
+  second a child of the first, and adding them tells a knitter they own twice the yarn they do.
+- **`Material.status`** (`instash` / `usedup` / `notusing`) — folded from Ravelry's longer list by
+  keyword, since only one status id has ever been observed. For-sale and for-trade both land on
+  `notusing`; Knitwit is not a marketplace.
+- **`Material.location`** and **`Material.notes`** — Ravelry has both per entry, and yarn was the one
+  entity in the app with nowhere to write a sentence.
+- **`Project.finishedOn`** — there was no finish date anywhere in the codebase. Imports Ravelry's
+  `completed` and exports it back. Optional rather than `string | null`, because every project saved
+  before it genuinely has no answer; nothing sets it automatically, since a make is often declared
+  finished weeks after the last row.
+- **`Material.craftType` is now read off the yarn**, not hardcoded to `'knit'` — which filed a
+  crocheter's whole stash as knitting. Ravelry gives no craft on a yarn but does record the tools it
+  is for, so hooks-and-no-needles means crochet; needles, both, or nothing stays knitting. The merge
+  treats it as the knitter's, because it is an inference and a correction must stick.
+
+Skipped deliberately: `Project.sizeName` (the `sizeIndex`-into-`Pattern.sizes` mismatch is real but
+not worth a second field yet), a gauge's stitch pattern (`gauge_pattern`), social counts, ratings,
+`made_for`, `finish_by`, multiple project photos, and a `hibernating` project status.
+
 ## Deferred
 
 - **Updating an exported project.** The stamp makes it possible (`POST /projects/{user}/{id}.json`),

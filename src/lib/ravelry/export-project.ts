@@ -20,6 +20,7 @@ export type RavelryProjectDraft = {
   status_name: string;
   pattern_id?: number;
   started?: string;
+  completed?: string;
   progress?: number;
   notes?: string;
   size?: string;
@@ -84,6 +85,9 @@ export function knitwitProjectToRavelry(
 
   const started = toRavelryDate(project.startedOn);
   if (started) draft.started = started;
+
+  const finished = toRavelryDate(project.finishedOn ?? null);
+  if (finished) draft.completed = finished;
 
   // Only what the knitter actually wrote. An empty field sent as an empty string is still a field
   // Ravelry would store, and a notebook full of blanks is worse than one with gaps.

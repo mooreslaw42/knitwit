@@ -119,6 +119,7 @@ export function ravelryProjectToProject(
     project: {
       name: project.name ?? '',
       startedOn: toIsoDate(project.started),
+      finishedOn: toIsoDate(project.completed),
       craft: mapCraft(project.craft_name),
       photo: photo?.medium_url ?? photo?.square_url ?? null,
       // Ravelry has no accent colour for a project, so it lands on Knitwit's neutral pair; the

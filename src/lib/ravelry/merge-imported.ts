@@ -33,9 +33,20 @@ function knittersOwn<T>(existing: T[], incoming: T[]): T[] {
 
 export function mergeMaterial(existing: Material, incoming: Material): Material {
   return {
-    // thickness, strands, washing, careSymbols, crafts, craftType and the knitter's measured gauge
-    // all survive here: the mapper has nothing to say about any of them, so it must not blank them.
+    // thickness, strands, washing, careSymbols, crafts and the knitter's measured gauge all survive
+    // here: the mapper has nothing to say about any of them, so it must not blank them. So do the
+    // knitter's notes — like a pattern's, those are theirs once written, and an import that brought
+    // the Ravelry note in the first place must not undo an edit to it.
     ...existing,
+    // Ravelry's own stash bookkeeping: how many are in the drawer, where it is, whether it is gone.
+    // Ravelry is the record here for the same reason it is for a needle's quantity — it is the thing
+    // the knitter maintains over there, and a re-import is them asking for it.
+    skeins: incoming.skeins ?? existing.skeins,
+    location: fromRavelry(incoming.location ?? '', existing.location ?? ''),
+    status: incoming.status ?? existing.status,
+    // Ravelry does not say which craft a yarn is for; the mapper infers it from the needle and hook
+    // sizes, and that inference must not overrule a knitter who corrected it.
+    craftType: existing.craftType,
     brand: fromRavelry(incoming.brand, existing.brand),
     colorName: fromRavelry(incoming.colorName, existing.colorName),
     colorLot: fromRavelry(incoming.colorLot, existing.colorLot),
@@ -91,6 +102,7 @@ export function mergeProject(existing: Project, incoming: Project): Project {
     ...existing,
     name: fromRavelry(incoming.name, existing.name),
     startedOn: incoming.startedOn ?? existing.startedOn,
+    finishedOn: incoming.finishedOn ?? existing.finishedOn,
     craft: incoming.craft,
     photo: incoming.photo ?? existing.photo,
     needleSize: fromRavelry(incoming.needleSize, existing.needleSize),

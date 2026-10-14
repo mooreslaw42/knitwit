@@ -57,6 +57,7 @@ export default function ProjectEditScreen() {
 
   const [name, setName] = useState(project?.name ?? '');
   const [startedOn, setStartedOn] = useState<string | null>(project?.startedOn ?? null);
+  const [finishedOn, setFinishedOn] = useState<string | null>(project?.finishedOn ?? null);
   const [craft, setCraft] = useState<TechniqueCraft>(project?.craft ?? 'knit');
   const [patternId, setPatternId] = useState(project?.patternId ?? '');
   const [photo, setPhoto] = useState<string | null>(project?.photo ?? null);
@@ -123,6 +124,9 @@ export default function ProjectEditScreen() {
 
           <FormField label="Project name" value={name} onChangeText={setName} />
           <DateField label="Started" value={startedOn} onChange={setStartedOn} />
+          {/* Deliberately the knitter's to set. Nothing fills it in when the last row is counted:
+              a make is often declared finished weeks later, and a guessed date is worse than none. */}
+          <DateField label="Finished" value={finishedOn} onChange={setFinishedOn} />
           <SelectField
             label="Craft"
             options={CRAFT_OPTIONS}
@@ -193,6 +197,7 @@ export default function ProjectEditScreen() {
               updateProject(key, {
                 name,
                 startedOn,
+                finishedOn,
                 craft,
                 patternId: patternId || null,
                 photo,

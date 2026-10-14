@@ -127,6 +127,7 @@ type KnitwitState = {
     patch: {
       name: string;
       startedOn: string | null;
+      finishedOn?: string | null;
       craft: TechniqueCraft;
       patternId: string | null;
       photo?: string | null;
@@ -745,7 +746,10 @@ export const useKnitwitStore = create<KnitwitState>()(
         return key;
       },
 
-      updateProject: (key, { name, startedOn, craft, patternId, photo, labels, ...meta }) => {
+      updateProject: (
+        key,
+        { name, startedOn, finishedOn, craft, patternId, photo, labels, ...meta },
+      ) => {
         const { projects, patterns } = get();
         const project = projects[key];
         if (!project) return;
@@ -759,6 +763,8 @@ export const useKnitwitStore = create<KnitwitState>()(
               ...meta,
               name: name.trim() || 'Untitled project',
               startedOn,
+              // Undefined means the caller isn't touching it; null clears the date.
+              finishedOn: finishedOn === undefined ? project.finishedOn : finishedOn,
               craft,
               patternId,
               // Undefined means the caller isn't touching the photo; null means remove it.

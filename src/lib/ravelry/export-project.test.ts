@@ -68,6 +68,22 @@ describe('knitwitProjectToRavelry', () => {
     });
   });
 
+  it('sends the finish date when there is one, and nothing when there is not', () => {
+    const finished = knitwitProjectToRavelry({
+      ...sampleProject,
+      status: 'finished',
+      finishedOn: '2026-10-12',
+    });
+    expect(finished.completed).toBe('2026/10/12');
+
+    // Still on the needles, so there is no date to claim.
+    expect(knitwitProjectToRavelry(sampleProject).completed).toBeUndefined();
+    // A project saved before the field existed has no answer either.
+    expect(
+      knitwitProjectToRavelry({ ...sampleProject, finishedOn: undefined }).completed,
+    ).toBeUndefined();
+  });
+
   it('never publishes the knitter’s private labels as Ravelry tags', () => {
     const draft = knitwitProjectToRavelry(sampleProject) as Record<string, unknown>;
     // Labels are made-up private groupings; Ravelry's tags are public. Not ours to convert.

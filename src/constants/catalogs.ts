@@ -1,5 +1,6 @@
 // Ported verbatim from reference/index.html's catalog constants.
 import type {
+  MaterialStatus,
   PatternCategory,
   ProjectStatus,
   SectionStatus,
@@ -76,6 +77,15 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   finished: 'Finished',
   frogged: 'Frogged',
 };
+
+// Where a yarn stands in the stash, in the knitter's words.
+export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {
+  instash: 'In the stash',
+  usedup: 'Used up',
+  notusing: "Won't use",
+};
+
+export const MATERIAL_STATUS_ORDER: MaterialStatus[] = ['instash', 'usedup', 'notusing'];
 
 export const SECTION_STATUS_LABELS: Record<SectionStatus, string> = {
   'not-started': 'Not started',
