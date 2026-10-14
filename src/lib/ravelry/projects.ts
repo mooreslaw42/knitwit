@@ -37,6 +37,15 @@ function toIsoDate(value: string | null | undefined): string | null {
   return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
+// How far along, 0–100. A finished project is finished whatever the slider says — plenty of knitters
+// never drag it to the end — and anything else falls back to Ravelry's percentage, clamped, or zero.
+function percentDone(project: RavelryProject, status: ProjectStatus): number {
+  if (status === 'finished') return 100;
+  const progress = project.progress;
+  if (typeof progress !== 'number' || !Number.isFinite(progress)) return 0;
+  return Math.max(0, Math.min(100, Math.round(progress)));
+}
+
 function trimZero(n: number): string {
   return String(Number(n));
 }
@@ -79,20 +88,27 @@ export function ravelryProjectToProject(
   // sections[current].name), so a project with none crashes the list. An imported one therefore gets
   // one placeholder section that renders and counts until the knitter adds real sections or charts
   // the linked pattern. Deterministic id and timestamp keep the mapper pure.
+  //
+  // It counts in percent — 100 "rows", one per percentage point — because that is the only progress
+  // Ravelry has. A one-row section would have had every unfinished import read "row 0 of 1", which
+  // says nothing; this at least carries the knitter's own number across, and the section says so.
+  const percent = percentDone(project, status);
   const section: ProjectSection = {
     id: `psec_rav_${project.id}`,
     updatedAt: importedAt,
     name: 'Whole project',
-    totalRows: 1,
-    row: status === 'finished' ? 1 : 0,
-    complete: status === 'finished',
+    totalRows: 100,
+    row: percent,
+    complete: percent >= 100,
     seconds: 0,
     rowNotes: [],
     notes: '',
     materialIds: [],
     toolIds: [],
     techniqueIds: [],
-    description: '',
+    description:
+      'Imported from Ravelry, which tracks a project as a percentage rather than by row — so this ' +
+      'section counts to 100. Chart the pattern, or add your own sections, to count real rows.',
     stitchMultiple: null,
     markers: [],
     castOn: 0,

@@ -51,14 +51,15 @@ describe('ravelryProjectToProject', () => {
           pattern: { stitches: 30, rows: 38, width: 4, height: 4, unit: 'inch' },
           mine: { stitches: 30, rows: 38, width: 4, height: 4, unit: 'inch' },
         },
-        // A finished project gets one placeholder section (the app needs at least one to render).
+        // A finished project gets one placeholder section (the app needs at least one to render),
+        // counting in percent because that is the only progress Ravelry keeps.
         sections: [
           {
             id: 'psec_rav_3333333',
             updatedAt: IMPORTED_AT,
             name: 'Whole project',
-            totalRows: 1,
-            row: 1,
+            totalRows: 100,
+            row: 100,
             complete: true,
             seconds: 0,
             rowNotes: [],
@@ -66,7 +67,7 @@ describe('ravelryProjectToProject', () => {
             materialIds: [],
             toolIds: [],
             techniqueIds: [],
-            description: '',
+            description: expect.stringContaining('percentage'),
             stitchMultiple: null,
             markers: [],
             castOn: 0,
@@ -92,6 +93,33 @@ describe('ravelryProjectToProject', () => {
     expect(status('Frogged')).toBe('frogged');
     expect(status('In progress')).toBe('active');
     expect(status('Hibernating')).toBe('active');
+  });
+
+  it('counts the placeholder section in percent, from Ravelry’s progress', () => {
+    const section = (overrides: Partial<typeof sampleProject>) =>
+      ravelryProjectToProject({ ...sampleProject, ...overrides }, IMPORTED_AT).project.sections[0];
+
+    const halfway = section({ status_name: 'In progress', progress: 42 });
+    expect(halfway).toMatchObject({ totalRows: 100, row: 42, complete: false });
+
+    // Never set, so there is nothing to claim.
+    expect(section({ status_name: 'In progress', progress: null })).toMatchObject({ row: 0 });
+
+    // Finished is finished, whatever the slider was left at — plenty of knitters never drag it over.
+    expect(section({ status_name: 'Finished', progress: 20 })).toMatchObject({
+      row: 100,
+      complete: true,
+    });
+
+    // A frogged project keeps how far it got, but is not complete.
+    expect(section({ status_name: 'Frogged', progress: 60 })).toMatchObject({
+      row: 60,
+      complete: false,
+    });
+
+    // Out of range is clamped rather than trusted — the counter must never be sent past its end.
+    expect(section({ status_name: 'In progress', progress: 160 })).toMatchObject({ row: 100 });
+    expect(section({ status_name: 'In progress', progress: -5 })).toMatchObject({ row: 0 });
   });
 
   it('leaves startedOn null when there is no start date', () => {

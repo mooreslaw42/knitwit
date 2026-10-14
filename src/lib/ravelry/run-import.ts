@@ -45,12 +45,27 @@ const storeTarget: ImportTarget = {
   saveProject: (id, data) => useKnitwitStore.getState().saveProject(id, data),
 };
 
+// Everything already fetched is already saved, so "try again" is honest advice rather than a shrug:
+// a second run picks up where this one stopped.
+const SO_FAR_IS_SAFE = 'What came across so far is saved — try again.';
+
 async function ask<T>(body: Record<string, unknown>): Promise<Page<T>> {
-  return (await invokeEdgeFunction('ravelry-import', body, {
-    // One page, so this is a generous ceiling rather than a budget for the whole notebook.
-    timeoutMs: 60_000,
-    timeoutMessage: 'Ravelry took too long to answer. What came across so far is saved — try again.',
-  })) as Page<T>;
+  // One retry. The first call after a deploy can cold-start slowly enough to come back as a failure —
+  // which it did, once, in testing, and reported an import that had not actually gone wrong. A
+  // second attempt costs a moment and saves the run; a genuinely broken call still fails, just later.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return (await invokeEdgeFunction('ravelry-import', body, {
+        // One page, so this is a generous ceiling rather than a budget for the whole notebook.
+        timeoutMs: 60_000,
+        timeoutMessage: `Ravelry took too long to answer. ${SO_FAR_IS_SAFE}`,
+        failureMessage: `Couldn't reach Ravelry. ${SO_FAR_IS_SAFE}`,
+      })) as Page<T>;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+    }
+  }
 }
 
 export async function runRavelryImport(

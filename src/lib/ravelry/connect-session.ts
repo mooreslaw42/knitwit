@@ -34,7 +34,13 @@ export function captureRavelryToken(event: AuthChangeEvent, session: Session | n
   void invokeEdgeFunction(
     'ravelry-connect',
     { refresh_token: refreshToken, access_token: session?.provider_token ?? undefined },
-    { timeoutMs: 10_000, timeoutMessage: '' },
+    // Nobody reads these two — the catch below logs and moves on — but the default would have said
+    // "couldn't reach the pattern reader", which is a confusing thing to find in a log about Ravelry.
+    {
+      timeoutMs: 10_000,
+      timeoutMessage: 'Ravelry connect timed out.',
+      failureMessage: "Couldn't reach Ravelry connect.",
+    },
   ).catch((error) => {
     // Logged, not surfaced: there is no screen waiting on this and nothing a knitter could do about
     // it. The connection simply is not saved yet, and the next Ravelry sign-in tries again.

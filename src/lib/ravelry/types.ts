@@ -123,6 +123,7 @@ export type RavelryProject = {
   pattern_id?: number | null; // → the pattern this was made from, to link an imported card
   craft_name?: string | null; // "Knitting" | "Crochet"
   status_name?: string | null; // "In progress" | "Finished" | "Frogged" | "Hibernating" | …
+  progress?: number | null; // percent complete, 0–100; null when the knitter never set it
   started?: string | null; // "2026/10/01"
   personal_source_name?: string | null;
   notes?: string | null;
