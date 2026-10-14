@@ -112,13 +112,16 @@ async function loadConnection(
   return rows[0] ?? null;
 }
 
+// Persisting a rotated refresh token. Ravelry's are single-use, so if this does not land, the next
+// import refreshes a spent token and the connection is dead — which is why the result is checked and
+// a failure is loud, not swallowed.
 async function storeRefreshToken(
   url: string,
   serviceKey: string,
   userId: string,
   enveloped: string,
-): Promise<void> {
-  await fetch(`${url}/rest/v1/ravelry_connections?user_id=eq.${userId}`, {
+): Promise<boolean> {
+  const response = await fetch(`${url}/rest/v1/ravelry_connections?user_id=eq.${userId}`, {
     method: 'PATCH',
     headers: {
       apikey: serviceKey,
@@ -129,6 +132,10 @@ async function storeRefreshToken(
     body: JSON.stringify({ refresh_token: enveloped }),
     signal: AbortSignal.timeout(10_000),
   });
+  if (!response.ok) {
+    console.error('ravelry-import could not re-store the rotated token', response.status, await response.text().catch(() => ''));
+  }
+  return response.ok;
 }
 
 type Tokens = { accessToken: string; refreshToken: string | null };
@@ -339,9 +346,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // reconnects — there is nothing to retry here.
   if (!tokens) return json({ error: 'Ravelry would not renew access. Connect it again.', connected: false }, 401);
 
-  // A rotated refresh token has to replace the old one or the next run fails with a token already spent.
-  if (tokens.refreshToken && tokens.refreshToken !== refreshToken) {
-    await storeRefreshToken(url, serviceKey, userId, await envelope(tokens.refreshToken, tokenKey));
+  // A rotated refresh token has to replace the old one or the next run fails with a token already
+  // spent. Ravelry rotates on every refresh, so this runs most times; a failure here is logged by
+  // storeRefreshToken, because a silent one strands the connection.
+  const rotated = Boolean(tokens.refreshToken && tokens.refreshToken !== refreshToken);
+  if (rotated) {
+    const restored = await storeRefreshToken(
+      url,
+      serviceKey,
+      userId,
+      await envelope(tokens.refreshToken as string, tokenKey),
+    );
+    console.log(JSON.stringify({ event: 'ravelry-import', step: 'rotate', rotated, restored }));
   }
 
   // One owned pattern's PDF, so the client can chart it (Phase 4). Returned as bytes for the client
