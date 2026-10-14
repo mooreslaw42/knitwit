@@ -230,6 +230,36 @@ Skipped deliberately: `Project.sizeName` (the `sizeIndex`-into-`Pattern.sizes` m
 not worth a second field yet), a gauge's stitch pattern (`gauge_pattern`), social counts, ratings,
 `made_for`, `finish_by`, multiple project photos, and a `hibernating` project status.
 
+### `Pattern.link`, and the pattern attributes
+
+- **`Pattern.link`** — the designer's own page, from Ravelry's `url`. The way back to a pattern
+  bought direct, which nothing else recorded, and where an updated version would appear. Kept apart
+  from `ravelrySource.url`, which is the copy *in Ravelry* rather than the pattern's home.
+- **`pattern_attributes` → `Pattern.techniques`**, with the catalogue as the filter rather than a
+  hand-written allow-list. Each attribute permalink is humanised and run through `matchTechnique` —
+  the same matcher that reads techniques out of imported pattern text — against **only the entries
+  for the pattern's craft**. That craft filter is what makes an ambiguous tag safe: a crochet
+  pattern tagged `lace` cannot land on *Lace knitting*, and `mosaic` resolves to mosaic knitting or
+  mosaic crochet by itself.
+
+  Most of the vocabulary is not technique at all. The camisole in the fixtures carries eleven
+  attributes — `female`, `unisex`, `adult`, `negative-ease`, `fitted`, `crew-neck`, `sleeveless`,
+  `top-down`, `written-pattern`, `in-the-round`, `other-edging` — and the right number of techniques
+  to take from those is zero: even the two construction tags match nothing, because the catalogue
+  deliberately leaves garment construction out. Everything unmatched goes into the card's notes as a
+  `Details:` line, since "adult, fitted, crew neck, sleeveless, top down" is a fair description of a
+  garment and dropping it for not being a skill would lose the more useful half.
+
+  `ATTRIBUTE_PHRASES` in `patterns.ts` is the thin curated layer, for the few whose permalink does
+  not read like the catalogue's name (`stranded` → *Stranded colourwork*, `felted` → *Felting*).
+  Anything not in it falls through to the humanised permalink, so an attribute nobody has seen yet
+  can still match on its own name.
+
+  `runRavelryImport` now awaits `loadCatalogue()` first. The catalogue is otherwise loaded lazily by
+  the Techniques tab and the pattern wizard, and a knitter who signs in and imports from the Account
+  screen has touched neither — without it the matching would quietly do nothing on the likeliest
+  path of all. Never fatal: no catalogue just means the attributes stay as prose.
+
 ## Deferred
 
 - **Updating an exported project.** The stamp makes it possible (`POST /projects/{user}/{id}.json`),

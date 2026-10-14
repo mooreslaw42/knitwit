@@ -39,6 +39,7 @@ const storeTarget: ImportTarget = {
   getTools: () => useKnitwitStore.getState().tools,
   getPatterns: () => useKnitwitStore.getState().patterns,
   getProjects: () => useKnitwitStore.getState().projects,
+  getCatalogue: () => Object.values(useKnitwitStore.getState().catalogue),
   saveMaterial: (id, data) => useKnitwitStore.getState().saveMaterial(id, data),
   saveTool: (id, data) => useKnitwitStore.getState().saveTool(id, data),
   savePattern: (id, data) => useKnitwitStore.getState().savePattern(id, data),
@@ -74,6 +75,19 @@ export async function runRavelryImport(
   const at = stamp();
   const soFar: ImportSummary = { materials: 0, tools: 0, patterns: 0, projects: 0 };
   const report = () => onProgress?.({ ...soFar });
+
+  // The technique catalogue, before any pattern is mapped.
+  //
+  // It is what turns Ravelry's pattern attributes into techniques, and it is otherwise loaded
+  // lazily — by the Techniques tab and the pattern wizard. A knitter who signs in and imports from
+  // the Account screen would never have touched either, so without this the matching would quietly
+  // do nothing in the most likely path of all. Cached with its own max age, so this is usually a
+  // no-op; awaited but never fatal, because an import must not fail over a nicety.
+  try {
+    await useKnitwitStore.getState().loadCatalogue();
+  } catch {
+    // No catalogue: attributes stay as prose in each pattern's notes, which is the fallback anyway.
+  }
 
   // Pattern details, fetched once per *run*.
   //

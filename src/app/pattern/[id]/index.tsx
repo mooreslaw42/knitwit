@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { ExternalLink } from '@/components/external-link';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { SharePattern } from '@/components/share-pattern';
 import { GaugeField } from '@/components/gauge-field';
@@ -276,6 +277,13 @@ export default function PatternDetailScreen() {
                 onChange={(g) => set('swatchGauge', g)}
               />
               <FormField
+                label="Pattern page (optional)"
+                value={draft.link ?? ''}
+                onChangeText={(v) => set('link', v)}
+                placeholder="https://… — where the pattern came from"
+                autoCapitalize="none"
+              />
+              <FormField
                 label="Instruction video (optional)"
                 value={draft.video}
                 onChangeText={(v) => set('video', v)}
@@ -346,6 +354,20 @@ export default function PatternDetailScreen() {
                   no way to tell which is right. */}
               <Field label="Gauge" value={gaugeLine(pattern.gauge, unit)} />
               <Field label="Your swatch" value={gaugeLine(pattern.swatchGauge, unit)} />
+              {/* The way back to where the pattern came from — the designer's page, the shop, the
+                  blog post. Tappable, because a URL you can only read is a URL you have to retype. */}
+              {pattern.link ? (
+                <Card style={styles.fieldCard}>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    Pattern page
+                  </ThemedText>
+                  <ExternalLink href={pattern.link as Parameters<typeof ExternalLink>[0]['href']}>
+                    <ThemedText type="smallBold" themeColor="sageDeep" numberOfLines={1}>
+                      {pattern.link} →
+                    </ThemedText>
+                  </ExternalLink>
+                </Card>
+              ) : null}
               <Field label="Instruction video" value={pattern.video} />
               <Field label="Imported file" value={pattern.sourceName} />
               <Field label="Imported text" value={pattern.sourceText} numberOfLines={4} />

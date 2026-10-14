@@ -8,7 +8,7 @@
 // It talks to the store through a small interface rather than importing it, so the whole thing is
 // pure and testable with a fake target. The real caller builds a target from useKnitwitStore.
 
-import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
+import type { CatalogueTechnique, Material, Pattern, Project, Tool } from '@/types/knitwit';
 
 import { mergeMaterial, mergePattern, mergeProject, mergeTool } from './merge-imported';
 import { ravelryNeedlesToTools } from './needles';
@@ -37,6 +37,10 @@ export interface ImportTarget {
   getTools(): Record<string, Tool>;
   getPatterns(): Record<string, Pattern>;
   getProjects(): Record<string, Project>;
+  // The shared technique catalogue, for matching Ravelry's pattern attributes onto entries. May be
+  // empty — it is fetched and cached separately, and an import must not wait on it or fail without
+  // it. Empty simply means no techniques are matched on this run.
+  getCatalogue(): CatalogueTechnique[];
   saveMaterial(id: string | null, data: Material): string;
   saveTool(id: string | null, data: Tool): string;
   savePattern(id: string | null, data: Pattern): string;
@@ -101,9 +105,10 @@ export function applyPatterns(
   target: ImportTarget,
   importedAt: string,
 ): number {
+  const catalogue = target.getCatalogue();
   for (const pattern of items) {
     const key = existingKey(target.getPatterns(), String(pattern.id));
-    const incoming = ravelryPatternToPattern(pattern, importedAt);
+    const incoming = ravelryPatternToPattern(pattern, importedAt, catalogue);
     const existing = key ? target.getPatterns()[key] : undefined;
     target.savePattern(key, existing ? mergePattern(existing, incoming) : incoming);
   }

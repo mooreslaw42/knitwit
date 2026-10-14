@@ -368,6 +368,12 @@ export type Pattern = {
   craft: TechniqueCraft;
   weight: string; // legacy yarn-weight descriptor (kept for seeds); new patterns use needleSize
   needleSize: string; // recommended needle / hook size, e.g. "4.5mm"
+  // Where the pattern lives: the designer's own page, the shop it was bought from, the blog post it
+  // was published in. The way back to a pattern bought direct, which nothing else records — and
+  // where an updated version would appear. An imported pattern's Ravelry deep link is kept apart,
+  // on `ravelrySource.url`, because that is the copy *in Ravelry* rather than the pattern's home.
+  // Optional: every pattern saved before this field existed has no answer to give.
+  link?: string;
   video: string; // optional link to an instruction video
   // The original pattern the user imported, kept for reference (and future automatic parsing).
   sourceName: string; // uploaded file name, if any

@@ -131,6 +131,27 @@ describe('runRavelryImport', () => {
     expect(Object.keys(useKnitwitStore.getState().patterns)).toHaveLength(1); // still reconciled, not duplicated
   });
 
+  it('loads the technique catalogue before mapping any pattern', async () => {
+    // Otherwise the attribute matching quietly does nothing on the likeliest path of all: the
+    // catalogue is loaded lazily by the Techniques tab and the pattern wizard, and a knitter who
+    // signs in and imports from the Account screen has touched neither.
+    const loadCatalogue = jest.fn().mockResolvedValue(undefined);
+    useKnitwitStore.setState({ loadCatalogue });
+    serve({ stash: [[]], library: [[]], projects: [[]] });
+
+    await runRavelryImport();
+
+    expect(loadCatalogue).toHaveBeenCalled();
+  });
+
+  it('imports anyway when the catalogue cannot be loaded', async () => {
+    useKnitwitStore.setState({ loadCatalogue: jest.fn().mockRejectedValue(new Error('offline')) });
+    serve({ stash: [[STASH]], library: [[]], projects: [[]] });
+
+    // A nicety must not be able to fail the import.
+    await expect(runRavelryImport()).resolves.toMatchObject({ materials: 1 });
+  });
+
   it('retries a page once before giving up on it', async () => {
     serve({ stash: [[STASH]], library: [[]], projects: [[]] });
     const good = invoke.getMockImplementation() as jest.Mock;
