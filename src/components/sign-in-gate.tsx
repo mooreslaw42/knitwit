@@ -24,9 +24,11 @@ import {
 } from "@/constants/theme";
 import {
   type AuthResult,
+  type SignInProvider,
   accountStateOf,
   createAccount,
   describeProviderReturn,
+  providerLabel,
   readable,
   requestPasswordReset,
   signInExisting,
@@ -85,7 +87,7 @@ export function SignInGate() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   // Which provider is waiting on an answer about the knitting already on this device.
-  const [asking, setAsking] = useState<"apple" | "google" | null>(null);
+  const [asking, setAsking] = useState<SignInProvider | null>(null);
   // The address a confirmation link has gone to. Set means the account exists and is waiting on an
   // inbox, which is a different screen from the one that asks for a password.
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -173,7 +175,7 @@ export function SignInGate() {
   // Apple and Google mean *sign in*, because that is what the button says on a screen whose whole
   // purpose is getting in. Attaching a provider to the account already on the device is a different
   // act with a different consequence, and it lives on the Account screen where it belongs.
-  const provider = async (which: "apple" | "google") => {
+  const provider = async (which: SignInProvider) => {
     // Work on this device belongs to the anonymous account being left behind, and signing in
     // abandons it. That is a question with two real answers, so it is asked as one — a note and a
     // second press is not a choice, it is a guess about what the second press means.
@@ -190,7 +192,7 @@ export function SignInGate() {
   // theirs to walk away from. Requiring the file turned "I want to sign in" into a door that only
   // opened for people willing to save something they had already decided they did not want.
   const runProviderSwitch = async (
-    which: "apple" | "google",
+    which: SignInProvider,
     withBackup: boolean,
   ) => {
     setBusy(true);
@@ -213,17 +215,6 @@ export function SignInGate() {
     } finally {
       setBusy(false);
     }
-  };
-
-  // Ravelry sits beside Apple and Google because knitters expect it there, but its sign-in is a
-  // separate OAuth 2.0 flow that needs an Edge Function doing the code exchange — deferred, not
-  // built (see docs/plans/multi-user.md). Until it is, the button is honest about that rather than
-  // throwing a provider error the way a half-wired signInWithOAuth would.
-  const ravelry = () => {
-    setAsking(null);
-    setNote(
-      "Signing in with Ravelry is on its way but not ready yet — use Apple, Google or an email address for now.",
-    );
   };
 
   return (
@@ -353,8 +344,10 @@ export function SignInGate() {
                     Google
                   </ThemedText>
                 </Pressable>
+                {/* A new account made this way stops for an email before the app — Ravelry has none
+                    to give. See add-email-gate.tsx. */}
                 <Pressable
-                  onPress={ravelry}
+                  onPress={() => void provider("ravelry")}
                   style={styles.provider}
                   disabled={busy}
                 >
@@ -383,7 +376,7 @@ export function SignInGate() {
                       Keep a copy first?
                     </ThemedText>
                     <ThemedText type="default">
-                      Signing in with {asking === "apple" ? "Apple" : "Google"}{" "}
+                      Signing in with {asking ? providerLabel(asking) : ""}{" "}
                       takes you to a different account. What is on this device —{" "}
                       {local} — stays with the one you have now.
                     </ThemedText>
@@ -514,6 +507,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   providers: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.two,
   },
   provider: {

@@ -27,6 +27,15 @@ export function authReturnUrl(): string {
   return Linking.createURL('/account').replace(':///', '://');
 }
 
+// Where the link in a confirm-your-email message should land.
+//
+// Nowhere in particular, on a phone: mail apps open links in a browser, not in Knitwit, and the
+// confirmation is applied by the server before any redirect happens. Left unset, Supabase uses the
+// project's Site URL; the app finds out by asking again (see recheckEmail in auth.ts).
+export function emailReturnUrl(): string | undefined {
+  return undefined;
+}
+
 export async function finishProviderFlow(url: string | null): Promise<void> {
   if (!url) throw new Error('no-url');
 

@@ -28,6 +28,7 @@ import { patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
+import { buildPatternChartFromRavelry } from '@/lib/ravelry/build-pattern-chart';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type {
@@ -75,6 +76,30 @@ export default function PatternDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Pattern | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Phase 4: charting an imported pattern from its owned PDF. Only offered on a pattern that came
+  // from Ravelry and has no sections yet.
+  const [building, setBuilding] = useState(false);
+  const [buildNote, setBuildNote] = useState<string | null>(null);
+
+  const buildChart = async () => {
+    setBuilding(true);
+    setBuildNote('Reading the pattern PDF and charting it — this can take a minute.');
+    try {
+      const result = await buildPatternChartFromRavelry(id);
+      setBuildNote(
+        `Charted ${result.summary.sections} sections, ${result.summary.rowsCharted} rows. ` +
+          'Check them over below.',
+      );
+    } catch (error) {
+      setBuildNote(
+        error instanceof Error
+          ? error.message
+          : 'The chart could not be built from the PDF. Try again in a moment.',
+      );
+    } finally {
+      setBuilding(false);
+    }
+  };
 
   // The colour swatch at the top doubles as the photo well while editing.
   const choosePhoto = async () => {
@@ -357,9 +382,27 @@ export default function PatternDetailScreen() {
                 Sections
               </ThemedText>
               {(pattern.sections ?? []).length === 0 ? (
-                <ThemedText type="small" themeColor="inkSoft">
-                  This pattern has no sections.
-                </ThemedText>
+                <>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    This pattern has no sections.
+                  </ThemedText>
+                  {pattern.ravelrySource ? (
+                    <PillButton
+                      variant="secondary"
+                      onPress={() => void buildChart()}
+                      loading={building}
+                      disabled={building}>
+                      <ThemedText type="smallBold" themeColor="ink">
+                        Build the chart from the PDF
+                      </ThemedText>
+                    </PillButton>
+                  ) : null}
+                  {buildNote ? (
+                    <ThemedText type="small" themeColor="inkSoft">
+                      {buildNote}
+                    </ThemedText>
+                  ) : null}
+                </>
               ) : (
                 <View style={styles.sectionsList}>
                   {(pattern.sections ?? []).map((s, i) => {

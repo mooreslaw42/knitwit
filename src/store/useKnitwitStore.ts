@@ -173,6 +173,9 @@ type KnitwitState = {
   savePattern: (id: string | null, data: Pattern) => string;
   savePatternFromProject: (projectKey: string, data: Pattern) => string;
   deletePattern: (id: string) => void;
+  // A plain upsert for a fully-formed project — what the Ravelry import writes, as opposed to
+  // createProject, which builds one from a pattern draft and its sections. id null makes a new one.
+  saveProject: (id: string | null, data: Project) => string;
   // A technique is picked from the catalogue and given a status, not written from scratch.
   setTechniqueStatus: (id: string, status: TechniqueStatus | null) => void;
   setTechniqueNotes: (id: string, notes: string) => void;
@@ -1015,6 +1018,20 @@ export const useKnitwitStore = create<KnitwitState>()(
           patternSeq: id ? patternSeq : patternSeq + 1,
           // Only a new pattern counts; editing one you already had isn't making another.
           achievements: id ? get().achievements : bumpTotal(get().achievements, 'patternsCreated'),
+        });
+        return resolvedId;
+      },
+
+      // A fully-formed project, written as-is. The Ravelry import uses this: the project already
+      // carries its own fields, status, gauge and ravelrySource, so there is nothing to build the
+      // way createProject does. No achievement bump — an imported project is not one the knitter
+      // just finished making here.
+      saveProject: (id, data) => {
+        const { projects, projectSeq } = get();
+        const resolvedId = id ?? `proj${projectSeq}`;
+        set({
+          projects: { ...projects, [resolvedId]: data },
+          projectSeq: id ? projectSeq : projectSeq + 1,
         });
         return resolvedId;
       },

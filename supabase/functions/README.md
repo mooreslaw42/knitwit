@@ -113,3 +113,77 @@ timestamp) costs the cache for every import. Everything variable belongs in the 
   it shells out to `npx deno check` and needs no permanent Deno install.
 - **Dependency pinning.** Deno refuses npm versions published in the last 24 hours as a
   supply-chain guard, so the `@anthropic-ai/sdk` pin deliberately trails the newest release.
+
+## `ravelry-userinfo`
+
+The userinfo endpoint for the `custom:ravelry` auth provider. Supabase Auth calls it — never the
+app — with a Ravelry access token as the bearer; it asks Ravelry's `/current_user.json` who that is
+and returns flat claims with the numeric id as `sub`. Needed because Supabase cannot read Ravelry's
+nested `{ user: { … } }` response. JWT verification is off for it in `config.toml` (the bearer is
+Ravelry's, not ours); it holds no secret and reads no table. No secrets to set — the Ravelry client
+secret lives in the provider's dashboard config, not here. Setup and open decisions:
+`docs/ravelry-sign-in.md`.
+
+## `ravelry-connect`
+
+Keeps the Ravelry **refresh token** Supabase hands over only once. On a Ravelry sign-in or connect,
+supabase-js puts `provider_refresh_token` on the session that comes back and stores it nowhere; the
+app (`src/lib/ravelry/connect-session.ts`, fired from the session watcher) sends it here the moment
+it sees it. This is Phase 0 of `docs/plans/ravelry-import.md` — nothing can read a knitter's library
+later without it.
+
+**Request** (`POST`, via `invokeEdgeFunction('ravelry-connect', …)`): `{ refresh_token, access_token? }`.
+The caller's JWT identifies whose row is written (verified against `/auth/v1/user`, never decoded on
+trust — same as `delete-account`); the optional access token is used once, best-effort, to ask
+Ravelry who this is for the "connected as …" label. Returns `{ ok, stored }`.
+
+The token is **enveloped** (AES-GCM) before it touches Postgres, so a row in `ravelry_connections`
+is ciphertext — see the table's migration, which also closes it to every client by RLS. Only the
+service role (this function) reads or writes it.
+
+| Secret | Required | Notes |
+|---|---|---|
+| `RAVELRY_TOKEN_KEY` | yes | 32 raw bytes, base64, for the envelope. **Supabase secret only.** Generate with `openssl rand -base64 32`. Rotating it orphans stored tokens — knitters reconnect once. |
+
+```bash
+supabase functions deploy ravelry-connect --project-ref <ref>
+```
+
+JWT verification is left on (the default): the caller is a signed-in knitter, and the row written is
+always their own.
+
+## `ravelry-import`
+
+Reads a knitter's Ravelry on their behalf — everything Ravelry has to run server-side (the client
+secret, and Ravelry's no-CORS rule). It loads the stored refresh token, decrypts it, exchanges it
+for an access token at Ravelry's token endpoint (HTTP Basic with the app credentials, re-storing a
+rotated refresh token), and reads.
+
+Three tasks:
+
+- `probe` (default) — does the whole chain and returns only counts
+  (`{ ravelryUser, counts, readStatus }`), to confirm the read path. A `200` with real counts means
+  it works; a `403` in `readStatus` with `current_user` fine means the scope is too narrow (below).
+- `pull` — the whole notebook: needles, and the details of every stash entry and project (lists
+  paginated in full, details fetched capped and four-at-a-time), plus the patterns those projects
+  and the library point at. Returns the raw payloads `src/lib/ravelry/*` maps. A notebook past the
+  `PULL_CAP` ceiling needs an incremental import, which is future work.
+- `pattern-pdf` — one owned pattern's PDF (`{ patternId }` → `{ owned, pdfBase64 }`), for the client
+  to extract and run through parse-pattern (Phase 4). **How Ravelry exposes an owned PDF is not yet
+  verified against a real owned pattern** — it reads `pattern.pdf_url`; adjust there if a real one
+  differs.
+
+| Secret | Required | Notes |
+|---|---|---|
+| `RAVELRY_TOKEN_KEY` | yes | The same key `ravelry-connect` enveloped the token with. |
+| `RAVELRY_CLIENT_ID` | yes | The Ravelry app's OAuth2 client id, for the token exchange. **Supabase secret only.** |
+| `RAVELRY_CLIENT_SECRET` | yes | The Ravelry app's OAuth2 client secret. Same. |
+
+```bash
+supabase functions deploy ravelry-import --project-ref <ref>
+```
+
+**Scope:** the `custom:ravelry` provider must request `offline` and **not** `profile-only`. Ravelry
+has no granular read scopes — it is full access unless restricted — so `offline` alone yields a token
+whose consent screen reads "view and update my Ravelry notebook". `profile-only` returns only the
+profile, and every read here comes back `403`.

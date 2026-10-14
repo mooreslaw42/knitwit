@@ -52,7 +52,7 @@ async function bytesOf(asset: DocumentPicker.DocumentPickerAsset): Promise<Array
   return await response.arrayBuffer();
 }
 
-async function extractPdf(bytes: ArrayBuffer): Promise<{ text: string; pages: number }> {
+export async function extractPdf(bytes: ArrayBuffer): Promise<{ text: string; pages: number }> {
   // Imported on demand: it's the largest dependency in the app, and most sessions never upload a
   // PDF. unpdf bundles a pdfjs build that needs no worker setup, which is the usual sharp edge.
   const { extractText, getDocumentProxy } = await import('unpdf');

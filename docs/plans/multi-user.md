@@ -186,10 +186,10 @@ than the code.
 
 Not planned, not scheduled, written down so the reasoning survives.
 
-**Ravelry sign-in.** Plain OAuth 2.0 with a client secret and registered redirect URLs — no
-`id_token`, so it is not OIDC and `signInWithIdToken` will not take it. It needs an Edge Function
-doing the code exchange and minting a session through the Admin API. Entirely doable; its own
-project, and it should sit on foundations that are already boring.
+**Ravelry sign-in.** Plain OAuth 2.0, no `id_token`. Supabase's custom OAuth2 provider handles the
+exchange and the session; a small userinfo adapter (`ravelry-userinfo`) reshapes Ravelry's nested
+profile. No session minting of our own. See `docs/ravelry-sign-in.md` for setup and the open
+decisions.
 
 **Stripe.** The shape is already in place — `subscriptions` with a read policy and no write policy,
 so a plan can be granted by a webhook and by nothing else, and `plan_for` already decides

@@ -14,15 +14,32 @@ import {
   accountStateOf,
   attachProvider,
   describeProviderReturn,
+  providerLabel,
   saveAccount,
   type AccountState,
 } from "@/lib/auth";
+import type { ImportSummary } from "@/lib/ravelry/import";
+import { runRavelryImport } from "@/lib/ravelry/run-import";
 import { currentSession, onSessionChange } from "@/lib/session";
 import {
   describeLocalWork,
   switchToExistingAccount,
 } from "@/lib/switch-account";
 import { useKnitwitStore } from "@/store/useKnitwitStore";
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function importSummaryLine(s: ImportSummary): string {
+  const parts = [
+    plural(s.materials, "yarn", "yarns"),
+    plural(s.tools, "needle", "needles"),
+    plural(s.patterns, "pattern", "patterns"),
+    plural(s.projects, "project", "projects"),
+  ];
+  return `Imported ${parts.join(", ")} from Ravelry.`;
+}
 
 // The only part of accounts a knitter ever sees.
 //
@@ -118,6 +135,38 @@ export function AccountSection() {
     if (!result.ok) setNote(result.message);
   };
 
+  // A second way into the account already open, not a different account. On the web the page
+  // leaves for Ravelry and comes back here with the identity attached; a Ravelry login that is
+  // already somebody else's way in is refused, and `readable` says so.
+  const handleConnectRavelry = async () => {
+    setBusy(true);
+    setNote(null);
+    const result = await attachProvider("ravelry", "connect");
+    setBusy(false);
+    if (!result.ok) setNote(result.message);
+  };
+
+  // Pulls the knitter's Ravelry — stash, needles, patterns, projects — into the account open here.
+  // Re-runnable: everything carries where it came from, so a second import updates rather than
+  // doubles. The counts come back plain; what landed is on the Library, Counter and Projects screens.
+  const handleImport = async () => {
+    setBusy(true);
+    setNote("Importing from Ravelry… this can take a moment.");
+    try {
+      setNote(importSummaryLine(await runRavelryImport()));
+    } catch (error) {
+      setNote(
+        error instanceof Error
+          ? error.message
+          : "The Ravelry import did not finish. Try again in a moment.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ravelryConnected = account.providers.includes("custom:ravelry");
+
   return (
     <View style={styles.wrap}>
       <ThemedText type="smallBold" style={styles.label}>
@@ -142,7 +191,8 @@ export function AccountSection() {
           <ReadOnlyField
             label={account.email ? "Email" : "Signed in with"}
             value={
-              account.email ?? (account.providers.join(", ") || "your account")
+              account.email ??
+              (account.providers.map(providerLabel).join(", ") || "your account")
             }
           />
         </>
@@ -245,6 +295,37 @@ export function AccountSection() {
             </ThemedText>
           </Pressable>
         </View>
+      ) : null}
+
+      {account.signedIn && !account.anonymous ? (
+        ravelryConnected ? (
+          <View style={styles.wrap}>
+            <ReadOnlyField label="Ravelry" value="Connected" />
+            <View style={styles.row}>
+              <Pressable
+                onPress={() => void handleImport()}
+                style={styles.provider}
+                disabled={busy}
+              >
+                <ThemedText type="smallBold" themeColor="ink">
+                  {busy ? "One moment…" : "Import from Ravelry"}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.row}>
+            <Pressable
+              onPress={() => void handleConnectRavelry()}
+              style={styles.provider}
+              disabled={busy}
+            >
+              <ThemedText type="smallBold" themeColor="ink">
+                {busy ? "One moment…" : "Connect Ravelry"}
+              </ThemedText>
+            </Pressable>
+          </View>
+        )
       ) : null}
 
       {note ? (
