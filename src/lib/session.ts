@@ -113,8 +113,9 @@ export function watchSession(): () => void {
       publish({ session, settled: true, recovering });
       // A Ravelry sign-in or connect arrives as a SIGNED_IN session carrying the one-time provider
       // refresh token. Catch it here — the single place every session passes through — and store it
-      // server-side. No-op for every other session (see captureRavelryToken).
-      captureRavelryToken(session);
+      // server-side. Gated on the event, not just the token, so a reload does not re-send a spent
+      // one (see captureRavelryToken).
+      captureRavelryToken(event, session);
     });
     return () => data.subscription.unsubscribe();
   } catch (error) {
