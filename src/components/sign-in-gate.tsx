@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BrandMark } from "@/components/brand/BrandMark";
 import { PillButton } from "@/components/knitwit-ui";
 import { KnitwitLogo } from "@/components/logo/KnitwitLogo";
 import { ThemedText } from "@/components/themed-text";
@@ -214,6 +215,17 @@ export function SignInGate() {
     }
   };
 
+  // Ravelry sits beside Apple and Google because knitters expect it there, but its sign-in is a
+  // separate OAuth 2.0 flow that needs an Edge Function doing the code exchange — deferred, not
+  // built (see docs/plans/multi-user.md). Until it is, the button is honest about that rather than
+  // throwing a provider error the way a half-wired signInWithOAuth would.
+  const ravelry = () => {
+    setAsking(null);
+    setNote(
+      "Signing in with Ravelry is on its way but not ready yet — use Apple, Google or an email address for now.",
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView
@@ -326,6 +338,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <BrandMark name="apple" size={18} color={Colors.ink} />
                   <ThemedText type="smallBold" themeColor="ink">
                     Apple
                   </ThemedText>
@@ -335,8 +348,19 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <BrandMark name="google" size={18} />
                   <ThemedText type="smallBold" themeColor="ink">
                     Google
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={ravelry}
+                  style={styles.provider}
+                  disabled={busy}
+                >
+                  <BrandMark name="ravelry" size={18} color={Colors.ink} />
+                  <ThemedText type="smallBold" themeColor="ink">
+                    Ravelry
                   </ThemedText>
                 </Pressable>
               </View>
@@ -490,11 +514,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   providers: {
-    flexDirection: "row",
     gap: Spacing.two,
-    justifyContent: "center",
   },
   provider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.five,
