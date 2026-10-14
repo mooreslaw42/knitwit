@@ -115,6 +115,40 @@ describe('applyRavelryImport', () => {
     expect(target.projects.proj1.patternId).toBe('p1');
   });
 
+  it('keeps the knitter’s work when they import a second time', () => {
+    const target = fakeTarget();
+    applyRavelryImport(data, target, IMPORTED_AT);
+
+    // Between the two imports the knitter actually uses the app: they count rows on the imported
+    // project and measure a swatch for the imported yarn.
+    const projectKey = Object.keys(target.projects)[0];
+    const materialKey = Object.keys(target.materials)[0];
+    target.projects[projectKey] = {
+      ...target.projects[projectKey],
+      sections: [{ id: 'psec_mine', name: 'Body', row: 37, totalRows: 60 } as never],
+      notes: 'ran out of yarn',
+    };
+    target.materials[materialKey] = {
+      ...target.materials[materialKey],
+      gauge: { stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' },
+    };
+
+    applyRavelryImport(data, target, '2026-11-01T00:00:00.000Z');
+
+    // Their row count and their swatch are still there.
+    expect(target.projects[projectKey].sections[0].row).toBe(37);
+    expect(target.projects[projectKey].notes).toBe('ran out of yarn');
+    expect(target.materials[materialKey].gauge).toEqual({
+      stitches: 22,
+      rows: 30,
+      width: 10,
+      height: 10,
+      unit: 'cm',
+    });
+    // …and Ravelry's side still refreshed.
+    expect(target.materials[materialKey].ravelrySource?.importedAt).toBe('2026-11-01T00:00:00.000Z');
+  });
+
   it('leaves a yarn unlinked when it was not tied to a stash entry', () => {
     const target = fakeTarget();
     const noStashLink: RavelryImportData = {
