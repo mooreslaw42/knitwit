@@ -140,6 +140,11 @@ export type CatalogueTechnique = {
   // own rather than another alias: an alias is for matching, this is for showing. Empty for the
   // ones that genuinely have no standard short form — nobody abbreviates "Blocking".
   abbr: string;
+  // The key in STITCHES this technique *is*, when it is one — "k2tog", "sc", "ch". Empty for the
+  // majority, which have no chartable stitch: blocking is not a stitch. The link exists because
+  // the same ideas were being described in two places with two hand-kept copies of the same
+  // abbreviation; technique-catalogue.test.ts fails if they ever disagree.
+  stitchKey?: string;
   summary: string;
   // What patterns actually call it, so imported text can be matched back to this entry.
   aliases: string[];

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BrandMark } from "@/components/brand/BrandMark";
 import { PillButton } from "@/components/knitwit-ui";
 import { KnitwitLogo } from "@/components/logo/KnitwitLogo";
 import { ThemedText } from "@/components/themed-text";
@@ -328,6 +329,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <BrandMark name="apple" size={18} color={Colors.ink} />
                   <ThemedText type="smallBold" themeColor="ink">
                     Apple
                   </ThemedText>
@@ -337,6 +339,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <BrandMark name="google" size={18} />
                   <ThemedText type="smallBold" themeColor="ink">
                     Google
                   </ThemedText>
@@ -348,6 +351,7 @@ export function SignInGate() {
                   style={styles.provider}
                   disabled={busy}
                 >
+                  <BrandMark name="ravelry" size={18} color={Colors.ink} />
                   <ThemedText type="smallBold" themeColor="ink">
                     Ravelry
                   </ThemedText>
@@ -506,9 +510,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.two,
-    justifyContent: "center",
   },
   provider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.two,
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.five,
