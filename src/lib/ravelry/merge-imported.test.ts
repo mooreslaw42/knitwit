@@ -70,6 +70,36 @@ describe('mergeMaterial', () => {
     expect(merged.colorLot).toBe('123');
     expect(merged.link).toBe('https://example.test/yarn');
   });
+
+  it('refreshes the stash bookkeeping Ravelry maintains', () => {
+    const existing = material({ skeins: 4, location: 'attic', status: 'instash' });
+    const merged = mergeMaterial(
+      existing,
+      material({ skeins: 1, location: 'the blue tub', status: 'usedup' }),
+    );
+    // The knitter keeps this up to date over there, and a re-import is them asking for it.
+    expect(merged.skeins).toBe(1);
+    expect(merged.location).toBe('the blue tub');
+    expect(merged.status).toBe('usedup');
+  });
+
+  it('keeps the count and the craft when the import has nothing to say', () => {
+    const existing = material({ skeins: 4, location: 'attic', craftType: 'crochet' });
+    const merged = mergeMaterial(existing, material({ brand: 'New', skeins: null, location: '' }));
+    // Not counted is not zero, and an empty location is not a move to nowhere.
+    expect(merged.skeins).toBe(4);
+    expect(merged.location).toBe('attic');
+    // The craft is the mapper's *inference* from needle and hook sizes. A knitter who corrected it
+    // must not have the guess put back on every import.
+    expect(merged.craftType).toBe('crochet');
+  });
+
+  it('leaves the knitter’s yarn notes alone', () => {
+    const existing = material({ notes: 'Splits if you are not watching.' });
+    const merged = mergeMaterial(existing, material({ notes: 'Whatever Ravelry says now' }));
+    // Theirs once written — the same rule a pattern's notes follow.
+    expect(merged.notes).toBe('Splits if you are not watching.');
+  });
 });
 
 describe('mergeTool', () => {
@@ -199,5 +229,14 @@ describe('mergeProject', () => {
   it('accepts the placeholder when the project has no sections yet', () => {
     const incoming = project({ sections: [{ id: 'p' } as ProjectSection] });
     expect(mergeProject(project(), incoming).sections).toHaveLength(1);
+  });
+
+  it('brings a finish date across without clearing one it already had', () => {
+    expect(mergeProject(project(), project({ finishedOn: '2026-10-12' })).finishedOn).toBe(
+      '2026-10-12',
+    );
+    // Ravelry has no date this time; the knitter's own stays.
+    const dated = project({ finishedOn: '2026-09-01' });
+    expect(mergeProject(dated, project({ finishedOn: null })).finishedOn).toBe('2026-09-01');
   });
 });

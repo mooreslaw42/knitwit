@@ -24,6 +24,12 @@ export type RavelryYarn = {
   yarn_company?: { name?: string | null } | null;
   yarn_weight?: { name?: string | null } | null; // "DK", "Fingering", …
   yarn_fibers?: RavelryFiber[] | null;
+  // The tools the yarn is meant for. Present as an object when the yarn says so, null when it does
+  // not — which is how a crochet-only yarn gives itself away: hook sizes and no needle sizes.
+  min_needle_size?: object | null;
+  max_needle_size?: object | null;
+  min_hook_size?: object | null;
+  max_hook_size?: object | null;
 };
 
 // One quantity line against a stash entry. A stash entry can hold several (a split skein, a second
@@ -34,6 +40,7 @@ export type RavelryStashPack = {
   meters_per_skein?: number | null;
   yards_per_skein?: number | null;
   total_paid?: string | null;
+  skeins?: number | null; // how many the knitter has of this pack; fractional (2.0, 1.5)
 };
 
 export type RavelryStash = {
@@ -44,6 +51,10 @@ export type RavelryStash = {
   dye_lot?: string | null; // "123"
   yarn_weight_name?: string | null; // "DK" — the stash entry's own, may differ from the yarn's
   notes?: string | null;
+  location?: string | null; // free text: "attic box 3"
+  // "In stash", "Used up", "Will not use", "For sale", "For trade" — a longer list than Knitwit's
+  // three, folded by keyword rather than by id (ids are not documented and only one was observed).
+  stash_status?: { name?: string | null } | null;
   photos?: RavelryPhoto[] | null;
   yarn?: RavelryYarn | null;
   packs?: RavelryStashPack[] | null;
@@ -125,6 +136,7 @@ export type RavelryProject = {
   status_name?: string | null; // "In progress" | "Finished" | "Frogged" | "Hibernating" | …
   progress?: number | null; // percent complete, 0–100; null when the knitter never set it
   started?: string | null; // "2026/10/01"
+  completed?: string | null; // "2026/10/12" — when it came off the needles
   personal_source_name?: string | null;
   notes?: string | null;
   tag_names?: string[] | null;

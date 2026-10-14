@@ -13,6 +13,7 @@ import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
+  formatFinished,
   formatStarted,
   projectMaterialIds,
   projectProgress,
@@ -70,8 +71,14 @@ export default function ProjectDetailScreen() {
             </Pressable>
           </View>
           <ThemedText type="default" themeColor="inkSoft">
-            {formatStarted(project.startedOn)} · {CRAFT_LABELS[project.craft]} ·{' '}
-            {Math.round(pct * 100)}% complete
+            {[
+              formatStarted(project.startedOn),
+              formatFinished(project.finishedOn),
+              CRAFT_LABELS[project.craft],
+              `${Math.round(pct * 100)}% complete`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </ThemedText>
 
           <Card style={styles.tagCard}>

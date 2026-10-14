@@ -13,6 +13,7 @@ const sampleProject: RavelryProject = {
   craft_name: 'Knitting',
   status_name: 'Finished',
   started: '2026/10/01',
+  completed: '2026/10/12',
   personal_source_name: null,
   notes: 'Notes for the entire project',
   tag_names: [],
@@ -32,6 +33,7 @@ describe('ravelryProjectToProject', () => {
       project: {
         name: 'Test project 1',
         startedOn: '2026-10-01',
+        finishedOn: '2026-10-12',
         craft: 'knit',
         photo: 'https://example.test/proj_medium.jpg',
         color: '#F7EBDD',
@@ -125,6 +127,14 @@ describe('ravelryProjectToProject', () => {
   it('leaves startedOn null when there is no start date', () => {
     const p = ravelryProjectToProject({ ...sampleProject, started: null }, IMPORTED_AT);
     expect(p.project.startedOn).toBeNull();
+  });
+
+  it('leaves finishedOn null when it is still on the needles', () => {
+    const p = ravelryProjectToProject(
+      { ...sampleProject, status_name: 'In progress', completed: null },
+      IMPORTED_AT,
+    );
+    expect(p.project.finishedOn).toBeNull();
   });
 
   it('carries no pattern link and no yarns when the project has neither', () => {
