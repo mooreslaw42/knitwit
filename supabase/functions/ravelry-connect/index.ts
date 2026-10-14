@@ -98,6 +98,45 @@ async function ravelryWhoAmI(accessToken: string): Promise<{ id: string; usernam
   }
 }
 
+// Exchange a refresh token for a fresh one. Ravelry takes the app credentials as HTTP Basic and
+// rotates the refresh token on every call, returning a new one — which is exactly what makes storing
+// the rotated result safe: a spent token cannot be exchanged.
+async function refreshAccess(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<{ accessToken: string; refreshToken: string | null } | null> {
+  try {
+    const response = await fetch('https://www.ravelry.com/oauth2/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { access_token?: string; refresh_token?: string };
+    if (!body.access_token) return null;
+    return { accessToken: body.access_token, refreshToken: body.refresh_token ?? null };
+  } catch {
+    return null;
+  }
+}
+
+async function connectionExists(url: string, serviceKey: string, userId: string): Promise<boolean> {
+  const response = await fetch(
+    `${url}/rest/v1/ravelry_connections?user_id=eq.${userId}&select=user_id`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!response.ok) return false;
+  return ((await response.json()) as unknown[]).length > 0;
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
@@ -106,7 +145,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const tokenKey = Deno.env.get('RAVELRY_TOKEN_KEY');
-  if (!url || !serviceKey || !tokenKey) {
+  const clientId = Deno.env.get('RAVELRY_CLIENT_ID');
+  const clientSecret = Deno.env.get('RAVELRY_CLIENT_SECRET');
+  if (!url || !serviceKey || !tokenKey || !clientId || !clientSecret) {
     console.error('ravelry-connect is not configured');
     return json({ error: 'Connecting Ravelry is not set up on this server.' }, 503);
   }
@@ -115,11 +156,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!userId) return json({ error: 'Sign in again and then try.' }, 401);
 
   let refreshToken = '';
-  let accessToken = '';
   try {
-    const body = (await request.json()) as { refresh_token?: unknown; access_token?: unknown };
+    const body = (await request.json()) as { refresh_token?: unknown };
     if (typeof body.refresh_token === 'string') refreshToken = body.refresh_token;
-    if (typeof body.access_token === 'string') accessToken = body.access_token;
   } catch {
     return json({ error: 'Send the connection details as JSON.' }, 400);
   }
@@ -127,8 +166,25 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // return one this time — so it answers plainly rather than failing.
   if (!refreshToken) return json({ ok: true, stored: false });
 
-  const enveloped = await envelope(refreshToken, tokenKey);
-  const who = accessToken ? await ravelryWhoAmI(accessToken) : null;
+  // Exchange the one-time token Supabase handed over for a fresh, rotated one, and store THAT. The
+  // stored token is then always a step ahead of the spent original the client still holds — so a
+  // reload replaying that original cannot refresh, and is turned away below rather than clobbering a
+  // good connection. (This is the fix for the token dying after one import.)
+  const refreshed = await refreshAccess(refreshToken, clientId, clientSecret);
+  if (!refreshed) {
+    // The incoming token would not refresh. If a connection already exists, this is almost certainly
+    // a reload replaying the spent original — keep what is there, do not overwrite it.
+    if (await connectionExists(url, serviceKey, userId)) {
+      console.log(JSON.stringify({ event: 'ravelry-connect', ok: true, kept: true }));
+      return json({ ok: true, stored: false, kept: true });
+    }
+    return json({ error: 'That Ravelry sign-in could not be confirmed. Connect it again.' }, 502);
+  }
+
+  // Ravelry rotates, so there is a new token to store; the original is the fallback only if it did
+  // not. Who this is comes from the fresh access token the exchange just returned.
+  const enveloped = await envelope(refreshed.refreshToken ?? refreshToken, tokenKey);
+  const who = await ravelryWhoAmI(refreshed.accessToken);
 
   const stored = await fetch(`${url}/rest/v1/ravelry_connections`, {
     method: 'POST',
