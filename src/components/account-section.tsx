@@ -18,12 +18,28 @@ import {
   saveAccount,
   type AccountState,
 } from "@/lib/auth";
+import type { ImportSummary } from "@/lib/ravelry/import";
+import { runRavelryImport } from "@/lib/ravelry/run-import";
 import { currentSession, onSessionChange } from "@/lib/session";
 import {
   describeLocalWork,
   switchToExistingAccount,
 } from "@/lib/switch-account";
 import { useKnitwitStore } from "@/store/useKnitwitStore";
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function importSummaryLine(s: ImportSummary): string {
+  const parts = [
+    plural(s.materials, "yarn", "yarns"),
+    plural(s.tools, "needle", "needles"),
+    plural(s.patterns, "pattern", "patterns"),
+    plural(s.projects, "project", "projects"),
+  ];
+  return `Imported ${parts.join(", ")} from Ravelry.`;
+}
 
 // The only part of accounts a knitter ever sees.
 //
@@ -128,6 +144,25 @@ export function AccountSection() {
     const result = await attachProvider("ravelry", "connect");
     setBusy(false);
     if (!result.ok) setNote(result.message);
+  };
+
+  // Pulls the knitter's Ravelry — stash, needles, patterns, projects — into the account open here.
+  // Re-runnable: everything carries where it came from, so a second import updates rather than
+  // doubles. The counts come back plain; what landed is on the Library, Counter and Projects screens.
+  const handleImport = async () => {
+    setBusy(true);
+    setNote("Importing from Ravelry… this can take a moment.");
+    try {
+      setNote(importSummaryLine(await runRavelryImport()));
+    } catch (error) {
+      setNote(
+        error instanceof Error
+          ? error.message
+          : "The Ravelry import did not finish. Try again in a moment.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const ravelryConnected = account.providers.includes("custom:ravelry");
@@ -264,7 +299,20 @@ export function AccountSection() {
 
       {account.signedIn && !account.anonymous ? (
         ravelryConnected ? (
-          <ReadOnlyField label="Ravelry" value="Connected" />
+          <View style={styles.wrap}>
+            <ReadOnlyField label="Ravelry" value="Connected" />
+            <View style={styles.row}>
+              <Pressable
+                onPress={() => void handleImport()}
+                style={styles.provider}
+                disabled={busy}
+              >
+                <ThemedText type="smallBold" themeColor="ink">
+                  {busy ? "One moment…" : "Import from Ravelry"}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
         ) : (
           <View style={styles.row}>
             <Pressable
