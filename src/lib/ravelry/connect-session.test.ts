@@ -22,32 +22,44 @@ function session(parts: {
   } as unknown as Session;
 }
 
+const ravelry = { providerRefresh: 'r3fr3sh', providerToken: 'acc3ss', providers: ['custom:ravelry'] };
+
 describe('captureRavelryToken', () => {
   beforeEach(() => invoke.mockClear());
 
-  it('sends the token when a Ravelry session carries one', () => {
-    captureRavelryToken(
-      session({ providerRefresh: 'r3fr3sh', providerToken: 'acc3ss', providers: ['custom:ravelry'] }),
-    );
+  it('sends the token on a Ravelry SIGNED_IN', () => {
+    captureRavelryToken('SIGNED_IN', session(ravelry));
     expect(invoke).toHaveBeenCalledWith(
       'ravelry-connect',
       { refresh_token: 'r3fr3sh', access_token: 'acc3ss' },
-      { timeoutMs: 10_000, timeoutMessage: '' },
+      // The wording of the messages is not the point here, only that it goes.
+      expect.objectContaining({ timeoutMs: 10_000 }),
     );
   });
 
+  it('does NOT re-send on a reload (INITIAL_SESSION) carrying the persisted token', () => {
+    // The bug that killed the first live test: a reload replays the original, now-spent token.
+    captureRavelryToken('INITIAL_SESSION', session(ravelry));
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('ignores TOKEN_REFRESHED and other events', () => {
+    captureRavelryToken('TOKEN_REFRESHED', session(ravelry));
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it('does nothing when there is no provider refresh token', () => {
-    captureRavelryToken(session({ providerRefresh: null, providers: ['custom:ravelry'] }));
+    captureRavelryToken('SIGNED_IN', session({ providerRefresh: null, providers: ['custom:ravelry'] }));
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it('does nothing when the refresh token is not a Ravelry one', () => {
-    captureRavelryToken(session({ providerRefresh: 'r3fr3sh', providers: ['google'] }));
+    captureRavelryToken('SIGNED_IN', session({ providerRefresh: 'r3fr3sh', providers: ['google'] }));
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it('does nothing for a null session', () => {
-    captureRavelryToken(null);
+    captureRavelryToken('SIGNED_IN', null);
     expect(invoke).not.toHaveBeenCalled();
   });
 });

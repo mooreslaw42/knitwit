@@ -101,12 +101,41 @@ export type RavelrySource = {
   importedAt: string; // ISO timestamp of the import that last wrote this entity
 };
 
+// Where a yarn stands in the stash. Not a count — a ball can be used up and still be worth keeping
+// a record of, because the knitter wants to remember what they used and find it again.
+//
+// Three, not Ravelry's longer list (which also has for-sale and for-trade): Knitwit is not a
+// marketplace, and "I am not going to knit with this" covers both of those for its purposes.
+export type MaterialStatus = 'instash' | 'usedup' | 'notusing';
+
 export type Material = {
   brand: string;
   colorName: string;
   colorLot: string;
+  // The yarn's actual colour, as hex. A name ("Dusty Rose") is what a ball band prints, but it is
+  // not something the app can compare, match or draw with — three stash yarns can share a name and
+  // be three different pinks. Optional: nothing before this field had one, and a stash full of
+  // yarns with no swatch still has to work. `yarnSwatchColor` falls back to guessing from the name.
+  swatch?: string | null;
   price: string;
   weight: string; // yarn weight code, see YARN_WEIGHTS
+  // How many of this skein the knitter actually owns.
+  //
+  // The one number a stash is for. Everything else called `skeins` in Knitwit is a *requirement* —
+  // what a pattern asks for (Pattern.materials[].skeins) or what a project needs
+  // (Project.materialSkeins) — so without this the app could say a sweater wants six balls while
+  // having no idea you own two. A number rather than the strings around it, because the whole point
+  // is to subtract one from the other; fractional, because half a ball left is a real answer.
+  // Absent means not said, which is not the same as none.
+  skeins?: number | null;
+  // Where it physically is: "attic box 3", "the blue tub". Only the knitter can know, and a stash
+  // big enough to need an app is a stash big enough to lose things in.
+  location?: string;
+  // Absent reads as 'instash' — every yarn that predates this field is one the knitter has.
+  status?: MaterialStatus;
+  // Anything else about this yarn. The other three entities have had notes all along; this one was
+  // the odd one out, with nowhere to write "slight halo, splits on the needle".
+  notes?: string;
   grams: string;
   meters: string;
   composition: string;
@@ -354,6 +383,12 @@ export type Pattern = {
   craft: TechniqueCraft;
   weight: string; // legacy yarn-weight descriptor (kept for seeds); new patterns use needleSize
   needleSize: string; // recommended needle / hook size, e.g. "4.5mm"
+  // Where the pattern lives: the designer's own page, the shop it was bought from, the blog post it
+  // was published in. The way back to a pattern bought direct, which nothing else records — and
+  // where an updated version would appear. An imported pattern's Ravelry deep link is kept apart,
+  // on `ravelrySource.url`, because that is the copy *in Ravelry* rather than the pattern's home.
+  // Optional: every pattern saved before this field existed has no answer to give.
+  link?: string;
   video: string; // optional link to an instruction video
   // The original pattern the user imported, kept for reference (and future automatic parsing).
   sourceName: string; // uploaded file name, if any
@@ -430,6 +465,11 @@ export type Project = {
   // ISO YYYY-MM-DD, or null when the knitter didn't say. A real date rather than the free text it
   // used to be, so it can be sorted, compared and shown in whatever form suits the screen.
   startedOn: string | null;
+  // When it came off the needles. Optional rather than `string | null` because every project saved
+  // before this field existed genuinely has no answer, and declaring one would be a lie about what
+  // is in storage. Finishing a project does not set it on its own — plenty of makes are declared
+  // finished long after the last row, and a guessed date is worse than an empty one.
+  finishedOn?: string | null;
   // A project can be a different craft from the pattern it came from — crocheting an edging onto
   // a knitted pattern, say — so it carries its own rather than reading the pattern's.
   craft: TechniqueCraft;

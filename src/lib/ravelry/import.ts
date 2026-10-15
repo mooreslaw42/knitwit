@@ -8,8 +8,9 @@
 // It talks to the store through a small interface rather than importing it, so the whole thing is
 // pure and testable with a fake target. The real caller builds a target from useKnitwitStore.
 
-import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
+import type { CatalogueTechnique, Material, Pattern, Project, Tool } from '@/types/knitwit';
 
+import { mergeMaterial, mergePattern, mergeProject, mergeTool } from './merge-imported';
 import { ravelryNeedlesToTools } from './needles';
 import { ravelryPatternToPattern } from './patterns';
 import { ravelryProjectToProject } from './projects';
@@ -36,6 +37,10 @@ export interface ImportTarget {
   getTools(): Record<string, Tool>;
   getPatterns(): Record<string, Pattern>;
   getProjects(): Record<string, Project>;
+  // The shared technique catalogue, for matching Ravelry's pattern attributes onto entries. May be
+  // empty — it is fetched and cached separately, and an import must not wait on it or fail without
+  // it. Empty simply means no techniques are matched on this run.
+  getCatalogue(): CatalogueTechnique[];
   saveMaterial(id: string | null, data: Material): string;
   saveTool(id: string | null, data: Tool): string;
   savePattern(id: string | null, data: Pattern): string;
@@ -60,30 +65,64 @@ function existingKey(record: Record<string, Stamped>, ravelryId: string): string
   return null;
 }
 
-export function applyRavelryImport(
-  data: RavelryImportData,
+// Each kind applies on its own, so the import can land a page at a time instead of one whole
+// notebook. Everything goes in through a merge rather than a replace: reconciling onto a row the
+// knitter has since edited must refresh Ravelry's facts without destroying their work — see
+// merge-imported.ts. Each returns how many it wrote, for the running total.
+
+export function applyStash(
+  items: RavelryStash[],
   target: ImportTarget,
   importedAt: string,
-): ImportSummary {
-  // Stash, needles and patterns first — a project's links are resolved by finding them in the store
-  // after they have been saved.
-  for (const stash of data.stash) {
+): number {
+  for (const stash of items) {
     const key = existingKey(target.getMaterials(), String(stash.id));
-    target.saveMaterial(key, ravelryStashToMaterial(stash, importedAt));
+    const incoming = ravelryStashToMaterial(stash, importedAt);
+    const existing = key ? target.getMaterials()[key] : undefined;
+    target.saveMaterial(key, existing ? mergeMaterial(existing, incoming) : incoming);
   }
+  return items.length;
+}
 
-  const tools = ravelryNeedlesToTools(data.needles, importedAt);
+export function applyNeedles(
+  records: RavelryNeedleRecord[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  // Grouped first: Ravelry keeps one record per physical needle, Knitwit one tool with a quantity.
+  const tools = ravelryNeedlesToTools(records, importedAt);
   for (const tool of tools) {
     const ravelryId = tool.ravelrySource?.id;
-    target.saveTool(ravelryId ? existingKey(target.getTools(), ravelryId) : null, tool);
+    const key = ravelryId ? existingKey(target.getTools(), ravelryId) : null;
+    const existing = key ? target.getTools()[key] : undefined;
+    target.saveTool(key, existing ? mergeTool(existing, tool) : tool);
   }
+  return tools.length;
+}
 
-  for (const pattern of data.patterns) {
+export function applyPatterns(
+  items: RavelryPattern[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  const catalogue = target.getCatalogue();
+  for (const pattern of items) {
     const key = existingKey(target.getPatterns(), String(pattern.id));
-    target.savePattern(key, ravelryPatternToPattern(pattern, importedAt));
+    const incoming = ravelryPatternToPattern(pattern, importedAt, catalogue);
+    const existing = key ? target.getPatterns()[key] : undefined;
+    target.savePattern(key, existing ? mergePattern(existing, incoming) : incoming);
   }
+  return items.length;
+}
 
-  for (const rawProject of data.projects) {
+// Projects go last of any batch: their links are resolved by finding the pattern and the stash yarn
+// already in the store, so those have to have been applied first.
+export function applyProjects(
+  items: RavelryProject[],
+  target: ImportTarget,
+  importedAt: string,
+): number {
+  for (const rawProject of items) {
     const { project, ravelryPatternId, yarns } = ravelryProjectToProject(rawProject, importedAt);
 
     // Link to the pattern card, if one was imported from the same Ravelry pattern.
@@ -101,13 +140,23 @@ export function applyRavelryImport(
     }
     if (Object.keys(skeins).length > 0) project.materialSkeins = skeins;
 
-    target.saveProject(existingKey(target.getProjects(), String(rawProject.id)), project);
+    const key = existingKey(target.getProjects(), String(rawProject.id));
+    const existing = key ? target.getProjects()[key] : undefined;
+    target.saveProject(key, existing ? mergeProject(existing, project) : project);
   }
+  return items.length;
+}
 
+// The whole notebook in one go. Still used by the single-shot `pull`, and the shape the tests pin.
+export function applyRavelryImport(
+  data: RavelryImportData,
+  target: ImportTarget,
+  importedAt: string,
+): ImportSummary {
   return {
-    materials: data.stash.length,
-    tools: tools.length,
-    patterns: data.patterns.length,
-    projects: data.projects.length,
+    materials: applyStash(data.stash, target, importedAt),
+    tools: applyNeedles(data.needles, target, importedAt),
+    patterns: applyPatterns(data.patterns, target, importedAt),
+    projects: applyProjects(data.projects, target, importedAt),
   };
 }

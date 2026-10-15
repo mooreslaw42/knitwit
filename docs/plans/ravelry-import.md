@@ -179,13 +179,93 @@ Ravelry** flow: once connected, show counts (*N projects, M stash, K patterns*),
 choose what to pull, show progress, and tolerate partial failure (per-item, resumable). Because every
 imported object carries `ravelrySource`, running it again reconciles instead of duplicating.
 
+## Phase 6 — export, one project at a time (built 2026-10-14)
+
+The other direction, and deliberately much smaller. The write scope turned out to be the same one
+the import already has (`offline` grants read **and update**), so what was gating this is gone.
+
+- **Create only.** Never updates, never deletes. The worst it can do to a knitter's notebook is put
+  something in it.
+- **Per-project, per-press.** A "Send to Ravelry" button on the project screen
+  (`src/components/ravelry-project-card.tsx`), shown only to a knitter with Ravelry connected and
+  only for a project with no `ravelrySource`.
+- **Idempotent by the stamp.** On success the project is stamped with the Ravelry id and URL, which
+  both removes the button and makes the next import reconcile onto that row rather than bring the
+  project back as a second copy.
+- **The facts only.** `src/lib/ravelry/export-project.ts` sends name, craft, status, progress,
+  start date, notes, the knitter's measured gauge, size and personal source. **Not** labels —
+  Knitwit's labels are private groupings the knitter invented and Ravelry's tags are public, which
+  is not a conversion to make on someone's behalf. **Not** photos — a separate endpoint, and the
+  photo may be a Ravelry URL we imported in the first place.
+- Craft and status ids are resolved server-side against Ravelry's own `crafts.json` and
+  `project_statuses.json`, not hardcoded from a fixture.
+
+## Phase 7 — the fields Ravelry showed were missing (2026-10-14)
+
+Reading the real responses field by field turned up data the mappers were dropping because Knitwit
+had nowhere to put it. All additive, and all free of SQL: every entity is an opaque `data jsonb`
+column (`20260916000000_accounts_and_sync_schema.sql`) and `sync/registry.ts` writes the object
+verbatim, so a new optional field syncs with no migration and no version bump.
+
+- **`Material.skeins`** — how many the knitter *owns*. Everything else named `skeins` in Knitwit is a
+  requirement (`Pattern.materials[].skeins`, `Project.materialSkeins`), so the app could say a
+  sweater wants six balls while having no idea you had two. From the stash entry's **head pack**, not
+  the sum: in the captured response a two-skein entry has two packs that both say `skeins: 2.0`, the
+  second a child of the first, and adding them tells a knitter they own twice the yarn they do.
+- **`Material.status`** (`instash` / `usedup` / `notusing`) — folded from Ravelry's longer list by
+  keyword, since only one status id has ever been observed. For-sale and for-trade both land on
+  `notusing`; Knitwit is not a marketplace.
+- **`Material.location`** and **`Material.notes`** — Ravelry has both per entry, and yarn was the one
+  entity in the app with nowhere to write a sentence.
+- **`Project.finishedOn`** — there was no finish date anywhere in the codebase. Imports Ravelry's
+  `completed` and exports it back. Optional rather than `string | null`, because every project saved
+  before it genuinely has no answer; nothing sets it automatically, since a make is often declared
+  finished weeks after the last row.
+- **`Material.craftType` is now read off the yarn**, not hardcoded to `'knit'` — which filed a
+  crocheter's whole stash as knitting. Ravelry gives no craft on a yarn but does record the tools it
+  is for, so hooks-and-no-needles means crochet; needles, both, or nothing stays knitting. The merge
+  treats it as the knitter's, because it is an inference and a correction must stick.
+
+Skipped deliberately: `Project.sizeName` (the `sizeIndex`-into-`Pattern.sizes` mismatch is real but
+not worth a second field yet), a gauge's stitch pattern (`gauge_pattern`), social counts, ratings,
+`made_for`, `finish_by`, multiple project photos, and a `hibernating` project status.
+
+### `Pattern.link`, and the pattern attributes
+
+- **`Pattern.link`** — the designer's own page, from Ravelry's `url`. The way back to a pattern
+  bought direct, which nothing else recorded, and where an updated version would appear. Kept apart
+  from `ravelrySource.url`, which is the copy *in Ravelry* rather than the pattern's home.
+- **`pattern_attributes` → `Pattern.techniques`**, with the catalogue as the filter rather than a
+  hand-written allow-list. Each attribute permalink is humanised and run through `matchTechnique` —
+  the same matcher that reads techniques out of imported pattern text — against **only the entries
+  for the pattern's craft**. That craft filter is what makes an ambiguous tag safe: a crochet
+  pattern tagged `lace` cannot land on *Lace knitting*, and `mosaic` resolves to mosaic knitting or
+  mosaic crochet by itself.
+
+  Most of the vocabulary is not technique at all. The camisole in the fixtures carries eleven
+  attributes — `female`, `unisex`, `adult`, `negative-ease`, `fitted`, `crew-neck`, `sleeveless`,
+  `top-down`, `written-pattern`, `in-the-round`, `other-edging` — and the right number of techniques
+  to take from those is zero: even the two construction tags match nothing, because the catalogue
+  deliberately leaves garment construction out. Everything unmatched goes into the card's notes as a
+  `Details:` line, since "adult, fitted, crew neck, sleeveless, top down" is a fair description of a
+  garment and dropping it for not being a skill would lose the more useful half.
+
+  `ATTRIBUTE_PHRASES` in `patterns.ts` is the thin curated layer, for the few whose permalink does
+  not read like the catalogue's name (`stranded` → *Stranded colourwork*, `felted` → *Felting*).
+  Anything not in it falls through to the humanised permalink, so an attribute nobody has seen yet
+  can still match on its own name.
+
+  `runRavelryImport` now awaits `loadCatalogue()` first. The catalogue is otherwise loaded lazily by
+  the Techniques tab and the pattern wizard, and a knitter who signs in and imports from the Account
+  screen has touched neither — without it the matching would quietly do nothing on the likeliest
+  path of all. Never fatal: no catalogue just means the attributes stay as prose.
+
 ## Deferred
 
-- **Export (Knitwit → Ravelry).** Gated on a **write-scope** check that may not exist at all, and it
-  writes to a knitter's real notebook — so it needs explicit per-action consent and strict
-  idempotency (store the created Ravelry project id, match on re-run). Create-new first;
-  update-existing is a further step. A Knitwit pattern with no Ravelry pattern id would land as a
-  pattern-less craft project on Ravelry.
+- **Updating an exported project.** The stamp makes it possible (`POST /projects/{user}/{id}.json`),
+  but it means deciding which side wins per field on a thing other people can see. Not yet.
+- **Exporting stash, needles or patterns.** Projects are what a knitter wants in their notebook;
+  the rest is inventory nobody else reads.
 - **Live two-way sync.** Builds on the provenance stamp plus a sync cursor and a per-field
   source-of-truth decision. Out of scope here.
 
@@ -193,14 +273,21 @@ imported object carries `ravelrySource`, running it again reconciles instead of 
 
 1. ~~**Ravelry OAuth2 may not grant project/stash read scopes.**~~ **Resolved (2026-10-13):**
    `offline` with no `profile-only` grants full notebook read+write. See Phase 0.
-2. **Photo URLs must be hotlinkable without auth.** The "URL + thumbnail, don't copy bytes" choice
-   depends on Ravelry project and library photos being public CDN links. If any are auth-gated, the
-   URL approach breaks for those and needs a fallback.
+2. ~~**Photo URLs must be hotlinkable without auth.**~~ **Resolved (2026-10-15):** both a private
+   project's photo and a pattern's come back `200 image/jpeg` from `images4-*.ravelrycache.com` with
+   no `Authorization` header at all — the CDN does not gate on the notebook's privacy. So "URL +
+   thumbnail, don't copy bytes" holds, and no fallback is needed. Re-check if Ravelry ever moves to
+   signed URLs: the symptom would be imported photos turning into broken images some days later,
+   not at import time.
 3. **Getting the owned PDF out of Ravelry** (Phase 4) is the one part still unverified — the import
    now reuses the app's existing client-side PDF extraction, so the only guess left is how Ravelry
    exposes an owned pattern's PDF. The `pattern-pdf` task reads `pattern.pdf_url`; it needs a real
    owned pattern to confirm, and is the single place to adjust if that is wrong.
-4. **Stash ↔ project yarn matching** is lossy — Ravelry's yarn model is richer and messier than
+4. **The shape `create.json` wants its parameters in** (Phase 6) is not publicly documented — the
+   API reference is behind a Ravelry login. The function tries flat JSON, JSON nested under
+   `project`, then form-encoded, advancing only on a status that means the parameters were not
+   understood, and logs which one worked. The first real export settles it; collapse the ladder then.
+5. **Stash ↔ project yarn matching** is lossy — Ravelry's yarn model is richer and messier than
    Knitwit's, so expect some unresolved material slots on imported projects.
 
 ## Appendix A — self-serve data-shape probe

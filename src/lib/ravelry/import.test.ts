@@ -1,4 +1,4 @@
-import type { Material, Pattern, Project, Tool } from '@/types/knitwit';
+import type { CatalogueTechnique, Material, Pattern, Project, Tool } from '@/types/knitwit';
 
 import { applyRavelryImport, type ImportTarget, type RavelryImportData } from './import';
 
@@ -6,7 +6,7 @@ const IMPORTED_AT = '2026-10-13T00:00:00.000Z';
 
 // A fake store with the same save semantics as the real one: an existing key updates, null makes a
 // new sequential key.
-function fakeTarget() {
+function fakeTarget(catalogue: CatalogueTechnique[] = []) {
   const materials: Record<string, Material> = {};
   const tools: Record<string, Tool> = {};
   const patterns: Record<string, Pattern> = {};
@@ -29,6 +29,7 @@ function fakeTarget() {
     getTools: () => tools,
     getPatterns: () => patterns,
     getProjects: () => projects,
+    getCatalogue: () => catalogue,
     saveMaterial: (id, data) => {
       const key = id ?? `m${(m += 1)}`;
       materials[key] = data;
@@ -113,6 +114,40 @@ describe('applyRavelryImport', () => {
     // The second run's timestamp won, proving it rewrote the same row.
     expect(target.materials.m1.ravelrySource?.importedAt).toBe('2026-11-01T00:00:00.000Z');
     expect(target.projects.proj1.patternId).toBe('p1');
+  });
+
+  it('keeps the knitter’s work when they import a second time', () => {
+    const target = fakeTarget();
+    applyRavelryImport(data, target, IMPORTED_AT);
+
+    // Between the two imports the knitter actually uses the app: they count rows on the imported
+    // project and measure a swatch for the imported yarn.
+    const projectKey = Object.keys(target.projects)[0];
+    const materialKey = Object.keys(target.materials)[0];
+    target.projects[projectKey] = {
+      ...target.projects[projectKey],
+      sections: [{ id: 'psec_mine', name: 'Body', row: 37, totalRows: 60 } as never],
+      notes: 'ran out of yarn',
+    };
+    target.materials[materialKey] = {
+      ...target.materials[materialKey],
+      gauge: { stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' },
+    };
+
+    applyRavelryImport(data, target, '2026-11-01T00:00:00.000Z');
+
+    // Their row count and their swatch are still there.
+    expect(target.projects[projectKey].sections[0].row).toBe(37);
+    expect(target.projects[projectKey].notes).toBe('ran out of yarn');
+    expect(target.materials[materialKey].gauge).toEqual({
+      stitches: 22,
+      rows: 30,
+      width: 10,
+      height: 10,
+      unit: 'cm',
+    });
+    // …and Ravelry's side still refreshed.
+    expect(target.materials[materialKey].ravelrySource?.importedAt).toBe('2026-11-01T00:00:00.000Z');
   });
 
   it('leaves a yarn unlinked when it was not tied to a stash entry', () => {

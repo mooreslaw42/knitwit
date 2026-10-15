@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@jsquash/jpeg/decode": "npm:@jsquash/jpeg@^1.6.0/decode.js",
+    "@jsquash/png/decode": "npm:@jsquash/png@^3.1.1/decode.js"
+  }
+}

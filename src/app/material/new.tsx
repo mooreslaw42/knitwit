@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
+import { SwatchField } from '@/components/swatch-field';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
@@ -33,6 +34,7 @@ const BLANK: Material = {
   brand: '',
   colorName: '',
   colorLot: '',
+  swatch: null,
   price: '',
   weight: '',
   grams: '',
@@ -369,6 +371,12 @@ export default function NewMaterialWizardScreen() {
                   onChangeText={(v) => set('colorLot', v)}
                   placeholder="e.g. L28304"
                 />
+                <SwatchField
+                  value={form.swatch}
+                  colorName={form.colorName}
+                  photo={form.photo}
+                  onChange={(swatch) => set('swatch', swatch)}
+                />
                 <FormField
                   label="Price / skein (€)"
                   badge={badgeFor('price')}
@@ -415,6 +423,21 @@ export default function NewMaterialWizardScreen() {
                   onChangeText={(v) => set('meters', v)}
                   keyboardType="numeric"
                   placeholder="250"
+                />
+                {/* Grams and meters are per skein; this is how many of them there are. Asked here
+                    because it is known at the moment of buying, which is when this wizard is used.
+                    Where it lives and whether it is used up are edits for later — the Edit screen
+                    has those. */}
+                <FormField
+                  label="Skeins you have"
+                  value={form.skeins == null ? '' : String(form.skeins)}
+                  onChangeText={(v) => {
+                    const cleaned = v.replace(/[^0-9.]/g, '');
+                    const n = Number(cleaned);
+                    set('skeins', cleaned && Number.isFinite(n) ? n : null);
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="2"
                 />
               </>
             )}

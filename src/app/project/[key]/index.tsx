@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, InputStyle, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
 import { NotesCard } from '@/components/notes-card';
+import { RavelryProjectCard } from '@/components/ravelry-project-card';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,6 +14,7 @@ import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
   formatClock,
+  formatFinished,
   formatStarted,
   projectCost,
   projectMaterialIds,
@@ -95,8 +97,14 @@ export default function ProjectDetailScreen() {
             </Pressable>
           </View>
           <ThemedText type="default" themeColor="inkSoft">
-            {formatStarted(project.startedOn)} · {CRAFT_LABELS[project.craft]} ·{' '}
-            {Math.round(pct * 100)}% complete
+            {[
+              formatStarted(project.startedOn),
+              formatFinished(project.finishedOn),
+              CRAFT_LABELS[project.craft],
+              `${Math.round(pct * 100)}% complete`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </ThemedText>
 
           <Card style={styles.tagCard}>
@@ -263,6 +271,10 @@ export default function ProjectDetailScreen() {
             onChange={(notes) => setProjectNotes(key, notes)}
             hint="About the whole project. Saved as you type."
           />
+
+          {/* Only for knitters who have Ravelry connected, or whose project came from there — it
+              draws nothing otherwise. */}
+          <RavelryProjectCard projectKey={key} project={project} />
 
           <View style={styles.sectionsHeader}>
             <ThemedText type="subtitle" heading={2}>Sections</ThemedText>

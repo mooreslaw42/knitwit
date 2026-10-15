@@ -7,6 +7,7 @@ import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/
 import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
 import { PhotoImage } from '@/components/photo';
+import { SwatchField } from '@/components/swatch-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
@@ -14,18 +15,19 @@ import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { describeFilled, readYarnLabel } from '@/lib/read-yarn-label';
-import { WASHING_LABELS, YARN_WEIGHTS,
+import { MATERIAL_STATUS_LABELS, MATERIAL_STATUS_ORDER, WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
-import type { CraftType, Material } from '@/types/knitwit';
+import type { CraftType, Material, MaterialStatus } from '@/types/knitwit';
 
 const BLANK: Material = {
   brand: '',
   colorName: '',
   colorLot: '',
+  swatch: null,
   price: '',
   weight: '',
   grams: '',
@@ -54,6 +56,10 @@ const WASHING_OPTIONS = Object.entries(WASHING_LABELS).map(([value, label]) => (
   value,
   label,
 }));
+
+const STATUS_OPTIONS: { value: MaterialStatus; label: string }[] = MATERIAL_STATUS_ORDER.map(
+  (value) => ({ value, label: MATERIAL_STATUS_LABELS[value] }),
+);
 
 export default function MaterialEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -243,6 +249,12 @@ export default function MaterialEditScreen() {
             value={form.colorLot}
             onChangeText={(v) => set('colorLot', v)}
           />
+          <SwatchField
+            value={form.swatch}
+            colorName={form.colorName}
+            photo={form.photo}
+            onChange={(swatch) => set('swatch', swatch)}
+          />
           <FormField
             label="Price (€)"
             value={form.price}
@@ -260,6 +272,32 @@ export default function MaterialEditScreen() {
             options={WEIGHT_OPTIONS}
             value={form.weight}
             onChange={(v) => set('weight', v)}
+          />
+          {/* How many you have, as opposed to how many a pattern wants — the one number the stash
+              is actually for. Decimal, because half a ball left is a real answer. */}
+          <FormField
+            label="Skeins you have"
+            value={form.skeins == null ? '' : String(form.skeins)}
+            onChangeText={(v) => {
+              const cleaned = v.replace(/[^0-9.]/g, '');
+              const n = Number(cleaned);
+              // An empty box means "not counted", which is not the same answer as none.
+              set('skeins', cleaned && Number.isFinite(n) ? n : null);
+            }}
+            keyboardType="decimal-pad"
+            placeholder="—"
+          />
+          <SelectField
+            label="In the stash?"
+            options={STATUS_OPTIONS}
+            value={form.status ?? 'instash'}
+            onChange={(v) => set('status', v)}
+          />
+          <FormField
+            label="Where it is"
+            value={form.location ?? ''}
+            onChangeText={(v) => set('location', v)}
+            placeholder="e.g. attic box 3"
           />
           <FormField
             label="Grams per skein"
@@ -297,6 +335,14 @@ export default function MaterialEditScreen() {
             onChange={(careSymbols) => set('careSymbols', careSymbols)}
           />
           <FormField label="Link" value={form.link} onChangeText={(v) => set('link', v)} />
+          {/* The one entity that had nowhere to write "splits on the needle" until now. */}
+          <FormField
+            label="Notes"
+            value={form.notes ?? ''}
+            onChangeText={(v) => set('notes', v)}
+            multiline
+            placeholder="Anything worth remembering about this yarn"
+          />
 
           <PillButton
             style={styles.saveBtn}

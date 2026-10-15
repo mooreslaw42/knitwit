@@ -7,7 +7,7 @@
 // `stash_id` → the Material imported from that stash entry. Pure, clock passed in.
 
 import { deriveProjectColors } from '@/lib/knitwit-helpers';
-import type { Gauge, Project, ProjectStatus, TechniqueCraft } from '@/types/knitwit';
+import type { Gauge, Project, ProjectSection, ProjectStatus, TechniqueCraft } from '@/types/knitwit';
 import type { RavelryProject } from './types';
 
 export type ImportedProject = {
@@ -35,6 +35,15 @@ function mapStatus(name: string | null | undefined): ProjectStatus {
 function toIsoDate(value: string | null | undefined): string | null {
   const match = (value ?? '').match(/^(\d{4})\/(\d{2})\/(\d{2})/);
   return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+}
+
+// How far along, 0–100. A finished project is finished whatever the slider says — plenty of knitters
+// never drag it to the end — and anything else falls back to Ravelry's percentage, clamped, or zero.
+function percentDone(project: RavelryProject, status: ProjectStatus): number {
+  if (status === 'finished') return 100;
+  const progress = project.progress;
+  if (typeof progress !== 'number' || !Number.isFinite(progress)) return 0;
+  return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
 function trimZero(n: number): string {
@@ -72,11 +81,45 @@ export function ravelryProjectToProject(
 ): ImportedProject {
   const photo = project.photos?.[0];
   const owner = project.user?.username ?? '';
+  const status = mapStatus(project.status_name);
+
+  // Ravelry tracks progress as a percentage, not rows, and a metadata-only pattern has no sections
+  // to copy — but the app addresses a project through its *current section* (projects.tsx reads
+  // sections[current].name), so a project with none crashes the list. An imported one therefore gets
+  // one placeholder section that renders and counts until the knitter adds real sections or charts
+  // the linked pattern. Deterministic id and timestamp keep the mapper pure.
+  //
+  // It counts in percent — 100 "rows", one per percentage point — because that is the only progress
+  // Ravelry has. A one-row section would have had every unfinished import read "row 0 of 1", which
+  // says nothing; this at least carries the knitter's own number across, and the section says so.
+  const percent = percentDone(project, status);
+  const section: ProjectSection = {
+    id: `psec_rav_${project.id}`,
+    updatedAt: importedAt,
+    name: 'Whole project',
+    totalRows: 100,
+    row: percent,
+    complete: percent >= 100,
+    seconds: 0,
+    rowNotes: [],
+    notes: '',
+    materialIds: [],
+    toolIds: [],
+    techniqueIds: [],
+    description:
+      'Imported from Ravelry, which tracks a project as a percentage rather than by row — so this ' +
+      'section counts to 100. Chart the pattern, or add your own sections, to count real rows.',
+    stitchMultiple: null,
+    markers: [],
+    castOn: 0,
+    rows: [],
+  };
 
   return {
     project: {
       name: project.name ?? '',
       startedOn: toIsoDate(project.started),
+      finishedOn: toIsoDate(project.completed),
       craft: mapCraft(project.craft_name),
       photo: photo?.medium_url ?? photo?.square_url ?? null,
       // Ravelry has no accent colour for a project, so it lands on Knitwit's neutral pair; the
@@ -95,9 +138,9 @@ export function ravelryProjectToProject(
       // Resolved by the orchestration from ravelryPatternId below.
       patternId: null,
       sizeIndex: 0,
-      status: mapStatus(project.status_name),
+      status,
       gauge: mapGauge(project),
-      sections: [],
+      sections: [section],
       ravelrySource: {
         id: String(project.id),
         kind: 'project',

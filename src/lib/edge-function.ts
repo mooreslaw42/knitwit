@@ -27,8 +27,18 @@ export async function readErrorBody(error: unknown): Promise<string | null> {
 
 export async function invokeEdgeFunction(
   name: string,
-  body: Record<string, unknown>,
-  options: { timeoutMs: number; timeoutMessage: string; signal?: AbortSignal },
+  // Usually a JSON object. A file goes up as raw bytes instead — base64 would inflate it by a
+  // third and build the whole thing as a string first, which is a poor trade on a phone.
+  body: Record<string, unknown> | ArrayBuffer | Uint8Array,
+  options: {
+    timeoutMs: number;
+    timeoutMessage: string;
+    signal?: AbortSignal;
+    // What to say when the call fails for a reason the function did not name itself. Defaults to the
+    // pattern reader's wording because that is where this started — but it is wrong in anybody
+    // else's mouth, and a knitter importing from Ravelry was being told about a pattern reader.
+    failureMessage?: string;
+  },
 ): Promise<unknown> {
   // Both the signal and the timeout are handed to invoke(), which aborts the underlying fetch.
   // That matters for more than tidiness: an abandoned read still costs money until the request
@@ -45,7 +55,9 @@ export async function invokeEdgeFunction(
     if (isAbortLike(error)) throw new EdgeFunctionTimeout(options.timeoutMessage);
     const detail = await readErrorBody(error);
     throw new Error(
-      detail ?? "Couldn't reach the pattern reader. Check your connection and retry.",
+      detail ??
+        options.failureMessage ??
+        "Couldn't reach the pattern reader. Check your connection and retry.",
     );
   }
   return data as unknown;

@@ -18,6 +18,7 @@ import {
   CRAFT_LABELS,
   CRAFT_ORDER,
   TOOL_ICONS,
+  MATERIAL_STATUS_LABELS,
   TOOL_TYPE_LABELS,
   yarnWeightLabel,
   describeToolSize,
@@ -171,10 +172,17 @@ export default function LibraryScreen() {
           ) : view === 'materials' ? (
             <View style={styles.techList}>
               {Object.entries(materials).map(([id, m]) => {
+                const status = m.status ?? 'instash';
                 const meta = [
+                  // How many you have comes first: it is what the list is scanned for.
+                  m.skeins != null ? `${m.skeins} ${m.skeins === 1 ? 'skein' : 'skeins'}` : '',
+                  // Only when it is not the ordinary case — a stash list where every row says
+                  // "In the stash" has just become a stash list with a wasted column.
+                  status === 'instash' ? '' : MATERIAL_STATUS_LABELS[status],
                   m.composition,
                   m.weight ? yarnWeightLabel(m.weight) : '',
                   `${m.grams || '?'}g / ${m.meters || '?'}m`,
+                  m.location ? m.location : '',
                   m.price ? `€${m.price}` : '',
                 ]
                   .filter(Boolean)
@@ -185,7 +193,7 @@ export default function LibraryScreen() {
                     style={styles.stashRow}
                     href={`/material/${id}`}>
                     <Thumb photo={m.photo}>
-                      <YarnSkein color={yarnSwatchColor(m.colorName)} size={44} />
+                      <YarnSkein color={yarnSwatchColor(m.colorName, m.swatch)} size={44} />
                     </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">

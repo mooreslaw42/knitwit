@@ -37,6 +37,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        // Without this, `eas submit` stops to ask which App Store Connect app it is pointed at,
+        // so a non-interactive submit fails outright. Setting it also skips the app-creation step.
+        "ascAppId": "6821345437"
+      }
+    }
   }
 }

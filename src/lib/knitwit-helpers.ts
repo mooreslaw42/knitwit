@@ -274,6 +274,16 @@ export function formatStarted(startedOn: string | null): string {
   return `Started ${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
 }
 
+// "Finished 12 October 2026", or '' when there is no date — unlike a start date, a missing finish
+// is usually just a project that is not finished, so there is nothing to say in its place.
+export function formatFinished(finishedOn: string | null | undefined): string {
+  if (!finishedOn) return '';
+  const [y, m, d] = finishedOn.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const at = new Date(y, m - 1, d);
+  return `Finished ${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+}
+
 // Free text a previous version stored ("Started Jun 14") turned into a date, so the years of
 // projects already in the app don't all reset to blank. The year was never recorded, so it's
 // inferred as the most recent one that isn't in the future — you cannot have cast on next month.

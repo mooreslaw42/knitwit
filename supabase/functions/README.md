@@ -4,6 +4,105 @@ Server-side code. The one rule that governs everything here: **the language mode
 called from this directory.** The app ships to the web, so anything in the client bundle is public
 — an API key there would be readable by anyone who opens devtools.
 
+## `extract-pdf`
+
+Pulls the text layer out of an uploaded PDF. No model, no prompt, no key, no spend — it extracts
+characters and hands them back.
+
+It exists because this cannot run in the app. The library that reads a PDF is pdf.js, which wants
+`DOMMatrix`, `Path2D` and `OffscreenCanvas`. A browser has them; Hermes does not. The app used to
+call pdf.js directly, so uploading a PDF worked on the web and threw on every phone — and the
+thrown error was reported to the knitter as "it might be password-protected", which sent people
+looking for a problem with their file. Deno has those globals, so both platforms now take one path.
+
+**Request** (`POST`): the raw PDF bytes as the body — not JSON, and not base64, which would inflate
+a 12MB file into a 16MB string for the phone to build and hold.
+
+```
+supabase.functions.invoke('extract-pdf', { body: arrayBuffer })
+```
+
+**Response**
+
+```jsonc
+{ "text": "CAMISOLE NO. 9 …", "pages": 9 }
+```
+
+| Status | Body | Means |
+|---|---|---|
+| 400 | `{ "error": "That file is empty." }` | Nothing was sent |
+| 405 | `{ "error": "Send the PDF as a POST body." }` | Not a POST |
+| 413 | `{ "error": "That file is too big to read (over 12MB)." }` | Over the cap the app also enforces |
+| 422 | `{ "error": "unreadable" }` | pdf.js would not open it: encrypted, truncated, or not a PDF |
+
+`unreadable` is a sentinel rather than a sentence. The app turns it into wording for a knitter
+(`extractMessage` in `src/lib/read-pattern-file.ts`), so the copy lives with the rest of the UI
+copy instead of in a server log.
+
+**What it deliberately does not do:** decide whether the text is any good. A PDF whose text layer
+is nearly empty is a scan — words as pixels — and the app refuses it with `looksLikeScan` rather
+than running OCR, because a bad OCR pass produces plausible-looking nonsense. Whether the
+characters amount to a *pattern* is `parse-pattern`'s question.
+
+## `image-colours`
+
+Reduces a picture to the few colours a knitter would actually work it in, and optionally to a grid
+of stitches. No model, no key, no spend — arithmetic on pixels.
+
+Server-side for the same reason as `extract-pdf`: reading pixels needs a canvas and Hermes has
+none. The decoders are WASM (`@jsquash/png`, `@jsquash/jpeg`) rather than native bindings, so they
+run on the Edge Runtime with no build step.
+
+Two callers, one job: the material editor taking a yarn's real colour off its photo, and the
+pixel-pattern flow turning a picture into a colourwork chart.
+
+**Request** (`POST`): the raw image bytes as the body. Parameters go in the query string, since the
+body is the image.
+
+| Param | Default | Means |
+|---|---|---|
+| `colours` | 6 | How many colours to reduce to (2–24) |
+| `stitches` | — | Chart width. With `rows`, also returns a grid |
+| `rows` | — | Chart height. Both or neither — a width without a row count is not a chart |
+
+```
+supabase.functions.invoke('image-colours?colours=6', { body: bytes })
+```
+
+**Response**
+
+```jsonc
+{
+  "colours": ["#86553b", "#b55621", "#be764d", "#f5e5d6", "#fdf6ee"],
+  "width": 1200,
+  "height": 630,
+  // only when stitches and rows were both given
+  "grid": [2, 2, 1, 0, …],   // one palette index per stitch, row-major
+  "stitches": 12,
+  "rows": 8
+}
+```
+
+| Status | Body | Means |
+|---|---|---|
+| 400 | `{ "error": "That image is empty." }` | Nothing was sent |
+| 400 | `{ "error": "That chart is too big (max 250 × 400)." }` | Grid beyond what anyone follows stitch by stitch |
+| 405 | `{ "error": "Send the image as a POST body." }` | Not a POST |
+| 413 | `{ "error": "That image is too big (over 8MB)." }` | Over the cap |
+| 415 | `{ "error": "unsupported" }` | Not a PNG or JPEG, by magic bytes rather than declared type |
+| 422 | `{ "error": "unreadable" }` / `"blank"` | The decoder refused it, or there were no opaque pixels |
+
+The one-word bodies are sentinels, not sentences; `colourMessage` in `src/lib/image-colours.ts`
+turns them into wording for a knitter.
+
+**Fewer colours may come back than asked for, and that is the point.** Median cut happily returns
+near-identical entries when an image is mostly one shade — two creams a knitter could not tell
+apart, and a second skein bought for nothing. Entries closer than a small channel distance are
+merged. Asking a flat image for six colours gives one.
+
+The arithmetic lives in `quantise.ts`, which is plain TypeScript with no Deno globals, so Jest
+tests it directly — same arrangement as `provider-greenpt.test.ts`.
+
 ## `parse-pattern`
 
 Two tasks, one function — they share a provider, a cached prompt discipline, and the rule that the
@@ -132,18 +231,31 @@ app (`src/lib/ravelry/connect-session.ts`, fired from the session watcher) sends
 it sees it. This is Phase 0 of `docs/plans/ravelry-import.md` — nothing can read a knitter's library
 later without it.
 
-**Request** (`POST`, via `invokeEdgeFunction('ravelry-connect', …)`): `{ refresh_token, access_token? }`.
-The caller's JWT identifies whose row is written (verified against `/auth/v1/user`, never decoded on
-trust — same as `delete-account`); the optional access token is used once, best-effort, to ask
-Ravelry who this is for the "connected as …" label. Returns `{ ok, stored }`.
+**Request** (`POST`, via `invokeEdgeFunction('ravelry-connect', …)`): `{ refresh_token }`. The caller's
+JWT identifies whose row is written (verified against `/auth/v1/user`, never decoded on trust — same
+as `delete-account`). Returns `{ ok, stored, kept? }`.
 
-The token is **enveloped** (AES-GCM) before it touches Postgres, so a row in `ravelry_connections`
-is ciphertext — see the table's migration, which also closes it to every client by RLS. Only the
-service role (this function) reads or writes it.
+### Why it refreshes before it stores
+
+Ravelry's refresh tokens are **single-use**: each refresh consumes the token and returns a new one.
+supabase-js persists the *original* `provider_refresh_token` and replays it on every page reload — so
+a naive store would keep overwriting the rotated token with the spent original, and the connection
+would die after one import. So this does **not** store the incoming token directly: it exchanges it
+once (`/oauth2/token`, HTTP Basic with the app credentials), stores the **rotated** result, and reads
+the Ravelry username from the fresh access token. A stale token re-sent on a reload then fails to
+exchange and is **turned away** (`kept: true`) rather than clobbering the good connection — the
+client's `SIGNED_IN`-only gate is the first line, this is the belt-and-braces. (`ravelry-import`
+rotates and re-stores the same way on every pull.)
+
+The stored token is **enveloped** (AES-GCM) before it touches Postgres, so a row in
+`ravelry_connections` is ciphertext — see the table's migration, which also closes it to every client
+by RLS. Only the service role (this function) reads or writes it.
 
 | Secret | Required | Notes |
 |---|---|---|
 | `RAVELRY_TOKEN_KEY` | yes | 32 raw bytes, base64, for the envelope. **Supabase secret only.** Generate with `openssl rand -base64 32`. Rotating it orphans stored tokens — knitters reconnect once. |
+| `RAVELRY_CLIENT_ID` | yes | The Ravelry app's OAuth2 client id, to exchange the token. Must match the `custom:ravelry` provider's. |
+| `RAVELRY_CLIENT_SECRET` | yes | Its secret. Same. |
 
 ```bash
 supabase functions deploy ravelry-connect --project-ref <ref>
@@ -159,15 +271,64 @@ secret, and Ravelry's no-CORS rule). It loads the stored refresh token, decrypts
 for an access token at Ravelry's token endpoint (HTTP Basic with the app credentials, re-storing a
 rotated refresh token), and reads.
 
-Three tasks:
+### The paged tasks
+
+The list endpoints are thin — the mapping needs each entry's *detail* — so a notebook costs one
+request per stash entry, per project and per pattern on top of the lists. Doing all of that in one
+call is what breaks on a real account: a couple of hundred projects is several hundred Ravelry
+requests and a multi-megabyte response in a single function, which runs out of wall clock, annoys the
+rate limiter, and loses everything if the last one fails.
+
+So the unit of work is a **page** — at most `PAGE_SIZE` details, four in flight, one bounded
+response — and the client (`src/lib/ravelry/run-import.ts`) asks until `hasMore` goes false,
+applying each page as it arrives. That makes the import resumable (a failed page is retried, the
+ones before it are already saved) and gives the screen a real number to show.
+
+| Task | Body | Returns |
+|---|---|---|
+| `needles` | — | `{ items, hasMore: false }` — the whole drawer; small enough never to page |
+| `stash` | `{ page }` | `{ items, hasMore }` — stash entries with their yarn and packs |
+| `projects` | `{ page }` | `{ items, hasMore }` — project details, each carrying its `pattern_id` |
+| `library` | `{ page }` | `{ ids, hasMore }` — owned pattern **ids**, so the client fetches only what it lacks |
+| `patterns` | `{ ids }` | `{ items }` — details for the ids asked for |
+
+A failed page is retried once by the client before it gives up: the first call after a deploy can
+cold-start slowly enough to look like an error.
+
+Order matters on the client: stash and patterns before projects, because a project's links are
+resolved by finding them already in the store.
+
+### `create-project` — the one write
+
+Files a Knitwit project as a **new** Ravelry project. `{ task: 'create-project', draft }` →
+`{ id, permalink, url, ravelryUser }`. `draft` is what `src/lib/ravelry/export-project.ts` built;
+its `craft_name` and `status_name` are resolved here against `/projects/crafts.json` and
+`/projects/project_statuses.json`, because hardcoding ids seen once in a fixture is how an export
+files everything as the wrong craft. Everything else passes straight through, so adding a field to
+the mapper needs no change here.
+
+Create only — it never updates and never deletes, so the worst it can do to a knitter's notebook is
+put something in it. The client offers it only for a project with no `ravelrySource`, and stamps one
+on success, so the same project cannot be sent twice.
+
+**How `create.json` wants its parameters is not documented publicly** — the API reference is behind
+a Ravelry login and the open-source clients just forward whatever the caller passes. So `ravelryPost`
+tries the three shapes it could be and stops at the first accepted: flat JSON, JSON nested under
+`project`, then form-encoded. Only 400/415/422 ("I did not understand the parameters", nothing
+created) moves on to the next; 401/403/404/429 are returned as they came. For the same reason the
+two catalogue lookups try `GET` and then `POST` — they read like plain lists, but the published JS
+client calls both with `POST`, and nothing public settles it. The shape that worked is
+logged — `{"event":"ravelry-import","task":"create-project","ok":true,"shape":"…"}` — so the first
+real export settles it for good. **Collapse the ladder to the one that works once it is known.**
+
+### The rest
 
 - `probe` (default) — does the whole chain and returns only counts
   (`{ ravelryUser, counts, readStatus }`), to confirm the read path. A `200` with real counts means
   it works; a `403` in `readStatus` with `current_user` fine means the scope is too narrow (below).
-- `pull` — the whole notebook: needles, and the details of every stash entry and project (lists
-  paginated in full, details fetched capped and four-at-a-time), plus the patterns those projects
-  and the library point at. Returns the raw payloads `src/lib/ravelry/*` maps. A notebook past the
-  `PULL_CAP` ceiling needs an incremental import, which is future work.
+- `pull` — the whole notebook in one response, which is the paged walk run to the end and bounded by
+  `PULL_CAP`. Kept for a small account and for any client that has not updated yet; the paged tasks
+  are what a real notebook should use.
 - `pattern-pdf` — one owned pattern's PDF (`{ patternId }` → `{ owned, pdfBase64 }`), for the client
   to extract and run through parse-pattern (Phase 4). **How Ravelry exposes an owned PDF is not yet
   verified against a real owned pattern** — it reads `pattern.pdf_url`; adjust there if a real one

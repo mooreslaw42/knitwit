@@ -112,13 +112,16 @@ async function loadConnection(
   return rows[0] ?? null;
 }
 
+// Persisting a rotated refresh token. Ravelry's are single-use, so if this does not land, the next
+// import refreshes a spent token and the connection is dead — which is why the result is checked and
+// a failure is loud, not swallowed.
 async function storeRefreshToken(
   url: string,
   serviceKey: string,
   userId: string,
   enveloped: string,
-): Promise<void> {
-  await fetch(`${url}/rest/v1/ravelry_connections?user_id=eq.${userId}`, {
+): Promise<boolean> {
+  const response = await fetch(`${url}/rest/v1/ravelry_connections?user_id=eq.${userId}`, {
     method: 'PATCH',
     headers: {
       apikey: serviceKey,
@@ -129,6 +132,10 @@ async function storeRefreshToken(
     body: JSON.stringify({ refresh_token: enveloped }),
     signal: AbortSignal.timeout(10_000),
   });
+  if (!response.ok) {
+    console.error('ravelry-import could not re-store the rotated token', response.status, await response.text().catch(() => ''));
+  }
+  return response.ok;
 }
 
 type Tokens = { accessToken: string; refreshToken: string | null };
@@ -181,6 +188,90 @@ async function countFrom(
   return { status: response.status, count: body.paginator?.results ?? listed };
 }
 
+// Writing to Ravelry, which is the one thing here that is not a read.
+//
+// How `create.json` wants its parameters is **not documented publicly** — the API reference sits
+// behind a Ravelry login and the open-source clients simply forward whatever the caller passes. So
+// rather than guess once and file a knitter's project wrongly, this tries the three shapes it could
+// be, in order, and stops at the first that is accepted:
+//
+//   1. flat JSON            {"name":"…","craft_id":2}
+//   2. JSON under `project` {"project":{"name":"…"}}
+//   3. form-encoded flat    name=…&craft_id=2
+//
+// Only a status that means "I did not understand the parameters" (400/415/422) moves on to the next
+// shape — nothing was created, so there is nothing to double up. Anything else (401, 403, 404, 429)
+// is returned as it came, because retrying a refusal in a new costume is not going to help. The
+// shape that worked is logged, so the first real export tells us which one it is for good.
+const POST_SHAPES = ['json-flat', 'json-nested', 'form'] as const;
+const RETRY_STATUSES = new Set([400, 415, 422]);
+
+async function ravelryPost(
+  path: string,
+  params: Record<string, unknown>,
+  accessToken: string,
+): Promise<{ response: Response; shape: string }> {
+  let last: { response: Response; shape: string } | null = null;
+
+  for (const shape of POST_SHAPES) {
+    let headers: Record<string, string>;
+    let body: string;
+    if (shape === 'form') {
+      const form = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) form.set(key, String(value));
+      headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+      body = form.toString();
+    } else {
+      headers = { 'Content-Type': 'application/json' };
+      body = JSON.stringify(shape === 'json-nested' ? { project: params } : params);
+    }
+
+    const response = await fetch(`https://api.ravelry.com${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, ...headers },
+      body,
+      signal: AbortSignal.timeout(20_000),
+    });
+    last = { response, shape };
+    if (response.ok || !RETRY_STATUSES.has(response.status)) return last;
+  }
+
+  return last as { response: Response; shape: string };
+}
+
+// Ravelry's own lists for craft and project status, so the ids come from Ravelry rather than from a
+// number somebody once saw in a fixture. Matched on name, case-insensitively, with the permalink as
+// a second chance ("in-progress" for "In progress").
+//
+// GET first, then POST. These two read like plain lists, but the published JS client calls both of
+// them with POST — so either it is wrong or Ravelry is unusual here, and there is no public
+// reference to settle it. Trying both costs one extra request on a path that would otherwise fail
+// outright, and a list endpoint has nothing to do twice.
+async function idByName(
+  path: string,
+  key: string,
+  name: string,
+  accessToken: string,
+): Promise<number | null> {
+  type Catalogue = Record<string, { id?: number; name?: string; permalink?: string }[]>;
+  let body = await ravelryJson<Catalogue>(path, accessToken);
+  if (!body?.[key]) {
+    const response = await fetch(`https://api.ravelry.com${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    body = response.ok ? ((await response.json()) as Catalogue) : null;
+  }
+  const list = body?.[key] ?? [];
+  const wanted = name.trim().toLowerCase();
+  const slug = wanted.replace(/\s+/g, '-');
+  const hit =
+    list.find((entry) => (entry.name ?? '').trim().toLowerCase() === wanted) ??
+    list.find((entry) => (entry.permalink ?? '').toLowerCase() === slug);
+  return hit?.id ?? null;
+}
+
 async function ravelryJson<T>(path: string, accessToken: string): Promise<T | null> {
   const response = await ravelryGet(path, accessToken);
   if (!response.ok) return null;
@@ -191,10 +282,22 @@ function notNull<T>(value: T | null | undefined): value is T {
   return value != null;
 }
 
-// Ravelry rate-limits, and a whole notebook is far more requests than one burst should make — so at
-// most `limit` details are in flight. The cap is a safety ceiling on one function call, not the page
-// size: lists are paginated in full up to it. A notebook past the cap needs an incremental import,
-// which is future work.
+// How much one invocation is allowed to do.
+//
+// The list endpoints are thin — the mapping needs each entry's *detail* — so a notebook costs one
+// request per stash entry, per project and per pattern on top of the lists. Doing all of that in a
+// single call is what breaks on a real account: a knitter with a couple of hundred projects is
+// several hundred Ravelry requests and a multi-megabyte response in one function, which runs out of
+// wall clock, annoys Ravelry's rate limiter, and loses everything if the last one fails.
+//
+// So the unit of work is a *page*: at most PAGE_SIZE details, four in flight, one bounded response.
+// The client asks for pages until `hasMore` goes false, applying each as it arrives — which also
+// makes the import resumable (a failed page is retried, the ones before it are already saved) and
+// gives it something honest to show a knitter while it runs.
+const PAGE_SIZE = 25;
+
+// The ceiling the whole-notebook `pull` still honours. Paged tasks have no such limit — they just
+// keep going — so this only bounds the legacy single-shot path.
 const PULL_CAP = 1000;
 
 async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -210,86 +313,112 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return results;
 }
 
-// Walk every page of a list endpoint, collecting the `id` of each item, up to the cap. The list
-// responses carry a paginator with `last_page`; stop there, or when a page comes back empty.
-async function listAllIds(
+// One page of a list endpoint's ids, and whether anything follows it. `last_page` comes off the
+// paginator every list response carries.
+async function listPage(
   pathFor: (page: number) => string,
   key: string,
   token: string,
-): Promise<number[]> {
-  const ids: number[] = [];
-  for (let page = 1; ; page += 1) {
-    const body = await ravelryJson<
-      { paginator?: { last_page?: number; page_count?: number } } & Record<string, unknown>
-    >(pathFor(page), token);
-    const items = (body?.[key] as { id?: number }[] | undefined) ?? [];
-    for (const item of items) if (item.id != null) ids.push(item.id);
-    const lastPage = body?.paginator?.last_page ?? body?.paginator?.page_count ?? page;
-    if (items.length === 0 || page >= lastPage || ids.length >= PULL_CAP) break;
-  }
-  return ids.slice(0, PULL_CAP);
+  page: number,
+): Promise<{ ids: number[]; hasMore: boolean }> {
+  const body = await ravelryJson<
+    { paginator?: { last_page?: number; page_count?: number } } & Record<string, unknown>
+  >(pathFor(page), token);
+  const items = (body?.[key] as { id?: number }[] | undefined) ?? [];
+  const ids = items.map((item) => item.id).filter(notNull);
+  const lastPage = body?.paginator?.last_page ?? body?.paginator?.page_count ?? page;
+  return { ids, hasMore: items.length > 0 && page < lastPage };
 }
 
-// The list endpoints are thin; the mapping needs the detail (a stash entry's yarn and packs, a
-// project's gauge and needles). So list, then fetch each detail, capped and pooled.
-async function pullStash(username: string, token: string): Promise<unknown[]> {
-  const ids = await listAllIds(
-    (page) => `/people/${username}/stash/list.json?page_size=100&page=${page}`,
-    'stash',
-    token,
-  );
+async function detailsFor<T>(
+  ids: number[],
+  token: string,
+  pathFor: (id: number) => string,
+  key: string,
+): Promise<T[]> {
   const details = await mapPool(ids, 4, (id) =>
-    ravelryJson<{ stash?: unknown }>(`/people/${username}/stash/${id}.json`, token).then(
-      (d) => d?.stash ?? null,
-    ),
+    ravelryJson<Record<string, unknown>>(pathFor(id), token).then((d) => (d?.[key] ?? null) as T | null),
   );
   return details.filter(notNull);
 }
 
-async function pullProjects(
+async function stashPage(
   username: string,
   token: string,
-): Promise<{ projects: unknown[]; patternIds: number[] }> {
-  const ids = await listAllIds(
-    (page) => `/projects/${username}/list.json?page_size=100&page=${page}`,
-    'projects',
+  page: number,
+): Promise<{ items: unknown[]; hasMore: boolean }> {
+  const { ids, hasMore } = await listPage(
+    (p) => `/people/${username}/stash/list.json?page_size=${PAGE_SIZE}&page=${p}`,
+    'stash',
     token,
+    page,
   );
-  const details = await mapPool(ids, 4, (id) =>
-    ravelryJson<{ project?: unknown }>(`/projects/${username}/${id}.json`, token).then(
-      (d) => d?.project ?? null,
-    ),
-  );
-  const projects = details.filter(notNull);
-  const patternIds = projects
-    .map((p) => (p as { pattern_id?: number | null }).pattern_id)
-    .filter(notNull);
-  return { projects, patternIds };
+  return { items: await detailsFor(ids, token, (id) => `/people/${username}/stash/${id}.json`, 'stash'), hasMore };
 }
 
-// The patterns to import: the ones projects were made from, plus the ones the knitter owns. Library
-// volumes carry the pattern id directly, so this paginates them itself rather than through listAllIds.
+async function projectsPage(
+  username: string,
+  token: string,
+  page: number,
+): Promise<{ items: unknown[]; hasMore: boolean }> {
+  const { ids, hasMore } = await listPage(
+    (p) => `/projects/${username}/list.json?page_size=${PAGE_SIZE}&page=${p}`,
+    'projects',
+    token,
+    page,
+  );
+  return { items: await detailsFor(ids, token, (id) => `/projects/${username}/${id}.json`, 'project'), hasMore };
+}
+
+// Library volumes carry the pattern id directly, so this returns ids and lets the client decide which
+// details it still needs — it already knows which patterns it has.
+async function libraryPage(
+  username: string,
+  token: string,
+  page: number,
+): Promise<{ ids: number[]; hasMore: boolean }> {
+  const body = await ravelryJson<{
+    volumes?: { pattern_id?: number | null }[];
+    paginator?: { last_page?: number };
+  }>(`/people/${username}/library/search.json?page_size=${PAGE_SIZE}&page=${page}`, token);
+  const volumes = body?.volumes ?? [];
+  const ids = volumes.map((volume) => volume.pattern_id).filter(notNull);
+  const lastPage = body?.paginator?.last_page ?? page;
+  return { ids, hasMore: volumes.length > 0 && page < lastPage };
+}
+
+async function patternsByIds(ids: number[], token: string): Promise<unknown[]> {
+  const unique = [...new Set(ids)].slice(0, PAGE_SIZE * 2);
+  return await detailsFor(unique, token, (id) => `/patterns/${id}.json`, 'pattern');
+}
+
+// The legacy whole-notebook paths, now just the paged ones walked to the end (bounded by PULL_CAP).
+// `task: "pull"` still works for a small account and for any client that has not updated yet.
+async function pullAll(
+  page: (p: number) => Promise<{ items: unknown[]; hasMore: boolean }>,
+): Promise<unknown[]> {
+  const out: unknown[] = [];
+  for (let p = 1; out.length < PULL_CAP; p += 1) {
+    const { items, hasMore } = await page(p);
+    out.push(...items);
+    if (!hasMore) break;
+  }
+  return out.slice(0, PULL_CAP);
+}
+
 async function pullLibraryPatternIds(username: string, token: string): Promise<number[]> {
   const ids: number[] = [];
-  for (let page = 1; ; page += 1) {
-    const body = await ravelryJson<{
-      volumes?: { pattern_id?: number | null }[];
-      paginator?: { last_page?: number };
-    }>(`/people/${username}/library/search.json?page_size=100&page=${page}`, token);
-    const volumes = body?.volumes ?? [];
-    for (const volume of volumes) if (volume.pattern_id != null) ids.push(volume.pattern_id);
-    const lastPage = body?.paginator?.last_page ?? page;
-    if (volumes.length === 0 || page >= lastPage || ids.length >= PULL_CAP) break;
+  for (let page = 1; ids.length < PULL_CAP; page += 1) {
+    const { ids: pageIds, hasMore } = await libraryPage(username, token, page);
+    ids.push(...pageIds);
+    if (!hasMore) break;
   }
   return ids.slice(0, PULL_CAP);
 }
 
 async function pullPatterns(ids: number[], token: string): Promise<unknown[]> {
   const unique = [...new Set(ids)].slice(0, PULL_CAP);
-  const details = await mapPool(unique, 4, (id) =>
-    ravelryJson<{ pattern?: unknown }>(`/patterns/${id}.json`, token).then((d) => d?.pattern ?? null),
-  );
-  return details.filter(notNull);
+  return await detailsFor(unique, token, (id) => `/patterns/${id}.json`, 'pattern');
 }
 
 Deno.serve(async (request: Request): Promise<Response> => {
@@ -314,10 +443,24 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // client maps with src/lib/ravelry/*; `pattern-pdf` returns one owned pattern's PDF to chart.
   let task = 'probe';
   let patternId = 0;
+  let page = 1;
+  let ids: number[] = [];
+  let draft: Record<string, unknown> = {};
   try {
-    const body = (await request.json()) as { task?: unknown; patternId?: unknown };
+    const body = (await request.json()) as {
+      task?: unknown;
+      patternId?: unknown;
+      page?: unknown;
+      ids?: unknown;
+      draft?: unknown;
+    };
     if (typeof body.task === 'string') task = body.task;
     if (typeof body.patternId === 'number') patternId = body.patternId;
+    if (typeof body.page === 'number' && body.page >= 1) page = Math.floor(body.page);
+    if (Array.isArray(body.ids)) ids = body.ids.filter((v): v is number => typeof v === 'number');
+    if (typeof body.draft === 'object' && body.draft !== null) {
+      draft = body.draft as Record<string, unknown>;
+    }
   } catch {
     // No body, or not JSON — probe it is.
   }
@@ -339,9 +482,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // reconnects — there is nothing to retry here.
   if (!tokens) return json({ error: 'Ravelry would not renew access. Connect it again.', connected: false }, 401);
 
-  // A rotated refresh token has to replace the old one or the next run fails with a token already spent.
-  if (tokens.refreshToken && tokens.refreshToken !== refreshToken) {
-    await storeRefreshToken(url, serviceKey, userId, await envelope(tokens.refreshToken, tokenKey));
+  // A rotated refresh token has to replace the old one or the next run fails with a token already
+  // spent. Ravelry rotates on every refresh, so this runs most times; a failure here is logged by
+  // storeRefreshToken, because a silent one strands the connection.
+  const rotated = Boolean(tokens.refreshToken && tokens.refreshToken !== refreshToken);
+  if (rotated) {
+    const restored = await storeRefreshToken(
+      url,
+      serviceKey,
+      userId,
+      await envelope(tokens.refreshToken as string, tokenKey),
+    );
+    console.log(JSON.stringify({ event: 'ravelry-import', step: 'rotate', rotated, restored }));
   }
 
   // One owned pattern's PDF, so the client can chart it (Phase 4). Returned as bytes for the client
@@ -405,14 +557,118 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const username = who.user?.username ?? connection.ravelry_username;
   if (!username) return json({ error: 'No Ravelry username to read from.' }, 502);
 
+  // The one write: a Knitwit project filed as a new Ravelry project.
+  //
+  // Create only. It never updates and never deletes, so the worst this can do to a knitter's
+  // notebook is put something in it — and the client only offers it for a project Ravelry has never
+  // seen, stamping it on success so the button cannot send the same project twice.
+  if (task === 'create-project') {
+    const name = typeof draft.name === 'string' ? draft.name.trim() : '';
+    if (!name) return json({ error: 'A project needs a name before it can go to Ravelry.' }, 400);
+
+    // The two names the client sent become the ids Ravelry wants; everything else passes straight
+    // through, so adding a field to the mapper needs no change here.
+    const { craft_name: craftName, status_name: statusName, ...rest } = draft;
+    const params: Record<string, unknown> = { ...rest, name };
+
+    const craftId = await idByName(
+      '/projects/crafts.json',
+      'crafts',
+      typeof craftName === 'string' ? craftName : 'Knitting',
+      tokens.accessToken,
+    );
+    const statusId = await idByName(
+      '/projects/project_statuses.json',
+      'project_statuses',
+      typeof statusName === 'string' ? statusName : 'In progress',
+      tokens.accessToken,
+    );
+    // A missing id is left out rather than guessed: Ravelry's own default for the field beats a
+    // number we made up. Only the craft is worth refusing over, since it decides where the project
+    // even lives.
+    if (!craftId) return json({ error: 'Ravelry did not recognise the craft for this project.' }, 502);
+    params.craft_id = craftId;
+    if (statusId) params.project_status_id = statusId;
+
+    const { response, shape } = await ravelryPost(
+      `/projects/${username}/create.json`,
+      params,
+      tokens.accessToken,
+    );
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 400);
+      console.error(
+        JSON.stringify({ event: 'ravelry-import', task: 'create-project', status: response.status, shape, detail }),
+      );
+      return json(
+        { error: 'Ravelry would not take this project. Nothing was changed there.', status: response.status },
+        502,
+      );
+    }
+
+    const created = (await response.json()) as {
+      project?: { id?: number; permalink?: string | null };
+    };
+    const id = created.project?.id;
+    if (!id) return json({ error: 'Ravelry took the project but did not say where it went.' }, 502);
+    const permalink = created.project?.permalink ?? '';
+
+    // Which parameter shape Ravelry accepted — worth knowing once, since the API reference is not
+    // public and this is the only way to find out.
+    console.log(JSON.stringify({ event: 'ravelry-import', task: 'create-project', ok: true, shape, id }));
+    return json({
+      ok: true,
+      id,
+      permalink,
+      url: permalink ? `https://www.ravelry.com/projects/${username}/${permalink}` : '',
+      ravelryUser: username,
+    });
+  }
+
+  // The paged tasks. Each is one bounded slice of work, so a real notebook arrives in pieces the
+  // client applies as they land — resumable, and with something honest to show while it runs. The
+  // client keeps asking while `hasMore` is true.
+  if (task === 'needles') {
+    // Small enough to never need paging: the whole drawer comes back in one list.
+    const body = await ravelryJson<{ needle_records?: unknown[] }>(
+      `/people/${username}/needles/list.json`,
+      tokens.accessToken,
+    );
+    return json({ ok: true, items: body?.needle_records ?? [], hasMore: false });
+  }
+
+  if (task === 'stash') {
+    const { items, hasMore } = await stashPage(username, tokens.accessToken, page);
+    return json({ ok: true, page, items, hasMore });
+  }
+
+  if (task === 'projects') {
+    const { items, hasMore } = await projectsPage(username, tokens.accessToken, page);
+    return json({ ok: true, page, items, hasMore });
+  }
+
+  if (task === 'library') {
+    const { ids: volumeIds, hasMore } = await libraryPage(username, tokens.accessToken, page);
+    return json({ ok: true, page, ids: volumeIds, hasMore });
+  }
+
+  // Details for the patterns the client asks for by id — the ones its projects point at, or its
+  // library listed, minus whatever it already has.
+  if (task === 'patterns') {
+    return json({ ok: true, items: await patternsByIds(ids, tokens.accessToken), hasMore: false });
+  }
+
   if (task === 'pull') {
     const needlesResponse = await ravelryJson<{ needle_records?: unknown[] }>(
       `/people/${username}/needles/list.json`,
       tokens.accessToken,
     );
     const needles = needlesResponse?.needle_records ?? [];
-    const stash = await pullStash(username, tokens.accessToken);
-    const { projects, patternIds } = await pullProjects(username, tokens.accessToken);
+    const stash = await pullAll((p) => stashPage(username, tokens.accessToken, p));
+    const projects = await pullAll((p) => projectsPage(username, tokens.accessToken, p));
+    const patternIds = projects
+      .map((p) => (p as { pattern_id?: number | null }).pattern_id)
+      .filter(notNull);
     const libraryIds = await pullLibraryPatternIds(username, tokens.accessToken);
     const patterns = await pullPatterns([...patternIds, ...libraryIds], tokens.accessToken);
 

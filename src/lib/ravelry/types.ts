@@ -24,6 +24,12 @@ export type RavelryYarn = {
   yarn_company?: { name?: string | null } | null;
   yarn_weight?: { name?: string | null } | null; // "DK", "Fingering", …
   yarn_fibers?: RavelryFiber[] | null;
+  // The tools the yarn is meant for. Present as an object when the yarn says so, null when it does
+  // not — which is how a crochet-only yarn gives itself away: hook sizes and no needle sizes.
+  min_needle_size?: object | null;
+  max_needle_size?: object | null;
+  min_hook_size?: object | null;
+  max_hook_size?: object | null;
 };
 
 // One quantity line against a stash entry. A stash entry can hold several (a split skein, a second
@@ -34,6 +40,7 @@ export type RavelryStashPack = {
   meters_per_skein?: number | null;
   yards_per_skein?: number | null;
   total_paid?: string | null;
+  skeins?: number | null; // how many the knitter has of this pack; fractional (2.0, 1.5)
 };
 
 export type RavelryStash = {
@@ -44,6 +51,10 @@ export type RavelryStash = {
   dye_lot?: string | null; // "123"
   yarn_weight_name?: string | null; // "DK" — the stash entry's own, may differ from the yarn's
   notes?: string | null;
+  location?: string | null; // free text: "attic box 3"
+  // "In stash", "Used up", "Will not use", "For sale", "For trade" — a longer list than Knitwit's
+  // three, folded by keyword rather than by id (ids are not documented and only one was observed).
+  stash_status?: { name?: string | null } | null;
   photos?: RavelryPhoto[] | null;
   yarn?: RavelryYarn | null;
   packs?: RavelryStashPack[] | null;
@@ -80,9 +91,19 @@ export type RavelryPatternNeedleSize = {
   name?: string | null; // the US label, e.g. "US 2½ - 3.0 mm"
 };
 
+// One tag from Ravelry's fixed pattern vocabulary. A controlled list, not free text, which is what
+// makes it worth reading — but it mixes skills in with who the pattern is for, how it fits and what
+// shape it is: `female`, `adult`, `negative-ease`, `crew-neck`, `top-down`, `cables`. Only the
+// permalink is given on a pattern (no display name), so the permalink is what gets matched.
+export type RavelryPatternAttribute = {
+  id?: number | null;
+  permalink?: string | null; // "crew-neck", "top-down", "cables"
+};
+
 export type RavelryPattern = {
   id: number;
   permalink?: string | null; // → the Ravelry library page
+  url?: string | null; // the designer's own page for it, off Ravelry
   name?: string | null;
   notes?: string | null; // the designer's description, plain text
   gauge?: number | null; // stitches per gauge_divisor
@@ -95,6 +116,7 @@ export type RavelryPattern = {
   difficulty_count?: number | null;
   craft?: { name?: string | null } | null; // "Knitting" | "Crochet"
   pattern_type?: { name?: string | null } | null; // "Tank/Camisole"
+  pattern_attributes?: RavelryPatternAttribute[] | null;
   pattern_categories?: RavelryPatternCategory[] | null;
   pattern_needle_sizes?: RavelryPatternNeedleSize[] | null;
   pattern_author?: { name?: string | null } | null;
@@ -123,7 +145,9 @@ export type RavelryProject = {
   pattern_id?: number | null; // → the pattern this was made from, to link an imported card
   craft_name?: string | null; // "Knitting" | "Crochet"
   status_name?: string | null; // "In progress" | "Finished" | "Frogged" | "Hibernating" | …
+  progress?: number | null; // percent complete, 0–100; null when the knitter never set it
   started?: string | null; // "2026/10/01"
+  completed?: string | null; // "2026/10/12" — when it came off the needles
   personal_source_name?: string | null;
   notes?: string | null;
   tag_names?: string[] | null;
