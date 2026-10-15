@@ -243,6 +243,11 @@ export type PatternMaterial = {
   id: string; // slot id, unique within the pattern
   label: string;
   short: string; // one-letter tag used in charts, e.g. "A"
+  // A hex colour (`#rrggbb`) for the slot, when the pattern is colourwork and the slot *is* a
+  // colour rather than a generic "main / contrast" yarn. Set by the pixel-pattern builder, where
+  // each slot is one swatch sampled from a photo; the chart fills every cell worked in the slot
+  // with it. Optional — ordinary patterns leave it unset and their charts stay monochrome.
+  color?: string;
   // How many skeins the pattern calls for, one number per size. Sized for the same reason cast-on
   // and row counts are: a 4XL eats more yarn than an XS, and a knitter buying wool needs the
   // number for the size they are actually making. Optional — most patterns predate the field, and

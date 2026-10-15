@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
+import { PixelPatternBuilder, type PixelPatternResult } from '@/components/pixel-pattern-builder';
 import { GaugeField } from '@/components/gauge-field';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -120,6 +121,8 @@ export default function NewPatternWizardScreen() {
   const [reading, setReading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
+  // Whether the photo-to-colourwork builder is open on the Import step.
+  const [pixelOpen, setPixelOpen] = useState(false);
   // Held in a ref, not state: aborting must work from an unmount cleanup, which never sees a
   // re-render's state.
   const readRef = useRef<AbortController | null>(null);
@@ -224,6 +227,25 @@ export default function NewPatternWizardScreen() {
     setStep((s) => s + 1);
   };
 
+  // A pixel pattern fills in craft, the colour slots and the one charted section, then jumps to
+  // Basics like an accepted import — the knitter names it and reviews the rest. The source photo is
+  // kept the usual way (bytes to their own key, id on the record).
+  const applyPixel = (result: PixelPatternResult) => {
+    setForm((f) => ({
+      ...f,
+      craft: result.craft,
+      materials: result.materials,
+      sections: [result.section],
+      name: f.name || 'Pixel pattern',
+      photo: null,
+    }));
+    void putPhoto(result.photoDataUrl)
+      .then((id) => setForm((f) => ({ ...f, photo: id })))
+      .catch(() => setPhotoError(PHOTO_STORAGE_FULL));
+    setPixelOpen(false);
+    setStep((s) => s + 1);
+  };
+
   const skipImport = () => {
     // Nothing to carry forward — clear anything captured and move on to the manual details.
     setForm((f) => ({ ...f, sourceName: '', sourceText: '' }));
@@ -311,6 +333,25 @@ export default function NewPatternWizardScreen() {
                   minHeight={72}
                   style={styles.pasteBox}
                 />
+              </View>
+
+              <View style={styles.field}>
+                <ThemedText type="smallBold" themeColor="inkSoft">
+                  Or turn a photo into a pixel pattern
+                </ThemedText>
+                {pixelOpen ? (
+                  <PixelPatternBuilder
+                    initialCraft={form.craft === 'crochet' ? 'crochet' : 'knit'}
+                    onUse={applyPixel}
+                    onCancel={() => setPixelOpen(false)}
+                  />
+                ) : (
+                  <Pressable style={styles.uploadBtn} onPress={() => setPixelOpen(true)}>
+                    <ThemedText type="smallBold" themeColor="inkSoft" numberOfLines={1}>
+                      🧶 Create a pixel pattern from a photo…
+                    </ThemedText>
+                  </Pressable>
+                )}
               </View>
 
               {form.sourceText.trim().length > 0 && !imported && (

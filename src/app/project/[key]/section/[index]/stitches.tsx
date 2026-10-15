@@ -18,6 +18,11 @@ export default function ProjectSectionStitchesScreen() {
 
   const project = useKnitwitStore((state) => state.projects[key]);
   const setSectionStitches = useKnitwitStore((state) => state.setSectionStitches);
+  // Colourwork colours live on the originating pattern's slots; the project's rows still point at
+  // them. Looked up live so a pixel section edited in a project shows its colours too.
+  const patternMaterials = useKnitwitStore((state) =>
+    project?.patternId ? state.patterns[project.patternId]?.materials : undefined,
+  );
   const section = project?.sections[sectionIndex];
   usePageTitle(section ? `${section.name} · stitches` : undefined);
 
@@ -52,6 +57,7 @@ export default function ProjectSectionStitchesScreen() {
             patternGauge={project.gauge?.pattern ?? null}
             swatchGauge={project.gauge?.mine ?? null}
             multiple={section.stitchMultiple}
+            materials={patternMaterials}
             onSave={(draft) => {
               setSectionStitches(key, sectionIndex, {
                 ...draft,
