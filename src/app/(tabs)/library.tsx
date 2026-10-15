@@ -193,7 +193,7 @@ export default function LibraryScreen() {
                     style={styles.stashRow}
                     href={`/material/${id}`}>
                     <Thumb photo={m.photo}>
-                      <YarnSkein color={yarnSwatchColor(m.colorName)} size={44} />
+                      <YarnSkein color={yarnSwatchColor(m.colorName, m.swatch)} size={44} />
                     </Thumb>
                     <View style={styles.techInfo}>
                       <ThemedText type="smallBold">

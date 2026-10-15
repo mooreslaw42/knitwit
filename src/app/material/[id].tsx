@@ -7,6 +7,7 @@ import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/
 import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
 import { PhotoImage } from '@/components/photo';
+import { SwatchField } from '@/components/swatch-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
@@ -26,6 +27,7 @@ const BLANK: Material = {
   brand: '',
   colorName: '',
   colorLot: '',
+  swatch: null,
   price: '',
   weight: '',
   grams: '',
@@ -246,6 +248,12 @@ export default function MaterialEditScreen() {
             label="Color lot"
             value={form.colorLot}
             onChangeText={(v) => set('colorLot', v)}
+          />
+          <SwatchField
+            value={form.swatch}
+            colorName={form.colorName}
+            photo={form.photo}
+            onChange={(swatch) => set('swatch', swatch)}
           />
           <FormField
             label="Price (€)"

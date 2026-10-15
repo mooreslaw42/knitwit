@@ -19,7 +19,12 @@ const WORDS: [RegExp, string][] = [
 ];
 const FALLBACK = [Colors.blushDeep, Colors.sageDeep, Colors.lavenderDeep, Colors.coralDeep, Colors.butterDeep];
 
-export function yarnSwatchColor(colorName: string): string {
+// `swatch` is the yarn's real colour, set by the knitter or taken off its photo. Guessing from the
+// name is the fallback for a stash that predates the field — it is a decent placeholder and a poor
+// match, since "Dusty Rose", "Rose Quartz" and "Blush" all land on the same pink and anything
+// unrecognised gets an arbitrary colour from the hash below.
+export function yarnSwatchColor(colorName: string, swatch?: string | null): string {
+  if (swatch) return swatch;
   for (const [pattern, hex] of WORDS) if (pattern.test(colorName)) return hex;
   let h = 0;
   for (let i = 0; i < colorName.length; i++) h = (h * 31 + colorName.charCodeAt(i)) | 0;
