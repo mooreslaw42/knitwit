@@ -4,6 +4,46 @@ Server-side code. The one rule that governs everything here: **the language mode
 called from this directory.** The app ships to the web, so anything in the client bundle is public
 — an API key there would be readable by anyone who opens devtools.
 
+## `extract-pdf`
+
+Pulls the text layer out of an uploaded PDF. No model, no prompt, no key, no spend — it extracts
+characters and hands them back.
+
+It exists because this cannot run in the app. The library that reads a PDF is pdf.js, which wants
+`DOMMatrix`, `Path2D` and `OffscreenCanvas`. A browser has them; Hermes does not. The app used to
+call pdf.js directly, so uploading a PDF worked on the web and threw on every phone — and the
+thrown error was reported to the knitter as "it might be password-protected", which sent people
+looking for a problem with their file. Deno has those globals, so both platforms now take one path.
+
+**Request** (`POST`): the raw PDF bytes as the body — not JSON, and not base64, which would inflate
+a 12MB file into a 16MB string for the phone to build and hold.
+
+```
+supabase.functions.invoke('extract-pdf', { body: arrayBuffer })
+```
+
+**Response**
+
+```jsonc
+{ "text": "CAMISOLE NO. 9 …", "pages": 9 }
+```
+
+| Status | Body | Means |
+|---|---|---|
+| 400 | `{ "error": "That file is empty." }` | Nothing was sent |
+| 405 | `{ "error": "Send the PDF as a POST body." }` | Not a POST |
+| 413 | `{ "error": "That file is too big to read (over 12MB)." }` | Over the cap the app also enforces |
+| 422 | `{ "error": "unreadable" }` | pdf.js would not open it: encrypted, truncated, or not a PDF |
+
+`unreadable` is a sentinel rather than a sentence. The app turns it into wording for a knitter
+(`extractMessage` in `src/lib/read-pattern-file.ts`), so the copy lives with the rest of the UI
+copy instead of in a server log.
+
+**What it deliberately does not do:** decide whether the text is any good. A PDF whose text layer
+is nearly empty is a scan — words as pixels — and the app refuses it with `looksLikeScan` rather
+than running OCR, because a bad OCR pass produces plausible-looking nonsense. Whether the
+characters amount to a *pattern* is `parse-pattern`'s question.
+
 ## `parse-pattern`
 
 Two tasks, one function — they share a provider, a cached prompt discipline, and the rule that the
