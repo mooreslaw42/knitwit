@@ -273,9 +273,12 @@ not worth a second field yet), a gauge's stitch pattern (`gauge_pattern`), socia
 
 1. ~~**Ravelry OAuth2 may not grant project/stash read scopes.**~~ **Resolved (2026-10-13):**
    `offline` with no `profile-only` grants full notebook read+write. See Phase 0.
-2. **Photo URLs must be hotlinkable without auth.** The "URL + thumbnail, don't copy bytes" choice
-   depends on Ravelry project and library photos being public CDN links. If any are auth-gated, the
-   URL approach breaks for those and needs a fallback.
+2. ~~**Photo URLs must be hotlinkable without auth.**~~ **Resolved (2026-10-15):** both a private
+   project's photo and a pattern's come back `200 image/jpeg` from `images4-*.ravelrycache.com` with
+   no `Authorization` header at all — the CDN does not gate on the notebook's privacy. So "URL +
+   thumbnail, don't copy bytes" holds, and no fallback is needed. Re-check if Ravelry ever moves to
+   signed URLs: the symptom would be imported photos turning into broken images some days later,
+   not at import time.
 3. **Getting the owned PDF out of Ravelry** (Phase 4) is the one part still unverified — the import
    now reuses the app's existing client-side PDF extraction, so the only guess left is how Ravelry
    exposes an owned pattern's PDF. The `pattern-pdf` task reads `pattern.pdf_url`; it needs a real
