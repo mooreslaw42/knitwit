@@ -39,6 +39,11 @@ export type UserSettings = {
   // an email address, and a name that also had to be unique would be a different thing entirely.
   // Absent on a device that predates it, which reads as "not said" rather than empty.
   displayName?: string;
+  // What the knitter's time is worth, per hour, in the same currency the stash prices are in
+  // (euros — see the material form). Feeds a project's estimated labour cost. Absent until set,
+  // which reads as "not said": the cost section then simply shows materials and time, not a
+  // made-up labour figure.
+  hourlyFee?: number;
 };
 
 // One entry per day the knitter actually knitted. Keyed by *local* date, because a streak is

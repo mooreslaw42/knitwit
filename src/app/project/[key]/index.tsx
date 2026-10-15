@@ -12,7 +12,9 @@ import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
+  formatClock,
   formatStarted,
+  projectCost,
   projectMaterialIds,
   projectProgress,
   projectState,
@@ -23,6 +25,23 @@ import { formatGaugeIn } from '@/lib/gauge';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
+// Euros, the currency the stash is priced in (see the material form). Always two places: this is
+// money, and "€12.5" reads like a typo where "€12.50" reads like a price.
+function formatEuros(amount: number): string {
+  return `€${amount.toFixed(2)}`;
+}
+
+// A length of time the way you'd say it out loud — "4h 30m", "45m" — rounded to the minute,
+// because an estimate quoted to the second claims a precision it plainly doesn't have.
+function formatDuration(seconds: number): string {
+  const mins = Math.round(seconds / 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
+
 export default function ProjectDetailScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
   const router = useRouter();
@@ -31,6 +50,7 @@ export default function ProjectDetailScreen() {
     project?.patternId ? state.patterns[project.patternId] : null,
   );
   const unit = useKnitwitStore((state) => state.settings.gaugeUnit);
+  const hourlyFee = useKnitwitStore((state) => state.settings.hourlyFee);
   const materials = useKnitwitStore((state) => state.materials);
   usePageTitle(project?.name);
   const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
@@ -43,6 +63,12 @@ export default function ProjectDetailScreen() {
   // Only the yarns that are actually in the stash: a section can still point at one the knitter
   // deleted, and a row with no name to put on it is no use to anybody.
   const yarns = projectMaterialIds(project).filter((id) => materials[id]);
+
+  // Yarn, time, and what the two come to. Shown once there's either a priced yarn or time on the
+  // clock — before that it's an empty table of noughts, which is no more use here than it was for
+  // the yarn card above.
+  const cost = projectCost(project, materials, hourlyFee);
+  const showCost = cost.materialCost > 0 || cost.secondsSpent > 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -163,6 +189,75 @@ export default function ProjectDetailScreen() {
             </Card>
           ) : null}
 
+          {/* What the make has cost and is on course to cost: the yarn at its ball price, the time
+              already on the clock, and — once there's a pace to read it from — an estimate of the
+              whole project's hours and what they come to at the knitter's fee. */}
+          {showCost ? (
+            <Card style={styles.costCard}>
+              <ThemedText type="small" themeColor="inkSoft">
+                Cost
+              </ThemedText>
+
+              <View style={styles.costRow}>
+                <ThemedText type="small" themeColor="inkSoft" style={styles.costLabel}>
+                  Materials
+                </ThemedText>
+                <ThemedText type="smallBold">{formatEuros(cost.materialCost)}</ThemedText>
+              </View>
+
+              <View style={styles.costRow}>
+                <ThemedText type="small" themeColor="inkSoft" style={styles.costLabel}>
+                  Time so far
+                </ThemedText>
+                <ThemedText type="smallBold">
+                  {cost.secondsSpent > 0 ? formatClock(cost.secondsSpent) : '—'}
+                </ThemedText>
+              </View>
+
+              <View style={styles.costRow}>
+                <ThemedText type="small" themeColor="inkSoft" style={styles.costLabel}>
+                  Estimated total time
+                </ThemedText>
+                <ThemedText type="smallBold">
+                  {cost.estimatedSeconds != null ? formatDuration(cost.estimatedSeconds) : '—'}
+                </ThemedText>
+              </View>
+
+              <View style={styles.costRow}>
+                <ThemedText type="small" themeColor="inkSoft" style={styles.costLabel}>
+                  Labour
+                </ThemedText>
+                <ThemedText type="smallBold">
+                  {cost.laborCost != null ? formatEuros(cost.laborCost) : '—'}
+                </ThemedText>
+              </View>
+
+              {/* The number this card exists to produce: yarn plus labour, bold. Labour is left out
+                  of the total — not counted as zero — until it can actually be worked out, so the
+                  total never quietly understates the make. */}
+              <View style={[styles.costRow, styles.costTotalRow]}>
+                <ThemedText type="smallBold">Estimated cost</ThemedText>
+                <ThemedText type="smallBold" themeColor="sageDeep">
+                  {formatEuros(cost.materialCost + (cost.laborCost ?? 0))}
+                </ThemedText>
+              </View>
+
+              {/* Only the two things that leave the estimate incomplete get a nudge, and only when
+                  they're actually missing: no pace yet, or no fee to price it at. */}
+              {cost.estimatedSeconds == null ? (
+                <ThemedText type="small" themeColor="inkSoft">
+                  Count some rows to estimate how long the whole project will take.
+                </ThemedText>
+              ) : cost.laborCost == null ? (
+                <Pressable hitSlop={6} onPress={() => router.push('/account')}>
+                  <ThemedText type="small" themeColor="sageDeep">
+                    Set your hourly fee in Account to price your time →
+                  </ThemedText>
+                </Pressable>
+              ) : null}
+            </Card>
+          ) : null}
+
           <NotesCard
             value={project.notes}
             onChange={(notes) => setProjectNotes(key, notes)}
@@ -233,6 +328,24 @@ const styles = StyleSheet.create({
   },
   skeinUnit: {
     width: 44,
+  },
+  costCard: {
+    gap: Spacing.two,
+  },
+  costRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  costLabel: {
+    flex: 1,
+  },
+  costTotalRow: {
+    marginTop: Spacing.one,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: Colors.creamDeep,
   },
   container: {
     flex: 1,
