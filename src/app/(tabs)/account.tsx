@@ -32,6 +32,8 @@ export default function AccountScreen() {
   // A name already given is a settled thing, not a question still being asked. It goes back to
   // being a field only when the knitter says so.
   const [editingName, setEditingName] = useState(false);
+  const savedFee = useKnitwitStore((state) => state.settings.hourlyFee);
+  const [fee, setFee] = useState(savedFee == null ? '' : String(savedFee));
   const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
   const level = standing(achievements);
@@ -167,6 +169,46 @@ export default function AccountScreen() {
         </View>
 
         <ThemedText type="smallBold" style={styles.label}>
+          Your time
+        </ThemedText>
+        <ThemedText type="small" themeColor="inkSoft">
+          What an hour of your knitting is worth, in euros. A project works out its estimated
+          labour cost from this and the pace you&apos;re going at. Leave it blank and a project
+          simply shows its yarn and the time on the clock, with no figure put on your hours.
+        </ThemedText>
+        <View style={styles.feeRow}>
+          <ThemedText type="smallBold" themeColor="inkSoft">
+            €
+          </ThemedText>
+          <TextInput
+            value={fee}
+            onChangeText={setFee}
+            style={[styles.input, styles.feeInput]}
+            placeholder="0"
+            placeholderTextColor={Colors.inkSoft}
+            keyboardType="decimal-pad"
+            accessibilityLabel="Your hourly fee in euros"
+          />
+          <ThemedText type="small" themeColor="inkSoft">
+            per hour
+          </ThemedText>
+        </View>
+        <PillButton
+          onPress={() => {
+            // A comma is how a euro is written here; an empty box clears the fee rather than
+            // storing a zero, so "not said" stays distinct from "my time is worth nothing".
+            const n = parseFloat(fee.replace(',', '.'));
+            updateSettings({
+              hourlyFee: fee.trim() && Number.isFinite(n) && n >= 0 ? n : undefined,
+            });
+          }}
+          style={styles.saveBtn}>
+          <ThemedText type="smallBold" themeColor="white">
+            Save
+          </ThemedText>
+        </PillButton>
+
+        <ThemedText type="smallBold" style={styles.label}>
           Your data
         </ThemedText>
         <ThemedText type="small" themeColor="inkSoft">
@@ -279,6 +321,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
     marginTop: Spacing.one,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  feeInput: {
+    flex: 1,
   },
   unitChip: {
     backgroundColor: Colors.creamDeep,

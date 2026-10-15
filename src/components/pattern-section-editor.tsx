@@ -366,7 +366,15 @@ const BLANK_SECTION: EditSection = {
 // What the parser made of a section, shown where the knitter is reviewing an import: how many
 // rows were charted, how many were too irregular, and the chart itself behind a tap. Collapsed by
 // default — ten sections of open charts would bury the rest of the form.
-function SectionRowsPreview({ section, craft }: { section: EditSection; craft: TechniqueCraft }) {
+function SectionRowsPreview({
+  section,
+  craft,
+  materials,
+}: {
+  section: EditSection;
+  craft: TechniqueCraft;
+  materials?: PatternMaterial[];
+}) {
   const [open, setOpen] = useState(false);
   const rows = section.rows;
   if (rows.length === 0) return null;
@@ -392,7 +400,9 @@ function SectionRowsPreview({ section, craft }: { section: EditSection; craft: T
       </Pressable>
       {open && (
         <>
-          {charted > 0 && <StitchChart rows={rows} castOn={castOn} craft={craft} />}
+          {charted > 0 && (
+            <StitchChart rows={rows} castOn={castOn} craft={craft} materials={materials} />
+          )}
           <ThemedText type="small" themeColor="inkSoft">
             Save the pattern, then open this section to edit the stitches or read the remaining
             rows with AI.
@@ -517,7 +527,7 @@ export function PatternSectionsEditor({
           {/* Rows that were already charted — from an import, or from a previous edit. Read-only
               here: this is the review, and the stitch editor is where they're changed. Without it
               there was no way to see what an import had actually understood before saving. */}
-          <SectionRowsPreview section={section} craft={craft} />
+          <SectionRowsPreview section={section} craft={craft} materials={materials} />
 
           {materials.length > 0 && (
             <View style={styles.field}>

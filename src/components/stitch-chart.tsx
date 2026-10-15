@@ -6,7 +6,7 @@ import { STITCHES } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { chartLimitNote, KNIT_CHART_LIMITS, rowsWithinBudget } from '@/lib/chart-limits';
 import { resolveRowGroups, rowStitchesAfter, sectionRowCounts } from '@/lib/knitwit-helpers';
-import type { PatternRow, TechniqueCraft } from '@/types/knitwit';
+import type { PatternMaterial, PatternRow, TechniqueCraft } from '@/types/knitwit';
 
 // A knitting chart, drawn the way knitters read one: bottom row first, stitches right-to-left,
 // one cell per stitch worked, row numbers down the right edge. Wrong-side rows are shaded so the
@@ -19,23 +19,35 @@ const CELL = 22;
 const LIMITS = KNIT_CHART_LIMITS;
 
 // A cell remembers which stitch group produced it, so tapping any cell of a run ("k to last 1"
-// draws 18 cells but is one editable group) selects that group.
-type Cell = { type: string; symbol: string; groupIndex: number };
+// draws 18 cells but is one editable group) selects that group. `color` is set only for colourwork
+// — a cell worked in a slot that carries a hex colour — and turns the cell into a painted square.
+type Cell = { type: string; symbol: string; groupIndex: number; color?: string };
 
 export type ChartSelection = { rowIndex: number; groupIndex: number };
+
+// Slot id → hex colour, for the colourwork cells. Empty for an ordinary pattern, whose chart stays
+// monochrome symbols.
+function slotColorMap(materials?: PatternMaterial[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of materials ?? []) if (m.color) map.set(m.id, m.color);
+  return map;
+}
 
 function rowCells(
   row: PatternRow,
   stitchesBefore: number,
   sizeIndex = 0,
+  slotColor?: Map<string, string>,
 ): { cells: Cell[]; clipped: boolean } {
   const cells: Cell[] = [];
   const resolved = resolveRowGroups(row, stitchesBefore, sizeIndex);
   for (let groupIndex = 0; groupIndex < resolved.length; groupIndex++) {
-    const def = STITCHES[resolved[groupIndex].group.type];
+    const group = resolved[groupIndex].group;
+    const def = STITCHES[group.type];
+    const color = group.materialSlot ? slotColor?.get(group.materialSlot) : undefined;
     for (let i = 0; i < resolved[groupIndex].units; i++) {
       if (cells.length >= LIMITS.maxStitchesPerRow) return { cells, clipped: true };
-      cells.push({ type: resolved[groupIndex].group.type, symbol: def ? def.symbol : '?', groupIndex });
+      cells.push({ type: group.type, symbol: def ? def.symbol : '?', groupIndex, color });
     }
   }
   return { cells, clipped: false };
@@ -50,6 +62,7 @@ export function StitchRowStrip({
   craft = 'knit',
   showStitchCount = false,
   sizeIndex = 0,
+  materials,
 }: {
   rows: PatternRow[];
   castOn: number;
@@ -58,16 +71,24 @@ export function StitchRowStrip({
   sizeIndex?: number;
   // The live running stitch count after this row — what you should have on the needle.
   showStitchCount?: boolean;
+  // The pattern's material slots, so a colourwork slot's colour can paint its cells. See
+  // slotColorMap.
+  materials?: PatternMaterial[];
 }) {
   const row = rows[rowIndex];
   if (!row) return null;
 
   const before = sectionRowCounts(rows, castOn, sizeIndex);
-  const { cells, clipped } = rowCells(row, before[rowIndex], sizeIndex);
+  const slotColor = slotColorMap(materials);
+  const { cells, clipped } = rowCells(row, before[rowIndex], sizeIndex, slotColor);
   const ws = row.side === 'WS';
   const after = rowStitchesAfter(row, before[rowIndex], sizeIndex);
 
-  const crochet = craft === 'crochet';
+  // Colourwork is drawn as the grid whichever craft it is — a tapestry-crochet graph is a grid of
+  // colours, not the stitch-height diagram the crochet chart draws. So the diagram is only used
+  // when there are no colours to show.
+  const colorwork = cells.some((c) => c.color);
+  const crochet = craft === 'crochet' && !colorwork;
 
   return (
     <View style={styles.stripWrap}>
@@ -87,8 +108,10 @@ export function StitchRowStrip({
             </View>
           )}
           {cells.map((c, i) => (
-            <View key={i} style={[styles.cell, ws && styles.cellWs]}>
-              <ThemedText style={styles.symbol}>{c.symbol}</ThemedText>
+            <View
+              key={i}
+              style={[styles.cell, ws && styles.cellWs, c.color ? { backgroundColor: c.color } : null]}>
+              {c.color ? null : <ThemedText style={styles.symbol}>{c.symbol}</ThemedText>}
             </View>
           ))}
         </View>
@@ -107,12 +130,14 @@ export function StitchChart({
   sizeIndex = 0,
   worked,
   onRowLayout,
+  materials,
 }: {
   rows: PatternRow[];
   castOn: number;
   // Crochet gets its own diagram rather than this grid. The two aren't variants of one drawing:
   // a knitting chart is one square per stitch, a crochet chart is a picture of the stitches at
-  // their real heights. See crochet-chart.tsx.
+  // their real heights. See crochet-chart.tsx. The exception is colourwork (below): a colourwork
+  // crochet graph is a grid of colours, so it uses this chart whatever the craft.
   craft?: TechniqueCraft;
   sizeIndex?: number;
   selected?: ChartSelection | null;
@@ -123,9 +148,16 @@ export function StitchChart({
   worked?: number;
   // Where each row line sits, so a caller owning the scroller can keep the current row in view.
   onRowLayout?: (index: number, y: number) => void;
+  // The pattern's material slots, so colourwork cells can be painted their slot's colour and the
+  // legend can name each colour. See slotColorMap.
+  materials?: PatternMaterial[];
 }) {
   if (rows.length === 0) return null;
-  if (craft === 'crochet') {
+  const slotColor = slotColorMap(materials);
+  const colorwork =
+    slotColor.size > 0 &&
+    rows.some((row) => row.stitches.some((g) => g.materialSlot && slotColor.has(g.materialSlot)));
+  if (craft === 'crochet' && !colorwork) {
     return <CrochetChart rows={rows} castOn={castOn} sizeIndex={sizeIndex} worked={worked} />;
   }
 
@@ -134,7 +166,7 @@ export function StitchChart({
   const all = rows.map((row, index) => ({
     row,
     index,
-    ...rowCells(row, before[index], sizeIndex),
+    ...rowCells(row, before[index], sizeIndex, slotColor),
   }));
   const rowsShown = rowsWithinBudget(
     all.map((d) => d.cells.length),
@@ -152,6 +184,10 @@ export function StitchChart({
 
   // Which symbols actually appear, for the legend.
   const usedTypes = Array.from(new Set(drawn.flatMap((d) => d.cells.map((c) => c.type))));
+  // Which colour slots actually appear, so the colour key lists only colours the chart shows.
+  const usedSlots = new Set(
+    drawn.flatMap((d) => d.row.stitches.map((g) => g.materialSlot).filter((s): s is string => !!s)),
+  );
 
   return (
     <View style={styles.wrap}>
@@ -203,9 +239,12 @@ export function StitchChart({
                     const style = [
                       styles.cell,
                       ws && styles.cellWs,
+                      c.color ? { backgroundColor: c.color } : null,
                       isSelected && styles.cellSelected,
                     ];
-                    const glyph = <ThemedText style={styles.symbol}>{c.symbol}</ThemedText>;
+                    const glyph = c.color ? null : (
+                      <ThemedText style={styles.symbol}>{c.symbol}</ThemedText>
+                    );
                     return onSelectStitch ? (
                       <Pressable
                         key={i}
@@ -241,20 +280,33 @@ export function StitchChart({
       ) : null}
 
       <View style={styles.legend}>
-        {usedTypes.map((t) => {
-          const def = STITCHES[t];
-          if (!def) return null;
-          return (
-            <View key={t} style={styles.legendItem}>
-              <View style={styles.legendCell}>
-                <ThemedText style={styles.symbol}>{def.symbol}</ThemedText>
-              </View>
-              <ThemedText type="small" themeColor="inkSoft">
-                {def.abbr} · {def.label}
-              </ThemedText>
-            </View>
-          );
-        })}
+        {colorwork
+          ? // A colour key: which swatch is which yarn. The stitch is the same in every cell, so the
+            // symbol legend would say nothing — the colours are the whole chart.
+            (materials ?? [])
+              .filter((m) => m.color && usedSlots.has(m.id))
+              .map((m) => (
+                <View key={m.id} style={styles.legendItem}>
+                  <View style={[styles.legendCell, { backgroundColor: m.color }]} />
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {m.short} · {m.label}
+                  </ThemedText>
+                </View>
+              ))
+          : usedTypes.map((t) => {
+              const def = STITCHES[t];
+              if (!def) return null;
+              return (
+                <View key={t} style={styles.legendItem}>
+                  <View style={styles.legendCell}>
+                    <ThemedText style={styles.symbol}>{def.symbol}</ThemedText>
+                  </View>
+                  <ThemedText type="small" themeColor="inkSoft">
+                    {def.abbr} · {def.label}
+                  </ThemedText>
+                </View>
+              );
+            })}
       </View>
     </View>
   );

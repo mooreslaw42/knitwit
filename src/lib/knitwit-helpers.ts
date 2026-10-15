@@ -1,6 +1,7 @@
 // Ported from reference/index.html's project/section helper functions.
 import { STITCHES } from '@/constants/catalogs';
 import type {
+  Material,
   PatternRow,
   PatternStitchGroup,
   Project,
@@ -145,6 +146,52 @@ export function projectProgress(p: Project): { done: number; total: number; pct:
     total += s.totalRows;
   });
   return { done, total, pct: total ? done / total : 0 };
+}
+
+// What a make has cost and is on course to cost. Two halves: the yarn, which is a known price the
+// moment it's bought, and the knitter's time, which can only be guessed at from the pace so far.
+//
+// Yarn: every stash yarn the project needs, its skein count times its ball price. A yarn with no
+// price, or none chosen yet, contributes nothing rather than an NaN — "not priced" is not "free",
+// but it's also not a number we can add up.
+//
+// Time: the clock on each section, summed, is what's gone in already. The estimate scales that up
+// by how far along the project is — an hour in at 10% projects to ten hours. It needs both a pace
+// to read (some time banked) and something to divide by (some rows counted), so it stays blank
+// until a project has actually been worked on; a cost quoted from zero progress is a guess dressed
+// as an answer. Labour cost is that estimate at the knitter's hourly fee, blank until they've set
+// one.
+export function projectCost(
+  project: Project,
+  materials: Record<string, Material>,
+  hourlyFee?: number,
+): {
+  materialCost: number;
+  secondsSpent: number;
+  pct: number;
+  estimatedSeconds: number | null;
+  laborCost: number | null;
+} {
+  let materialCost = 0;
+  const skeins = project.materialSkeins ?? {};
+  Object.keys(skeins).forEach((id) => {
+    const material = materials[id];
+    const count = skeins[id];
+    if (!material || !count) return;
+    const price = parseFloat(material.price);
+    if (!Number.isFinite(price)) return;
+    materialCost += count * price;
+  });
+
+  const secondsSpent = project.sections.reduce((n, s) => n + (s.seconds || 0), 0);
+  const pct = projectProgress(project).pct;
+  const estimatedSeconds = pct > 0 && secondsSpent > 0 ? secondsSpent / pct : null;
+
+  const fee = typeof hourlyFee === 'number' && hourlyFee > 0 ? hourlyFee : null;
+  const laborCost =
+    estimatedSeconds != null && fee != null ? (estimatedSeconds / 3600) * fee : null;
+
+  return { materialCost, secondsSpent, pct, estimatedSeconds, laborCost };
 }
 
 // How many of a tool are currently tied up in a project. A tool counts as in use once for every

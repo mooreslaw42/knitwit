@@ -10,6 +10,7 @@ import {
   parseSizeRun,
   parseStartedText,
   patternSectionMarkers,
+  projectCost,
   projectProgress,
   projectState,
   resolveRowGroups,
@@ -22,7 +23,34 @@ import {
   projectMaterialIds,
   toolInUseCount,
 } from '@/lib/knitwit-helpers';
-import type { PatternRow, PatternStitchGroup, Project, ProjectSection } from '@/types/knitwit';
+import type {
+  Material,
+  PatternRow,
+  PatternStitchGroup,
+  Project,
+  ProjectSection,
+} from '@/types/knitwit';
+
+function material(overrides: Partial<Material> = {}): Material {
+  return {
+    brand: 'Brand',
+    colorName: 'Colour',
+    colorLot: '',
+    price: '',
+    weight: '',
+    grams: '',
+    meters: '',
+    composition: '',
+    thickness: '',
+    strands: '',
+    craftType: 'knit',
+    washing: '',
+    gauge: null,
+    link: '',
+    photo: null,
+    ...overrides,
+  };
+}
 
 function section(overrides: Partial<ProjectSection> = {}): ProjectSection {
   return {
@@ -483,5 +511,52 @@ describe('atLeastCharted', () => {
   it('changes nothing when there is no chart', () => {
     expect(atLeastCharted(12, 0)).toBe(12);
     expect(atLeastCharted([4, 6], 0)).toEqual([4, 6]);
+  });
+});
+
+describe('projectCost', () => {
+  it('prices yarn as skeins times the ball price, skipping yarns with no price', () => {
+    const p = { ...project([section()]), materialSkeins: { a: 3, b: 2 } };
+    const materials = {
+      a: material({ price: '12.50' }),
+      b: material({ price: '' }), // never priced — contributes nothing rather than NaN
+    };
+    const cost = projectCost(p, materials);
+    expect(cost.materialCost).toBe(37.5);
+  });
+
+  it('ignores a skein count for a yarn no longer in the stash', () => {
+    const p = { ...project([section()]), materialSkeins: { gone: 4 } };
+    expect(projectCost(p, {}).materialCost).toBe(0);
+  });
+
+  it('sums the time banked on every section', () => {
+    const p = project([section({ seconds: 600 }), section({ seconds: 300 })]);
+    expect(projectCost(p, {}).secondsSpent).toBe(900);
+  });
+
+  it('extrapolates total time from the pace so far', () => {
+    // An hour in at 25% done projects to four hours.
+    const p = project([section({ row: 5, totalRows: 20, seconds: 3600 })]);
+    const cost = projectCost(p, {});
+    expect(cost.pct).toBe(0.25);
+    expect(cost.estimatedSeconds).toBe(14400);
+  });
+
+  it('cannot estimate time with no progress or no time on the clock', () => {
+    expect(projectCost(project([section({ row: 0, seconds: 3600 })]), {}).estimatedSeconds).toBeNull();
+    expect(projectCost(project([section({ row: 5, totalRows: 20, seconds: 0 })]), {}).estimatedSeconds).toBeNull();
+  });
+
+  it('prices labour at the hourly fee once there is an estimate to price', () => {
+    const p = project([section({ row: 5, totalRows: 20, seconds: 3600 })]);
+    // 4 estimated hours at €10/h.
+    expect(projectCost(p, {}, 10).laborCost).toBe(40);
+  });
+
+  it('leaves labour unpriced when no fee is set', () => {
+    const p = project([section({ row: 5, totalRows: 20, seconds: 3600 })]);
+    expect(projectCost(p, {}).laborCost).toBeNull();
+    expect(projectCost(p, {}, 0).laborCost).toBeNull();
   });
 });

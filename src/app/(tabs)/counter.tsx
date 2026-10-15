@@ -34,6 +34,14 @@ export default function CounterScreen() {
   const section = project?.sections[activeSectionIndex];
   usePageTitle(section ? `${section.name} · counting` : 'Counter');
 
+  // Colourwork cells are painted their yarn's colour, which lives on the originating pattern's
+  // material slots (set by the pixel-pattern builder). The project's copied rows still reference
+  // those slot ids, so the colours are looked up live from the pattern — gone (pattern deleted)
+  // means the chart simply falls back to monochrome.
+  const patternMaterials = useKnitwitStore((state) =>
+    project?.patternId ? state.patterns[project.patternId]?.materials : undefined,
+  );
+
   // The chart was copied onto the project section when it was created, so counting is unaffected
   // by later edits to the pattern it came from.
   const chartRows = section?.rows ?? [];
@@ -345,6 +353,7 @@ export default function CounterScreen() {
                   castOn={section.castOn}
                   rowIndex={chartRowIndex}
                   showStitchCount
+                  materials={patternMaterials}
                 />
                 {chartRow?.instruction ? (
                   <ThemedText
@@ -479,6 +488,7 @@ export default function CounterScreen() {
                   craft={project.craft}
                   worked={section.row}
                   onRowLayout={noteRowTop}
+                  materials={patternMaterials}
                 />
               </ScrollView>
             </View>

@@ -35,6 +35,7 @@ import {
 } from "@/lib/parse-pattern-text";
 import type {
   Gauge,
+  PatternMaterial,
   PatternRow,
   PatternStitchGroup,
   SizedNumber,
@@ -150,6 +151,7 @@ export function SectionStitchEditor({
   multiple = null,
   saveLabel = "Save stitches",
   onSave,
+  materials,
 }: {
   initial: StitchDraft;
   // Which vocabulary to read and offer. A crochet section gets crochet stitches in the dropdown
@@ -161,6 +163,9 @@ export function SectionStitchEditor({
   multiple?: StitchMultiple | null;
   saveLabel?: string;
   onSave: (draft: StitchDraft) => void;
+  // The pattern's material slots, so a colourwork (pixel) section draws its cells in colour. See
+  // stitch-chart.tsx.
+  materials?: PatternMaterial[];
 }) {
   const stitchOptions = stitchOptionsFor(craft);
   const [description, setDescription] = useState(initial.description);
@@ -560,6 +565,7 @@ export function SectionStitchEditor({
             sizeIndex={sizePreview}
             selected={selected}
             onSelectStitch={setSelected}
+            materials={materials}
           />
 
           {selectedGroup && selected && (
