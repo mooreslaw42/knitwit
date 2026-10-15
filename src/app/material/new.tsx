@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
+import { SwatchField } from '@/components/swatch-field';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
 import { ThemedView } from '@/components/themed-view';
@@ -33,6 +34,7 @@ const BLANK: Material = {
   brand: '',
   colorName: '',
   colorLot: '',
+  swatch: null,
   price: '',
   weight: '',
   grams: '',
@@ -368,6 +370,12 @@ export default function NewMaterialWizardScreen() {
                   value={form.colorLot}
                   onChangeText={(v) => set('colorLot', v)}
                   placeholder="e.g. L28304"
+                />
+                <SwatchField
+                  value={form.swatch}
+                  colorName={form.colorName}
+                  photo={form.photo}
+                  onChange={(swatch) => set('swatch', swatch)}
                 />
                 <FormField
                   label="Price / skein (€)"

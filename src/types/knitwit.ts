@@ -107,6 +107,11 @@ export type Material = {
   brand: string;
   colorName: string;
   colorLot: string;
+  // The yarn's actual colour, as hex. A name ("Dusty Rose") is what a ball band prints, but it is
+  // not something the app can compare, match or draw with — three stash yarns can share a name and
+  // be three different pinks. Optional: nothing before this field had one, and a stash full of
+  // yarns with no swatch still has to work. `yarnSwatchColor` falls back to guessing from the name.
+  swatch?: string | null;
   price: string;
   weight: string; // yarn weight code, see YARN_WEIGHTS
   // How many of this skein the knitter actually owns.

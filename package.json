@@ -60,7 +60,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "typecheck:functions": "npx -y deno@latest check --config supabase/functions/parse-pattern/deno.json supabase/functions/parse-pattern/index.ts && npx -y deno@latest check --config supabase/functions/extract-pdf/deno.json supabase/functions/extract-pdf/index.ts && npx -y deno@latest check supabase/functions/ravelry-userinfo/index.ts supabase/functions/ravelry-connect/index.ts supabase/functions/ravelry-import/index.ts",
+    "typecheck:functions": "npx -y deno@latest check --config supabase/functions/parse-pattern/deno.json supabase/functions/parse-pattern/index.ts && npx -y deno@latest check --config supabase/functions/extract-pdf/deno.json supabase/functions/extract-pdf/index.ts && npx -y deno@latest check --config supabase/functions/image-colours/deno.json supabase/functions/image-colours/index.ts && npx -y deno@latest check supabase/functions/ravelry-userinfo/index.ts supabase/functions/ravelry-connect/index.ts supabase/functions/ravelry-import/index.ts",
     "test": "jest"
   },
   "jest": {

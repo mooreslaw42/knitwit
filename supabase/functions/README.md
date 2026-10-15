@@ -44,6 +44,65 @@ is nearly empty is a scan — words as pixels — and the app refuses it with `l
 than running OCR, because a bad OCR pass produces plausible-looking nonsense. Whether the
 characters amount to a *pattern* is `parse-pattern`'s question.
 
+## `image-colours`
+
+Reduces a picture to the few colours a knitter would actually work it in, and optionally to a grid
+of stitches. No model, no key, no spend — arithmetic on pixels.
+
+Server-side for the same reason as `extract-pdf`: reading pixels needs a canvas and Hermes has
+none. The decoders are WASM (`@jsquash/png`, `@jsquash/jpeg`) rather than native bindings, so they
+run on the Edge Runtime with no build step.
+
+Two callers, one job: the material editor taking a yarn's real colour off its photo, and the
+pixel-pattern flow turning a picture into a colourwork chart.
+
+**Request** (`POST`): the raw image bytes as the body. Parameters go in the query string, since the
+body is the image.
+
+| Param | Default | Means |
+|---|---|---|
+| `colours` | 6 | How many colours to reduce to (2–24) |
+| `stitches` | — | Chart width. With `rows`, also returns a grid |
+| `rows` | — | Chart height. Both or neither — a width without a row count is not a chart |
+
+```
+supabase.functions.invoke('image-colours?colours=6', { body: bytes })
+```
+
+**Response**
+
+```jsonc
+{
+  "colours": ["#86553b", "#b55621", "#be764d", "#f5e5d6", "#fdf6ee"],
+  "width": 1200,
+  "height": 630,
+  // only when stitches and rows were both given
+  "grid": [2, 2, 1, 0, …],   // one palette index per stitch, row-major
+  "stitches": 12,
+  "rows": 8
+}
+```
+
+| Status | Body | Means |
+|---|---|---|
+| 400 | `{ "error": "That image is empty." }` | Nothing was sent |
+| 400 | `{ "error": "That chart is too big (max 250 × 400)." }` | Grid beyond what anyone follows stitch by stitch |
+| 405 | `{ "error": "Send the image as a POST body." }` | Not a POST |
+| 413 | `{ "error": "That image is too big (over 8MB)." }` | Over the cap |
+| 415 | `{ "error": "unsupported" }` | Not a PNG or JPEG, by magic bytes rather than declared type |
+| 422 | `{ "error": "unreadable" }` / `"blank"` | The decoder refused it, or there were no opaque pixels |
+
+The one-word bodies are sentinels, not sentences; `colourMessage` in `src/lib/image-colours.ts`
+turns them into wording for a knitter.
+
+**Fewer colours may come back than asked for, and that is the point.** Median cut happily returns
+near-identical entries when an image is mostly one shade — two creams a knitter could not tell
+apart, and a second skein bought for nothing. Entries closer than a small channel distance are
+merged. Asking a flat image for six colours gives one.
+
+The arithmetic lives in `quantise.ts`, which is plain TypeScript with no Deno globals, so Jest
+tests it directly — same arrangement as `provider-greenpt.test.ts`.
+
 ## `parse-pattern`
 
 Two tasks, one function — they share a provider, a cached prompt discipline, and the rule that the
