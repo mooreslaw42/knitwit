@@ -13,7 +13,7 @@ import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
 import { hasLabel, labelKey, labelsInUse } from '@/lib/labels';
 import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import {
-  currentSectionIndexOf,
+  currentSectionOf,
   matchesCraft,
   projectProgress,
   projectState,
@@ -172,7 +172,7 @@ export default function ProjectsScreen() {
             <View style={styles.projGrid}>
               {visible.map(([key, p]) => {
                 const pct = projectProgress(p).pct;
-                const cur = p.sections[currentSectionIndexOf(p)];
+                const cur = currentSectionOf(p);
                 return (
                   // The width lives on this wrapper, not on the CardLink. `Link asChild` hands its
                   // own props to the anchor and the card style lands on a View inside it, so a
@@ -215,11 +215,15 @@ export default function ProjectsScreen() {
                         ))}
                       </View>
                       <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
-                        {CRAFT_LABELS[p.craft]} · {cur.name}
+                        {CRAFT_LABELS[p.craft]}{cur ? ` · ${cur.name}` : ''}
                       </ThemedText>
-                      <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
-                        row {cur.row} of {cur.totalRows}
-                      </ThemedText>
+                      {/* A project with no sections has nothing to count — render it rather than
+                          crash the whole list on a current section that isn't there. */}
+                      {cur ? (
+                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                          row {cur.row} of {cur.totalRows}
+                        </ThemedText>
+                      ) : null}
                       <ProgressBar pct={pct} color={p.colorDeep} />
                     </View>
                   </CardLink>
