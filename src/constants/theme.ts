@@ -75,7 +75,13 @@ export const MaxContentWidth = 800;
 
 // Below this window width the web nav bar shows icons only (labels stay for screen readers): six
 // labelled tabs and the logo no longer fit beside each other.
-export const CompactNavBelow = 760;
+//
+// The nav lives inside the MaxContentWidth (800px) cap, and the logo plus the six labels measure
+// ~790px of that — so they only genuinely fit once the window is wide enough for the full 800
+// (content + 16px padding each side + room for a scrollbar). The old 760 was below that, which
+// left a band where the labelled nav overflowed the bar and the right-hand tabs were clipped or
+// crushed. Switch to icons earlier, where they actually stop fitting.
+export const CompactNavBelow = 860;
 
 // Cap on a free-text name the app later shows in a chip, a swatch caption or a card title.
 // Enforced where the text is entered and where it's imported, so nothing longer ever reaches a

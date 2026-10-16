@@ -104,6 +104,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,
+    // A nav item is its logo and its word at full size or not at all — never a squashed version of
+    // either. If they ever don't fit, the compact breakpoint drops the labels; it is not this row's
+    // job to compress them.
+    flexShrink: 0,
   },
   linkActive: {
     backgroundColor: Colors.blush,
