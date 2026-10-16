@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 
 import { invokeEdgeFunction } from '@/lib/edge-function';
 
@@ -60,11 +61,15 @@ export function extractMessage(error: unknown): string {
 }
 
 async function bytesOf(asset: DocumentPicker.DocumentPickerAsset): Promise<ArrayBuffer> {
-  // On web the picker hands back the actual File; everywhere else there's a URI to fetch.
-  const file = (asset as { file?: File }).file;
+  // On web the picker hands back the actual File; everywhere else there's a file:// URI.
+  const file = (asset as { file?: Blob }).file;
   if (file) return await file.arrayBuffer();
-  const response = await fetch(asset.uri);
-  return await response.arrayBuffer();
+  // Read the local file through the file-system module, not fetch(). A fetch() of a file:// URI
+  // goes through the networking layer, where Sentry's http instrumentation records it as a
+  // status-less request and then throws serialising that breadcrumb — an unhandled rejection that
+  // reached a knitter picking a PDF as a silent do-nothing (Bugsink KNITWIT-1). The File API reads
+  // the bytes directly, so the request never exists.
+  return await new File(asset.uri).arrayBuffer();
 }
 
 // A big scanned-looking PDF can take a while on a cold function; a pattern is worth waiting for,
