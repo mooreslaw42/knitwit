@@ -10,7 +10,12 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday } from '@/lib/achievements';
 import { nextAward } from '@/lib/awards';
-import { currentSectionIndexOf, projectProgress, projectState } from '@/lib/knitwit-helpers';
+import {
+  currentSectionIndexOf,
+  currentSectionOf,
+  projectProgress,
+  projectState,
+} from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Project } from '@/types/knitwit';
 
@@ -145,7 +150,7 @@ export default function HomeScreen() {
           <View style={styles.projList}>
             {incomplete.map(([key, p]) => {
               const pct = projectProgress(p).pct;
-              const cur = p.sections[currentSectionIndexOf(p)];
+              const cur = currentSectionOf(p);
               return (
                 <CardLink
                   key={key}
@@ -154,9 +159,13 @@ export default function HomeScreen() {
                   <Thumb photo={p.photo} color={p.color} />
                   <View style={styles.projInfo}>
                     <ThemedText type="smallBold">{p.name}</ThemedText>
-                    <ThemedText type="small" themeColor="inkSoft">
-                      {cur.name} · row {cur.row} of {cur.totalRows}
-                    </ThemedText>
+                    {/* A project with no sections has nothing to count — render it rather than
+                        crash the home list on a current section that isn't there. */}
+                    {cur ? (
+                      <ThemedText type="small" themeColor="inkSoft">
+                        {cur.name} · row {cur.row} of {cur.totalRows}
+                      </ThemedText>
+                    ) : null}
                     <View style={{ marginTop: Spacing.one }}>
                       <ProgressBar pct={pct} color={p.colorDeep} />
                     </View>

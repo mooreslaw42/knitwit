@@ -235,6 +235,16 @@ export function currentSectionIndexOf(p: Project): number {
   return idx === -1 ? p.sections.length - 1 : idx;
 }
 
+// The section a knitter is on, or undefined when a project has no sections at all. Every project
+// is meant to have at least one — createProject always stamps a "Main", and deleteSection refuses
+// to remove the last — but a project arriving from a Ravelry re-import (mergeProject can land on
+// an empty-on-empty merge) or from sync can still be sectionless, and `currentSectionIndexOf`
+// then returns -1. Reading `sections[-1].name` is the undefined-access that was crashing the
+// project lists, so the index is resolved to a maybe-section here and callers render around it.
+export function currentSectionOf(p: Project): ProjectSection | undefined {
+  return p.sections[currentSectionIndexOf(p)];
+}
+
 const NEUTRAL_PROJECT_COLORS = { color: '#F7EBDD', colorDeep: '#8A7873' };
 
 // Multiplies each channel toward black. Ported from the original's darken().

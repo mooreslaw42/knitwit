@@ -1,6 +1,7 @@
 import {
   matchesCraft,
   currentSectionIndexOf,
+  currentSectionOf,
   darken,
   deriveProjectColors,
   formatClock,
@@ -323,6 +324,21 @@ describe('currentSectionIndexOf', () => {
   it('falls back to the last section when everything is done', () => {
     const p = project([section({ complete: true }), section({ complete: true })]);
     expect(currentSectionIndexOf(p)).toBe(1);
+  });
+});
+
+describe('currentSectionOf', () => {
+  it('returns the current section object', () => {
+    const first = section({ complete: true });
+    const current = section({ name: 'Sleeve' });
+    expect(currentSectionOf(project([first, current]))).toBe(current);
+  });
+
+  // A project with no sections — from a Ravelry re-import or a sync that landed one empty — must
+  // not crash the lists that read the current section. currentSectionIndexOf returns -1 here, so
+  // sections[-1] is undefined, and that is exactly what callers guard on.
+  it('returns undefined for a project with no sections', () => {
+    expect(currentSectionOf(project([]))).toBeUndefined();
   });
 });
 
