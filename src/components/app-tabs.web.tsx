@@ -119,6 +119,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,
+    // Same as the pushed-screen header: a tab shows its icon and label at full size or goes to
+    // icons-only at the breakpoint — it never renders a compressed version of either.
+    flexShrink: 0,
   },
   tabButtonViewSelected: {
     backgroundColor: Colors.blush,
