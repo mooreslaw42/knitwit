@@ -36,7 +36,7 @@ const STEPS = ['Start', 'Basics', 'Gauge', 'Materials', 'Sections'] as const;
 // How the knitter said they'd begin. Null means they haven't picked yet, which is the first thing
 // the wizard asks — the step used to show every way in at once, so the upload control, the paste
 // box and the skip all competed for the same glance.
-type StartMode = 'upload' | 'write';
+type StartMode = 'upload' | 'write' | 'pixel';
 
 const START_CHOICES: { mode: StartMode; icon: KnitIconName; title: string; blurb: string }[] = [
   {
@@ -50,6 +50,12 @@ const START_CHOICES: { mode: StartMode; icon: KnitIconName; title: string; blurb
     icon: 'edit',
     title: 'Write pattern',
     blurb: 'Paste or type the pattern text, and Knitwit reads it the same way.',
+  },
+  {
+    mode: 'pixel',
+    icon: 'camera',
+    title: 'Pixel pattern',
+    blurb: 'Turn a photo into a colourwork chart — one stitch per pixel, in knit or crochet.',
   },
 ];
 
@@ -143,8 +149,6 @@ export default function NewPatternWizardScreen() {
   const [reading, setReading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
-  // Whether the photo-to-colourwork builder is open on the Import step.
-  const [pixelOpen, setPixelOpen] = useState(false);
   // Held in a ref, not state: aborting must work from an unmount cleanup, which never sees a
   // re-render's state.
   const readRef = useRef<AbortController | null>(null);
@@ -264,7 +268,6 @@ export default function NewPatternWizardScreen() {
     void putPhoto(result.photoDataUrl)
       .then((id) => setForm((f) => ({ ...f, photo: id })))
       .catch(() => setPhotoError(PHOTO_STORAGE_FULL));
-    setPixelOpen(false);
     setStep((s) => s + 1);
   };
 
@@ -362,7 +365,18 @@ export default function NewPatternWizardScreen() {
             </>
           )}
 
-          {STEPS[step] === 'Start' && mode !== null && (
+          {STEPS[step] === 'Start' && mode === 'pixel' && (
+            <>
+              <ThemedText type="subtitle" heading={1}>Pixel pattern from a photo</ThemedText>
+              <PixelPatternBuilder
+                initialCraft={form.craft === 'crochet' ? 'crochet' : 'knit'}
+                onUse={applyPixel}
+                onCancel={() => setMode(null)}
+              />
+            </>
+          )}
+
+          {STEPS[step] === 'Start' && mode !== null && mode !== 'pixel' && (
             <>
               {mode === 'upload' && (
                 <View style={styles.field}>
@@ -401,25 +415,6 @@ export default function NewPatternWizardScreen() {
                   minHeight={72}
                   style={styles.pasteBox}
                 />
-              </View>
-
-              <View style={styles.field}>
-                <ThemedText type="smallBold" themeColor="inkSoft">
-                  Or turn a photo into a pixel pattern
-                </ThemedText>
-                {pixelOpen ? (
-                  <PixelPatternBuilder
-                    initialCraft={form.craft === 'crochet' ? 'crochet' : 'knit'}
-                    onUse={applyPixel}
-                    onCancel={() => setPixelOpen(false)}
-                  />
-                ) : (
-                  <Pressable style={styles.uploadBtn} onPress={() => setPixelOpen(true)}>
-                    <ThemedText type="smallBold" themeColor="inkSoft" numberOfLines={1}>
-                      🧶 Create a pixel pattern from a photo…
-                    </ThemedText>
-                  </Pressable>
-                )}
               </View>
 
               {form.sourceText.trim().length > 0 && !imported && (
@@ -671,8 +666,9 @@ export default function NewPatternWizardScreen() {
           )}
 
           {/* On the choice screen the cards are the action — a Next button there would be a
-              second, vaguer way to do the same thing. */}
-          {!(STEPS[step] === 'Start' && mode === null) && (
+              second, vaguer way to do the same thing. The pixel builder owns its own Use/Cancel,
+              so the wizard's Continue would be a stray second way forward there too. */}
+          {!(STEPS[step] === 'Start' && (mode === null || mode === 'pixel')) && (
             <PillButton style={styles.nextBtn} onPress={handleNext}>
               <ThemedText type="smallBold" themeColor="white">
                 {isLast ? 'Save pattern' : STEPS[step] === 'Start' ? 'Continue' : 'Next'}
