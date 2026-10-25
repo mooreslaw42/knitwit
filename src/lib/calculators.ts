@@ -10,7 +10,7 @@ import type { KnitIconName } from '@/components/icons/knit-icon-data';
 // `question` is the whole point of the hub. It is what the old cards led with, in the knitter's own
 // words, and it is what somebody is choosing between — "which needle or hook?" means nothing next
 // to "your swatch didn't match: what size should you try next?".
-export type CalculatorId = 'rescale' | 'needle' | 'measure' | 'windows';
+export type CalculatorId = 'rescale' | 'needle' | 'measure' | 'windows' | 'yarn';
 
 export type CalculatorGroup = 'gauge' | 'yarn' | 'shaping';
 
@@ -54,6 +54,14 @@ export const CALCULATORS: CalculatorDef[] = [
     question: 'A pattern gives its gauge per 4in and yours is per 10cm. Are they the same fabric?',
     icon: 'pattern',
     group: 'gauge',
+  },
+  {
+    id: 'yarn',
+    title: 'How much yarn do I need?',
+    question:
+      'Before you buy: how many balls a make will take, what that comes to, and how many you already have.',
+    icon: 'yarn',
+    group: 'yarn',
   },
 ];
 

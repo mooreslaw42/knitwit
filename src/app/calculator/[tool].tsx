@@ -5,6 +5,7 @@ import { MeasureCalculator } from '@/components/calculators/measure-calculator';
 import { NeedleCalculator } from '@/components/calculators/needle-calculator';
 import { RescaleCalculator } from '@/components/calculators/rescale-calculator';
 import { WindowsCalculator } from '@/components/calculators/windows-calculator';
+import { YarnCalculator } from '@/components/calculators/yarn-calculator';
 import { CardLink } from '@/components/card-link';
 import { Card } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
@@ -23,6 +24,7 @@ const SCREENS: Record<CalculatorId, () => React.ReactElement> = {
   needle: NeedleCalculator,
   measure: MeasureCalculator,
   windows: WindowsCalculator,
+  yarn: YarnCalculator,
 };
 
 export default function CalculatorToolScreen() {
