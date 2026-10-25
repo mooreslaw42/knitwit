@@ -11,11 +11,15 @@ import {
   gaugeFields,
   makeGauge,
   presetIndexFor,
+  sameGauge,
 } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Gauge, LengthUnit } from '@/types/knitwit';
 
 type Window = { width: number; height: number; unit: LengthUnit };
+
+type Fields = { stitches: string; rows: string; window: Window };
+type Draft = Fields & { emitted: Gauge | null };
 
 // One control for every gauge in the app — pattern, material, and a material's per-craft gauge —
 // so a gauge entered in one place means the same thing as one entered in another.
@@ -36,32 +40,51 @@ export function GaugeField({
   value: Gauge | null;
   onChange: (gauge: Gauge | null) => void;
 }) {
-  // The fields hold strings so a half-typed number ("2", "", "21,") never round-trips through a
-  // parse and reappears as something the knitter didn't type.
+  // The draft holds strings so a half-typed number ("2", "", "21,") never round-trips through a
+  // parse and reappears as something the knitter didn't type. `emitted` is the gauge those strings
+  // last produced — what this control told its caller.
   // A gauge already recorded keeps the window it was written in; only a new one takes the
   // knitter's preference, because that is the only case where nothing would be overridden.
   const preferred = useKnitwitStore((state) => state.settings.gaugeUnit);
-  const initial = value ? gaugeFields(value) : { stitches: '', rows: '', window: defaultWindow(preferred) };
-  const [stitches, setStitches] = useState(initial.stitches);
-  const [rows, setRows] = useState(initial.rows);
-  const [window, setWindow] = useState<Window>(initial.window);
+  const [draft, setDraft] = useState<Draft>(() => ({
+    ...(value ? gaugeFields(value) : { stitches: '', rows: '', window: defaultWindow(preferred) }),
+    emitted: value,
+  }));
 
-  const commit = (s: string, r: string, w: Window) => onChange(makeGauge(s, r, w));
+  // `value` wins whenever it is not the gauge this control handed up.
+  //
+  // The draft only ever speaks for its own keystrokes, and the same gauge is routinely shown by
+  // several of these at once — the calculator asks for one gauge on six cards, over one piece of
+  // state. Seeding the strings on mount and never again meant the other five went on displaying
+  // the number you had just replaced, while every answer beside them recomputed from the new one:
+  // an input contradicting the answer under it, with nothing on screen to say which the app
+  // believed. So when the two disagree, the fields follow `value` and the draft is set aside.
+  const fromValue = gaugeFields(value);
+  const shown: Fields = sameGauge(draft.emitted, value)
+    ? draft
+    : // A gauge that has been cleared away says nothing about the window, so the one on screen
+      // stays rather than snapping back to the first preset.
+      { ...fromValue, window: value ? fromValue.window : draft.window };
+  const { stitches, rows, window } = shown;
+
+  const commit = (s: string, r: string, w: Window) => {
+    const next = makeGauge(s, r, w);
+    setDraft({ stitches: s, rows: r, window: w, emitted: next });
+    onChange(next);
+  };
 
   // Switching window restates the gauge rather than reinterpreting it: 22 sts/10cm becomes
   // 22.35 sts/4in, which is the same fabric. Silently relabelling it 22 sts/4in would change the
   // fabric without the knitter asking.
   const changeWindow = (next: Window) => {
     const current = makeGauge(stitches, rows, window);
-    setWindow(next);
     if (!current) {
       commit(stitches, rows, next);
       return;
     }
     const restated = convertGauge(current, next);
     const fields = gaugeFields(restated);
-    setStitches(fields.stitches);
-    setRows(fields.rows);
+    setDraft({ ...fields, window: next, emitted: restated });
     onChange(restated);
   };
 
@@ -110,10 +133,7 @@ export function GaugeField({
           <FormField
             label="Stitches"
             value={stitches}
-            onChangeText={(v) => {
-              setStitches(v);
-              commit(v, rows, window);
-            }}
+            onChangeText={(v) => commit(v, rows, window)}
             keyboardType="numeric"
             placeholder="22"
           />
@@ -122,10 +142,7 @@ export function GaugeField({
           <FormField
             label="Rows (optional)"
             value={rows}
-            onChangeText={(v) => {
-              setRows(v);
-              commit(stitches, v, window);
-            }}
+            onChangeText={(v) => commit(stitches, v, window)}
             keyboardType="numeric"
             placeholder="30"
           />
