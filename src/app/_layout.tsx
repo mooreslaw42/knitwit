@@ -246,6 +246,7 @@ export default function RootLayout() {
             name="project/[key]/section/[index]"
             options={DETAIL_SCREEN}
           />
+          <Stack.Screen name="calculator/[tool]" options={DETAIL_SCREEN} />
           <Stack.Screen name="material/[id]" options={DETAIL_SCREEN} />
           <Stack.Screen name="tool/[id]" options={DETAIL_SCREEN} />
           <Stack.Screen name="technique/[id]" options={DETAIL_SCREEN} />

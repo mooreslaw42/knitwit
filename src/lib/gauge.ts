@@ -48,6 +48,24 @@ export function hasRowGauge(g: Gauge | null | undefined): boolean {
   return !!g && g.rows > 0 && g.height > 0;
 }
 
+// Whether two gauges are the same *entry* — the same numbers in the same window — rather than the
+// same fabric. 22 sts/10cm and 22.35 sts/4in describe identical knitting and are not equal here, on
+// purpose: a form showing one of them has to be allowed to go on showing it, and a form told it is
+// already showing the other would silently relabel what the knitter typed.
+//
+// Absent equals absent. "Not stated" is a real answer everywhere gauge is concerned, so two of them
+// match; one of them never matches a gauge.
+export function sameGauge(a: Gauge | null | undefined, b: Gauge | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return (
+    a.stitches === b.stitches &&
+    a.rows === b.rows &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.unit === b.unit
+  );
+}
+
 // Re-express a gauge in another window without changing the fabric it describes. This is the
 // "inch to cm" conversion, and it deliberately changes the stitch and row numbers so that the
 // stitches-per-cm stays identical — the pattern has not been re-gauged, only restated.
@@ -108,7 +126,12 @@ export function formatGaugeIn(g: Gauge | null | undefined, unit: LengthUnit): st
 // Only the stitch axis is returned. Row gauge varies with blocking, fabric relaxation and how the
 // knitter measures, and patterns routinely say "work to 40cm" rather than trusting a row count —
 // so length is reported as a measurement rather than scaled. See the plan.
-export function stitchRatio(pattern: Gauge, mine: Gauge): number | null {
+// Takes a missing gauge rather than making every caller check first: it already guards, and "not
+// stated" is exactly the case a caller has on hand before the knitter has typed anything.
+export function stitchRatio(
+  pattern: Gauge | null | undefined,
+  mine: Gauge | null | undefined,
+): number | null {
   if (!isUsableGauge(pattern) || !isUsableGauge(mine)) return null;
   const from = stitchesPerCm(pattern);
   return from > 0 ? stitchesPerCm(mine) / from : null;

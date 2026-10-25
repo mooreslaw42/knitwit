@@ -5,8 +5,12 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatGaugeIn, isUsableGauge, stitchesToCm, stitchRatio } from '@/lib/gauge';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import { round } from '@/lib/numbers';
 import { describeIntervals, rescaleSection } from '@/lib/regauge';
 import type { Gauge, PatternRow, StitchMultiple } from '@/types/knitwit';
+
+// Measurements in this panel are all to the tenth of a centimetre.
+const roundTo1 = (n: number) => round(n, 1);
 
 // What a section becomes at the knitter's gauge. Read-only, and deliberately so: this is where
 // the arithmetic gets checked against a real pattern before anything is allowed to depend on it.
@@ -55,8 +59,8 @@ export function RegaugePanel({
               Cast on {result.castOn.to} instead of {result.castOn.from}
             </ThemedText>
             <ThemedText type="small" themeColor="inkSoft">
-              {round(stitchesToCm(result.castOn.to, swatchGauge) ?? 0)}cm wide · the pattern
-              intended {round(stitchesToCm(result.castOn.from, patternGauge) ?? 0)}cm
+              {roundTo1(stitchesToCm(result.castOn.to, swatchGauge) ?? 0)}cm wide · the pattern
+              intended {roundTo1(stitchesToCm(result.castOn.from, patternGauge) ?? 0)}cm
             </ThemedText>
             {result.finalStitches.to !== result.castOn.to && (
               <ThemedText type="small" themeColor="inkSoft">
@@ -122,10 +126,6 @@ function describeOriginal(run: { shapingRows: number[]; delta: number }): string
   const plural = `${count} ${verb}${count === 1 ? '' : 's'}`;
   if (gaps.length === 0) return plural;
   return `${plural}, spaced ${gaps.map((g) => `every ${g === 1 ? 'row' : `${g} rows`}`).join(' then ')}`;
-}
-
-function round(n: number): string {
-  return String(Math.round(n * 10) / 10);
 }
 
 const styles = StyleSheet.create({

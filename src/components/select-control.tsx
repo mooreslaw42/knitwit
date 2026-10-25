@@ -23,6 +23,8 @@ import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 
 const FIELD = {
   backgroundColor: Colors.white,
+  borderWidth: 1,
+  borderColor: Colors.creamDeep,
   borderRadius: Radii.medium,
   paddingHorizontal: Spacing.three,
   paddingVertical: Spacing.three,

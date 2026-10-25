@@ -1,5 +1,6 @@
+import { Link, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radii, Spacing } from '@/constants/theme';
@@ -70,6 +71,26 @@ export function SourceBadge({ source, detail }: { source: FieldSource; detail?: 
         </View>
       ) : null}
     </View>
+  );
+}
+
+// The other shape the same idea takes: a value copied out of the knitter's own data, marked with
+// where it came from and linking back to it.
+//
+// A tooltip would be the wrong answer here. The badges above explain a *kind* of source once, and
+// the explanation is the same every time; this names a particular project or yarn, so the useful
+// thing is to go and look at it. Phrased "from Hazel cardigan" rather than "Hazel cardigan's
+// gauge", because the value was copied when the screen opened — where it came from stays true even
+// if the project has changed since, and the link is how you check.
+export function SourceLink({ label, href }: { label: string; href: string }) {
+  return (
+    <Link href={href as Href} asChild>
+      <Pressable accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}>
+        <ThemedText type="small" themeColor="sageDeep">
+          from {label}
+        </ThemedText>
+      </Pressable>
+    </Link>
   );
 }
 

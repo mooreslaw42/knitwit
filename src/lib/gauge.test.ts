@@ -18,6 +18,7 @@ import {
   gaugeAtNeedle,
   needleForGauge,
   nearestToolSize,
+  sameGauge,
 } from '@/lib/gauge';
 import type { Gauge } from '@/types/knitwit';
 
@@ -105,6 +106,29 @@ describe('usability', () => {
   it('rejects nothing at all', () => {
     expect(isUsableGauge(null)).toBe(false);
     expect(isUsableGauge({ stitches: 0, rows: 0, width: 10, height: 10, unit: 'cm' })).toBe(false);
+  });
+});
+
+describe('sameGauge', () => {
+  it('compares the entry, not the object', () => {
+    expect(sameGauge(metric, { ...metric })).toBe(true);
+    expect(sameGauge(metric, { ...metric, stitches: 21 })).toBe(false);
+    expect(sameGauge(metric, { ...metric, rows: 0 })).toBe(false);
+  });
+
+  // The whole point of the window being stored. These two are the same fabric and a form showing
+  // one must not be told it is already showing the other.
+  it('does not call the same fabric in two windows the same entry', () => {
+    expect(sameGauge(metric, convertGauge(metric, { width: 4, height: 4, unit: 'inch' }))).toBe(
+      false,
+    );
+  });
+
+  it('treats absent as absent', () => {
+    expect(sameGauge(null, null)).toBe(true);
+    expect(sameGauge(undefined, null)).toBe(true);
+    expect(sameGauge(metric, null)).toBe(false);
+    expect(sameGauge(null, metric)).toBe(false);
   });
 });
 

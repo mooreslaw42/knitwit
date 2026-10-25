@@ -53,6 +53,7 @@ export default function SectionStitchesScreen() {
             patternGauge={pattern.gauge}
             swatchGauge={pattern.swatchGauge}
             multiple={section.stitchMultiple}
+            calculatorContext={{ pattern: id }}
             materials={pattern.materials}
             onSave={(draft) => {
               savePattern(id, {

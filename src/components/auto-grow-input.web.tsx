@@ -2,8 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import { StyleSheet, TextInput } from 'react-native';
 
 import type { AutoGrowInputProps } from '@/components/auto-grow-input';
-import { InputStyle } from '@/components/knitwit-ui';
-import { Colors } from '@/constants/theme';
+import { InputStyle, PlaceholderColor } from '@/components/knitwit-ui';
 
 // The web half of the auto-growing field. See auto-grow-input.tsx for what it's for.
 //
@@ -42,7 +41,7 @@ export function AutoGrowInput({
       ref={ref}
       multiline
       value={value}
-      placeholderTextColor={Colors.inkSoft}
+      placeholderTextColor={PlaceholderColor}
       // Fires for input the effect above can't see coming — a paste, an autofill, a drag-and-drop.
       onChange={resize}
       style={[styles.input, { minHeight }, style]}

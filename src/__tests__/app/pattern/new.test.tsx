@@ -6,6 +6,15 @@ import NewPatternWizardScreen from '@/app/pattern/new';
 // all competing for the same glance. It is a choice now, and the thing worth asserting is what the
 // knitter is actually offered at each point, because that is exactly the kind of wiring that looks
 // right in the diff and wrong on the screen. In the spirit of charts.test.tsx.
+//
+// Every other test in the app sits beside the thing it tests. This one can't, and no test of a
+// screen can: Expo Router's route context (expo-router/_ctx.web.js) takes *every* `.tsx` under the
+// router root and only excludes `+api`, `+middleware`, `+html` and `+native-intent` — so a file
+// named `new.test.tsx` in `src/app/pattern/` is a route. It used to be one. The dev server renders
+// every route module to serve any page, this file calls `jest.mock` at module scope, and so
+// `npm run web` answered HTTP 500 with "expect is not defined" on every URL; `expo export` kept
+// working but shipped `/pattern/new.test` as a public page. Hence the mirrored path — a test of a
+// route screen goes under `src/__tests__/app/`, never next to the route.
 
 jest.mock('@/lib/supabase', () => ({ getSupabase: jest.fn() }));
 // Reaches AsyncStorage's native module, which isn't there under Jest. Nothing here stores a photo.

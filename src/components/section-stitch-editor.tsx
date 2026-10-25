@@ -8,6 +8,7 @@ import {
   PillButton,
   SelectField,
 } from "@/components/knitwit-ui";
+import { CalculatorLink, type CalculatorContext } from "@/components/calculators/calculator-link";
 import { RegaugePanel } from "@/components/regauge-panel";
 import { StitchChart, type ChartSelection } from "@/components/stitch-chart";
 import { stitchGroupLabel } from "@/lib/stitch-group-label";
@@ -152,6 +153,7 @@ export function SectionStitchEditor({
   saveLabel = "Save stitches",
   onSave,
   materials,
+  calculatorContext,
 }: {
   initial: StitchDraft;
   // Which vocabulary to read and offer. A crochet section gets crochet stitches in the dropdown
@@ -166,6 +168,11 @@ export function SectionStitchEditor({
   // The pattern's material slots, so a colourwork (pixel) section draws its cells in colour. See
   // stitch-chart.tsx.
   materials?: PatternMaterial[];
+  // Which pattern or project this section belongs to, so the calculator link below the regauge
+  // panel can carry its gauges over. The editor is shared by both routes and knows neither id, so
+  // the route supplies it. Absent means no link, which is right for anywhere that has no address
+  // to give.
+  calculatorContext?: CalculatorContext;
 }) {
   const stitchOptions = stitchOptionsFor(craft);
   const [description, setDescription] = useState(initial.description);
@@ -546,6 +553,16 @@ export function SectionStitchEditor({
         multiple={multiple}
         sizeIndex={sizePreview}
       />
+
+      {/* Under the panel rather than inside it, because the panel returns nothing when a gauge is
+          missing — which is exactly when a knitter most needs somewhere to work one out. */}
+      {calculatorContext ? (
+        <CalculatorLink
+          id="rescale"
+          context={calculatorContext}
+          label="Try other numbers in the calculator"
+        />
+      ) : null}
 
       {rows.length > 0 && (
         <Card style={styles.chartCard}>
