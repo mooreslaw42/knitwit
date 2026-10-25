@@ -126,7 +126,12 @@ export function formatGaugeIn(g: Gauge | null | undefined, unit: LengthUnit): st
 // Only the stitch axis is returned. Row gauge varies with blocking, fabric relaxation and how the
 // knitter measures, and patterns routinely say "work to 40cm" rather than trusting a row count —
 // so length is reported as a measurement rather than scaled. See the plan.
-export function stitchRatio(pattern: Gauge, mine: Gauge): number | null {
+// Takes a missing gauge rather than making every caller check first: it already guards, and "not
+// stated" is exactly the case a caller has on hand before the knitter has typed anything.
+export function stitchRatio(
+  pattern: Gauge | null | undefined,
+  mine: Gauge | null | undefined,
+): number | null {
   if (!isUsableGauge(pattern) || !isUsableGauge(mine)) return null;
   const from = stitchesPerCm(pattern);
   return from > 0 ? stitchesPerCm(mine) / from : null;
