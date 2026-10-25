@@ -135,7 +135,7 @@ export function GaugeField({
             value={stitches}
             onChangeText={(v) => commit(v, rows, window)}
             keyboardType="numeric"
-            placeholder="22"
+            placeholder="e.g. 22"
           />
         </View>
         <View style={styles.grow}>
@@ -144,7 +144,7 @@ export function GaugeField({
             value={rows}
             onChangeText={(v) => commit(stitches, v, window)}
             keyboardType="numeric"
-            placeholder="30"
+            placeholder="e.g. 30"
           />
         </View>
       </View>

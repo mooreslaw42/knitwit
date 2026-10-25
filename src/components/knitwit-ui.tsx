@@ -20,8 +20,16 @@ import type { ProjectStatus, SectionStatus } from '@/types/knitwit';
 
 // The one text-input look, exported so the platform-split AutoGrowInput can wear it without
 // keeping a second copy that drifts.
+//
+// The border is not decoration. A white input with no edge is invisible the moment it sits on
+// anything white — which is every form inside a Card, Cards being white too — so the only thing
+// marking a field was the text already in it, and an empty one looked like a gap in the layout.
+// The calculator showed it worst, where a placeholder "22" was indistinguishable from a 22 somebody
+// had typed, but it was true of every form in the app.
 export const InputStyle = {
   backgroundColor: Colors.white,
+  borderWidth: 1,
+  borderColor: Colors.creamDeep,
   borderRadius: Radii.medium,
   paddingHorizontal: Spacing.three,
   paddingVertical: Spacing.three,
@@ -29,6 +37,11 @@ export const InputStyle = {
   fontSize: 15,
   color: Colors.ink,
 } as const;
+
+// Placeholders are examples, not values, and have to read as examples at a glance. Lighter than
+// `inkSoft` on purpose: the label above carries the meaning, so this text is allowed to sit below
+// body-copy contrast — and needs to, because at `inkSoft` it looked like an answer.
+export const PlaceholderColor = '#B9ABA6';
 
 export function Card({ style, ...props }: ViewProps) {
   return <View style={[styles.card, style]} {...props} />;
@@ -164,7 +177,7 @@ export function FormField({
     <View style={styles.field}>
       <FieldLabel label={label} badge={badge} />
       <TextInput
-        placeholderTextColor={Colors.inkSoft}
+        placeholderTextColor={PlaceholderColor}
         style={[styles.input, style]}
         {...props}
       />

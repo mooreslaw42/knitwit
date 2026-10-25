@@ -39,6 +39,10 @@ export function SelectControl<T extends string>({
 const styles = StyleSheet.create({
   box: {
     backgroundColor: Colors.white,
+    // Same edge as a text field, for the same reason: a white control on a white card is marked
+    // only by the text inside it, and reads as a label rather than as something you can change.
+    borderWidth: 1,
+    borderColor: Colors.creamDeep,
     borderRadius: Radii.medium,
     overflow: 'hidden',
     justifyContent: 'center',

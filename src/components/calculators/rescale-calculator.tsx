@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Answer, CalcScreen, Inputs, NeedsInput } from '@/components/calc-screen';
+import { Answer, CalcScreen, Caution, Inputs, NeedsInput, Working } from '@/components/calc-screen';
 import { MyGaugeField, PatternGaugeField } from '@/components/calculators/scratch-gauges';
 import { FormField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
@@ -42,7 +42,7 @@ export function RescaleCalculator() {
           value={count}
           onChangeText={setCount}
           keyboardType="numeric"
-          placeholder="30"
+          placeholder="e.g. 30"
         />
         <ThemedText type="small" themeColor="inkSoft">
           If that section has a stitch repeat, say so — otherwise rounding can break it.
@@ -54,7 +54,7 @@ export function RescaleCalculator() {
               value={multipleOf}
               onChangeText={setMultipleOf}
               keyboardType="numeric"
-              placeholder="4"
+              placeholder="e.g. 4"
             />
           </View>
           <View style={styles.grow}>
@@ -63,7 +63,7 @@ export function RescaleCalculator() {
               value={multiplePlus}
               onChangeText={setMultiplePlus}
               keyboardType="numeric"
-              placeholder="2"
+              placeholder="e.g. 2"
             />
           </View>
         </View>
@@ -71,8 +71,8 @@ export function RescaleCalculator() {
 
       {rescaled && ratio != null && isUsableGauge(myGauge) && isUsableGauge(patternGauge) ? (
         <Answer label="Cast on" value={`${rescaled.rounded} sts`}>
-          <ThemedText type="small" themeColor="inkSoft">
-            Exactly {round(rescaled.exact)} — rounded{' '}
+          <Working>
+            Exactly {round(rescaled.exact)}, rounded{' '}
             {multiple
               ? `to a multiple of ${multiple.of} plus ${multiple.plus}`
               : 'to the nearest stitch'}
@@ -83,16 +83,14 @@ export function RescaleCalculator() {
                 ? `finer, so it takes ${round((ratio - 1) * 100, 1)}% more stitches`
                 : `looser, so it takes ${round((1 - ratio) * 100, 1)}% fewer`}
             .
-          </ThemedText>
-          {rescaled.adjustedForMultiple && (
-            <ThemedText type="small" themeColor="coralDeep">
-              The repeat moved this further than plain rounding would have.
-            </ThemedText>
-          )}
-          <ThemedText type="small" themeColor="sageDeep">
+          </Working>
+          <Working>
             {round(stitchesToCm(rescaled.rounded, myGauge) ?? 0, 1)}cm wide at your gauge · the
             pattern intended {round(stitchesToCm(rawCount, patternGauge) ?? 0, 1)}cm
-          </ThemedText>
+          </Working>
+          {rescaled.adjustedForMultiple && (
+            <Caution>The repeat moved this further than plain rounding would have.</Caution>
+          )}
         </Answer>
       ) : (
         <NeedsInput>

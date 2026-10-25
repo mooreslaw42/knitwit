@@ -1,6 +1,5 @@
-import { Answer, CalcScreen, Inputs, NeedsInput } from '@/components/calc-screen';
+import { Answer, CalcScreen, Inputs, NeedsInput, Working } from '@/components/calc-screen';
 import { PatternGaugeField } from '@/components/calculators/scratch-gauges';
-import { ThemedText } from '@/components/themed-text';
 import { convertGauge, formatGauge, isUsableGauge } from '@/lib/gauge';
 import { useCalcScratch } from '@/store/useCalcScratch';
 
@@ -32,14 +31,12 @@ export function WindowsCalculator() {
           label="The same fabric, three windows"
           value={formatGauge(convertGauge(gauge, WINDOWS[0]))}>
           {WINDOWS.slice(1).map((w) => (
-            <ThemedText key={`${w.width}${w.unit}`} type="small" themeColor="inkSoft">
-              {formatGauge(convertGauge(gauge, w))}
-            </ThemedText>
+            <Working key={`${w.width}${w.unit}`}>{formatGauge(convertGauge(gauge, w))}</Working>
           ))}
-          <ThemedText type="small" themeColor="inkSoft">
+          <Working>
             Nothing has been re-gauged here. If these don&apos;t match the pattern in your hands,
             none of the other calculators can be trusted either.
-          </ThemedText>
+          </Working>
         </Answer>
       ) : (
         <NeedsInput>A gauge with a stitch count over a real width.</NeedsInput>

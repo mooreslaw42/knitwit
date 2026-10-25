@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Answer, Aside, CalcScreen, Inputs, NeedsInput } from '@/components/calc-screen';
+import { Answer, Aside, CalcScreen, Inputs, NeedsInput, Working } from '@/components/calc-screen';
 import { MyGaugeField, PatternGaugeField } from '@/components/calculators/scratch-gauges';
 import { SelectField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
@@ -66,7 +66,7 @@ export function NeedleCalculator() {
     <CalcScreen
       title="Which needle or hook?"
       question="Your swatch didn't match. What size should you try next — and what would another size give you?">
-      <Inputs>
+      <Inputs label="You fill in">
         <PatternGaugeField />
         <MyGaugeField />
         <SelectField label="Craft" options={CRAFT_OPTIONS} value={craft} onChange={setCraft} />
@@ -82,30 +82,30 @@ export function NeedleCalculator() {
         <NeedsInput>Both gauges, and the size you swatched on.</NeedsInput>
       ) : suggestion.nearest === myNeedleMm ? (
         <Answer label="Stay on" value={toolSizeLabel(myNeedleMm, craft)}>
-          <ThemedText type="small" themeColor="inkSoft">
+          <Working>
             You&apos;re already on the closest size there is. Rescaling the stitch counts is the way
             to fix what&apos;s left.
-          </ThemedText>
+          </Working>
         </Answer>
       ) : (
         <Answer label="Try" value={toolSizeLabel(suggestion.nearest, craft)}>
-          <ThemedText type="small" themeColor="inkSoft">
+          <Working>
             {suggestion.nearest < myNeedleMm ? 'Smaller' : 'Bigger'} than the{' '}
             {toolSizeLabel(myNeedleMm, craft)} you used — you need{' '}
             {suggestion.nearest < myNeedleMm ? 'more' : 'fewer'} stitches to the centimetre. Exactly{' '}
             {round(suggestion.exact, 2)}mm, snapped to a size that exists.
-          </ThemedText>
+          </Working>
           {suggestion.predicted ? (
-            <ThemedText type="small" themeColor="sageDeep">
+            <Working>
               You&apos;d expect about {formatGauge(suggestion.predicted)} — the pattern wants{' '}
               {formatGauge(patternGauge)}.
-            </ThemedText>
+            </Working>
           ) : null}
         </Answer>
       )}
 
       <Aside title="Or try a size and see what it would give you">
-        <Inputs>
+        <Inputs label="And one more thing">
           <SelectField
             label="What if you used"
             options={toolSizeOptions(tryNeedle, craft)}
@@ -115,14 +115,15 @@ export function NeedleCalculator() {
         </Inputs>
         {predicted && tryNeedleMm !== null && myNeedleMm !== null ? (
           <Answer
+            bare
             label={`On ${toolSizeLabel(tryNeedleMm, craft)} you'd expect`}
             value={formatGauge(predicted)}>
-            <ThemedText type="small" themeColor="inkSoft">
+            <Working>
               Against {formatGauge(myGauge)} on the {toolSizeLabel(myNeedleMm, craft)} you used.
-            </ThemedText>
+            </Working>
           </Answer>
         ) : (
-          <NeedsInput>Your gauge, and the size you swatched on.</NeedsInput>
+          <NeedsInput bare>Your gauge, and the size you swatched on.</NeedsInput>
         )}
       </Aside>
 

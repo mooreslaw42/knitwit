@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
 
-import { InputStyle } from '@/components/knitwit-ui';
-import { Colors } from '@/constants/theme';
+import { InputStyle, PlaceholderColor } from '@/components/knitwit-ui';
 
 export type AutoGrowInputProps = TextInputProps & {
   minHeight?: number;
@@ -44,7 +43,7 @@ export function AutoGrowInput({
       multiline
       // The page is the only scroller. See the note above.
       scrollEnabled={false}
-      placeholderTextColor={Colors.inkSoft}
+      placeholderTextColor={PlaceholderColor}
       onContentSizeChange={(event) => {
         const next = Math.min(maxHeight, Math.max(minHeight, event.nativeEvent.contentSize.height));
         // Only on a real change, so a report that matches what's already set doesn't re-render.

@@ -38,9 +38,9 @@ export default function CalculatorScreen() {
           Calculator
         </ThemedText>
         <ThemedText type="small" themeColor="inkSoft">
-          Pick the question and Knitwit works it out on a screen of its own. What you fill in sits on
-          the white; what it works out sits in the tinted box. Nothing is saved — it changes no
-          pattern and no project.
+          Pick the question and Knitwit works it out on a screen of its own: the fields you fill in
+          on white, the answer in green underneath. Nothing is saved — it changes no pattern and no
+          project.
         </ThemedText>
 
         {carryOver ? (

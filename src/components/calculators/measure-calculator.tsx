@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Answer, CalcScreen, Inputs, NeedsInput } from '@/components/calc-screen';
+import { Answer, CalcScreen, Caution, Inputs, NeedsInput, Working } from '@/components/calc-screen';
 import { MyGaugeField } from '@/components/calculators/scratch-gauges';
 import { FormField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
@@ -44,12 +44,11 @@ export function MeasureCalculator() {
     <CalcScreen
       title="Stitches and centimetres"
       question="How wide is this many stitches, and how many stitches is this wide?">
-      <Inputs>
+      <Inputs label="Your gauge">
         <MyGaugeField />
       </Inputs>
 
-      <Inputs>
-        <ThemedText type="smallBold">You have a count and want the measurement</ThemedText>
+      <Inputs label="You have a count, you want the measurement">
         <View style={styles.row}>
           <View style={styles.grow}>
             <FormField
@@ -57,7 +56,7 @@ export function MeasureCalculator() {
               value={stitches}
               onChangeText={setStitches}
               keyboardType="numeric"
-              placeholder="88"
+              placeholder="e.g. 88"
             />
           </View>
           <View style={styles.grow}>
@@ -66,7 +65,7 @@ export function MeasureCalculator() {
               value={rows}
               onChangeText={setRows}
               keyboardType="numeric"
-              placeholder="120"
+              placeholder="e.g. 120"
             />
           </View>
         </View>
@@ -86,22 +85,19 @@ export function MeasureCalculator() {
             .filter(Boolean)
             .join(' · ')}>
           {nStitches !== null ? (
-            <ThemedText type="small" themeColor="inkSoft">
+            <Working>
               {nStitches} sts is {round((stitchesToCm(nStitches, myGauge) ?? 0) / 2.54, 1)}in across.
-            </ThemedText>
+            </Working>
           ) : null}
           {nRows !== null && !rowsKnown ? (
-            <ThemedText type="small" themeColor="coralDeep">
-              No row gauge entered, so there is no length to give.
-            </ThemedText>
+            <Caution>No row gauge entered, so there is no length to give.</Caution>
           ) : null}
         </Answer>
       ) : (
         <NeedsInput>Your gauge, and a number of stitches or rows.</NeedsInput>
       )}
 
-      <Inputs>
-        <ThemedText type="smallBold">You have the measurement and want the count</ThemedText>
+      <Inputs label="You have the measurement, you want the count">
         <View style={styles.row}>
           <View style={styles.grow}>
             <FormField
@@ -109,7 +105,7 @@ export function MeasureCalculator() {
               value={across}
               onChangeText={setAcross}
               keyboardType="numeric"
-              placeholder="44"
+              placeholder="e.g. 44"
             />
           </View>
           <View style={styles.grow}>
@@ -118,7 +114,7 @@ export function MeasureCalculator() {
               value={along}
               onChangeText={setAlong}
               keyboardType="numeric"
-              placeholder="60"
+              placeholder="e.g. 60"
             />
           </View>
         </View>
@@ -134,15 +130,13 @@ export function MeasureCalculator() {
             .filter(Boolean)
             .join(' · ')}>
           {nAcross !== null ? (
-            <ThemedText type="small" themeColor="inkSoft">
+            <Working>
               Exactly {round(nAcross * stitchesPerCm(myGauge))} stitches, rounded to the nearest
               one. A stitch repeat may want a different number — rescale handles that.
-            </ThemedText>
+            </Working>
           ) : null}
           {nAlong !== null && !rowsKnown ? (
-            <ThemedText type="small" themeColor="coralDeep">
-              No row gauge entered, so the row count can&apos;t be worked out.
-            </ThemedText>
+            <Caution>No row gauge entered, so the row count can&apos;t be worked out.</Caution>
           ) : null}
         </Answer>
       ) : (
