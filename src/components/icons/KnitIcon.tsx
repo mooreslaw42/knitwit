@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Platform } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { Colors } from '@/constants/theme';
@@ -50,6 +51,30 @@ function Part({ part, color, accent }: { part: IconPart; color: string; accent?:
   return tag === 'circle' ? <Circle {...attrs} {...paint} /> : <Rect {...attrs} {...paint} />;
 }
 
+// Telling an icon to a screen reader, or hiding it from one, in each platform's own words.
+//
+// react-native-svg's web shape hands anything it doesn't recognise straight to the DOM `<svg>`, and
+// React then warns that it is not a valid attribute — once per prop, on every page with an icon on
+// it, which is every page. Both of React Native's spellings are native-only: `accessible` is not a
+// DOM attribute, and neither is `importantForAccessibility`. The web wants `aria-hidden`, `role`
+// and `aria-label`, which are real attributes and go through untouched.
+//
+// `HIDDEN` is hoisted because it is the common case by a long way — an icon beside its own label is
+// decorative, and almost every one in the app is. The labelled branch has to build its object, since
+// the label is the prop, but it is rare and only reached when there is something to say.
+type A11yProps = Record<string, unknown>;
+
+const HIDDEN: A11yProps = Platform.select({
+  web: { 'aria-hidden': true },
+  default: { accessible: false, importantForAccessibility: 'no-hide-descendants' },
+}) as A11yProps;
+
+function shownProps(label: string): A11yProps {
+  return Platform.OS === 'web'
+    ? { role: 'img', 'aria-label': label }
+    : { accessible: true, accessibilityRole: 'image', accessibilityLabel: label };
+}
+
 export const KnitIcon = memo(function KnitIcon({
   name,
   size = 24,
@@ -57,17 +82,12 @@ export const KnitIcon = memo(function KnitIcon({
   accent,
   accessibilityLabel,
 }: Props) {
-  const labelled = !!accessibilityLabel;
   return (
     <Svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      accessible={labelled}
-      accessibilityRole={labelled ? 'image' : undefined}
-      accessibilityLabel={accessibilityLabel}
-      aria-hidden={!labelled}
-      importantForAccessibility={labelled ? 'yes' : 'no-hide-descendants'}>
+      {...(accessibilityLabel ? shownProps(accessibilityLabel) : HIDDEN)}>
       {KNIT_ICONS[name].map((part, i) => (
         <Part key={i} part={part} color={color} accent={accent} />
       ))}
