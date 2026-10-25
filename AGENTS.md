@@ -70,7 +70,11 @@ not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENT
 - `npm test` — Jest (`jest-expo` preset + `@testing-library/react-native`); prioritize testing
   pure logic (counter math, gauge calculations) over UI snapshot tests. Render tests earn their
   place where a mistake is only visible on screen — see `charts.test.tsx` and
-  `app/pattern/new.test.tsx`. Two things bite: **`render` is async here**, so `await render(...)`
+  `src/__tests__/app/pattern/new.test.tsx`. Tests sit beside what they test, **except tests of a
+  route screen**, which mirror the route path under `src/__tests__/app/` — anything ending `.tsx`
+  under `src/app` becomes a route (Expo Router only excludes `+api`/`+middleware`/`+html`/
+  `+native-intent`), and a test file as a route breaks `npm run web` outright. Two things bite:
+  **`render` is async here**, so `await render(...)`
   or `screen` stays empty and every query fails with "render function has not been called"; and
   anything reaching `knitwit-ui` pulls in Reanimated, which needs the
   `react-native-worklets/jest/resolver.js` resolver already set in `package.json` — without it Jest
