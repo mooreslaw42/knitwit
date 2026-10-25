@@ -1,9 +1,10 @@
 # The Calculator, rebuilt as a set of calculators
 
-**Status: proposed, not built** — except the two bugs it turned up, which are fixed: `GaugeField`
-showing numbers that contradicted the answer beside them, and a test file serving as a route.
-Written against `src/app/(tabs)/calculator.tsx` as it stands on `main` (bfe694a), with the screen
-measured in a browser rather than read off the source.
+**Status: phases 1 and 2 built; phases 3 and 4 outstanding.** Written against
+`src/app/(tabs)/calculator.tsx` as it stood on `main` (bfe694a), with the screen measured in a
+browser rather than read off the source. Everything below the fold describes **that** screen, in the
+present tense, because the diagnosis is what the rest of the plan rests on — see Phasing at the
+bottom for what has actually shipped since.
 
 The tab is six cards on one route. Each card is well written — a question in the knitter's words, a
 clear visual split between what you type and what it works out, and honest copy about what is an
@@ -315,18 +316,57 @@ Three break the symmetry and should be decided individually rather than by the b
 
 ## Phasing
 
-1. **Restructure, no new maths.** Registry, hub, `[tool]` route; six cards → four calculators; drop
-   the invented defaults; `PrefilledField` and the params it reads. Everything already tested stays
-   tested — `gauge.ts` is untouched. (The `GaugeField` staleness fix it depended on has landed; see
-   `gauge-field.test.tsx`.)
-2. **Yarn and money.** `src/lib/yarn-estimate.ts` (both modes) and the cost screen, with the stash
-   wired in for metres, grams, price and `skeins`.
-3. **Shaping and the rest.** Evenly-across-a-row; shaping over rows (over existing `regauge.ts`
-   functions); substitution; what's left on the ball.
-4. **Write-back.** "Use this" into a project or pattern.
+1. **Restructure, no new maths. — done.** `src/lib/calculators.ts` as the registry, the hub on the
+   tab, `calculator/[tool].tsx` as a pushed screen, six cards down to four, and the invented
+   defaults gone. Context arrives as a prefill through `use-calculator-prefill.ts`.
 
-Phase 1 is a refactor and a bug fix and should land on its own. Phase 2 is where the tab starts
-answering a question nothing else in the app answers.
+   Two corrections to the plan as written, both found while building it:
+
+   - **"Say a gauge another way" stayed a calculator** rather than being demoted to a line under a
+     gauge field. A window chip shows one window at a time; what settles "are these the same
+     fabric?" is seeing all three at once. It also makes the six-to-four arithmetic above correct,
+     which it was not.
+   - **The prefill read the wrong source.** It shipped reading `Project.gauge` alone — 0 of 3 seed
+     projects carry one, against 7 of 7 patterns and 3 of 3 yarns — so the hub's project row never
+     appeared and `?project=` had no reachable door. It now reads `?pattern=` and `?material=` as
+     well, and there are links into it from a pattern, from either kind of section, and from a stash
+     yarn.
+
+2. **Yarn and money. — done.** `src/lib/yarn-estimate.ts` carries both modes and the ball/cost
+   arithmetic; `yarn-calculator.tsx` is the screen, with the stash filling in metres, grams, price
+   and `skeins`. Cost ended up inside it rather than in a calculator of its own, for the reason given
+   above: it is one errand.
+
+3. **Shaping and the rest. — not built.** Evenly-across-a-row; shaping over rows, which is nearly
+   free over `distributeShaping` and `describeIntervals` in `regauge.ts`; substitution; what is left
+   on the ball.
+
+4. **Write-back. — not built.** "Use this" into a project or pattern.
+
+## Still owed on what has shipped
+
+- **None of it has been seen at phone width.** Every screenshot taken while building was desktop;
+  `resize_window` had no effect in the browser used. The redesign leans on field borders, a dashed
+  outline and three-across field rows that wrap at `minWidth: 110`, all of which want checking on a
+  real device or a simulator.
+- **The answer is not pinned** to the bottom of the screen on a phone while you type. One question
+  per screen gets most of that benefit, which is why it was not in phase 1, but it is still the
+  thing that would make a long form on a small screen read properly.
+
+## What the presentation turned into
+
+The plan said "inputs on the white card, the answer in a tinted well" and kept the existing grammar.
+Built and looked at, that grammar turned out never to have rendered at all: a text input is `white`
+and so is a `Card`, with no border between them, so a field was marked only by the text already in
+it — a placeholder `22` was indistinguishable from a typed 22 — and the tinted well was `cream` on a
+`cream` page, a 2% difference.
+
+What it is now: fields have an edge (`InputStyle`, and both select controls to match, which fixes
+every form in the app); placeholders say "e.g." and sit lighter than any value; each half of a
+screen is announced rather than implied ("You fill in", "Knitwit works out"); and the answer is a
+solid `sageDeep` block in white text, with its working at reduced opacity and caveats in butter. The
+empty answer block is there before there is an answer, outlined in sage and naming what it still
+needs.
 
 ## One thing found on the way in, unrelated to any of this (**fixed**)
 

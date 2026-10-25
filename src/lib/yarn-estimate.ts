@@ -10,8 +10,6 @@ import type { PatternCategory, TechniqueCraft } from '@/types/knitwit';
 // starting point. Both say so where they are shown. Nothing here is a substitute for buying a
 // spare ball of the same dye lot.
 
-const CM_PER_INCH = 2.54;
-
 // ---- From a swatch: the honest one ----
 
 // Grams per square centimetre, from fabric the knitter actually made. This is the whole method —
@@ -275,10 +273,6 @@ export function ballsFor(input: BallsInput): BallsEstimate | null {
 }
 
 // ---- Shared ----
-
-export function inchesToCm(inches: number): number {
-  return inches * CM_PER_INCH;
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
