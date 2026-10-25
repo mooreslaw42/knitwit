@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { CareSymbolsField } from '@/components/care-symbols-field';
+import { CalculatorLink } from '@/components/calculators/calculator-link';
 import { GaugeField } from '@/components/gauge-field';
 import { PhotoImage } from '@/components/photo';
 import { SwatchField } from '@/components/swatch-field';
@@ -324,6 +325,16 @@ export default function MaterialEditScreen() {
             onChange={(v) => set('thickness', v)}
           />
           <GaugeField value={form.gauge} onChange={(g) => set('gauge', g)} />
+          {/* A ball band's gauge is the closest thing to a swatch you have before you knit one, so
+              it is worth being able to ask what it means in stitches and centimetres. Only once the
+              yarn is saved — a link carrying "new" as an id would arrive at nothing. */}
+          {!isNew && existing?.gauge ? (
+            <CalculatorLink
+              id="measure"
+              context={{ material: id }}
+              label="What this gauge means in centimetres"
+            />
+          ) : null}
           <SelectField
             label="Washing"
             options={WASHING_OPTIONS}

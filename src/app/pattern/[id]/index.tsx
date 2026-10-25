@@ -9,6 +9,7 @@ import { Card, ConfirmButton, FormField, PillButton, SelectField } from '@/compo
 import { ExternalLink } from '@/components/external-link';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { SharePattern } from '@/components/share-pattern';
+import { CalculatorLink } from '@/components/calculators/calculator-link';
 import { GaugeField } from '@/components/gauge-field';
 import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
@@ -354,6 +355,16 @@ export default function PatternDetailScreen() {
                   no way to tell which is right. */}
               <Field label="Gauge" value={gaugeLine(pattern.gauge, unit)} />
               <Field label="Your swatch" value={gaugeLine(pattern.swatchGauge, unit)} />
+              {/* Beside the two gauges, because that is the moment the question comes up: the
+                  pattern says 22 and you got 20, so what do you cast on? Carries both numbers over
+                  rather than making them be typed again. */}
+              {pattern.gauge ? (
+                <CalculatorLink
+                  id="rescale"
+                  context={{ pattern: id }}
+                  label="Work out your cast-on at your gauge"
+                />
+              ) : null}
               {/* The way back to where the pattern came from — the designer's page, the shop, the
                   blog post. Tappable, because a URL you can only read is a URL you have to retype. */}
               {pattern.link ? (

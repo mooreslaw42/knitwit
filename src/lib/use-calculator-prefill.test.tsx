@@ -11,14 +11,17 @@ import type { Gauge } from '@/types/knitwit';
 const metric: Gauge = { stitches: 22, rows: 30, width: 10, height: 10, unit: 'cm' };
 const mine: Gauge = { stitches: 20, rows: 28, width: 10, height: 10, unit: 'cm' };
 
-let mockParams: { project?: string };
+let mockParams: { project?: string; pattern?: string; material?: string };
 let mockProjects: Record<string, unknown>;
+let mockPatterns: Record<string, unknown>;
+let mockMaterials: Record<string, unknown>;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@/store/useKnitwitStore', () => ({
-  useKnitwitStore: (select: (s: unknown) => unknown) => select({ projects: mockProjects }),
+  useKnitwitStore: (select: (s: unknown) => unknown) =>
+    select({ projects: mockProjects, patterns: mockPatterns, materials: mockMaterials }),
 }));
 
 function Probe() {
@@ -32,11 +35,24 @@ beforeEach(() => {
     hazel: { name: 'Hazel cardigan', gauge: { pattern: metric, mine } },
     plain: { name: 'Plain socks', gauge: null },
   };
+  mockPatterns = {
+    yoke: { name: 'Meadow yoke', gauge: metric, swatchGauge: null },
+    swatched: { name: 'Swatched tee', gauge: metric, swatchGauge: mine },
+  };
+  mockMaterials = {
+    merino: { brand: 'DROPS', colorName: 'Baby Merino', gauge: mine, crafts: undefined },
+    dual: {
+      brand: 'DROPS',
+      colorName: 'Nepal',
+      gauge: mine,
+      crafts: { crochet: { thickness: '5mm', gauge: { ...mine, stitches: 14 } } },
+    },
+  };
   useCalcScratch.getState().clear();
 });
 
-describe('arriving at a calculator from a project', () => {
-  it('leaves the scratch alone with no project in the url', async () => {
+describe('arriving at a calculator with context', () => {
+  it('leaves the scratch alone with nothing in the url', async () => {
     await render(<Probe />);
     expect(useCalcScratch.getState().patternGauge).toBeNull();
     expect(useCalcScratch.getState().myGauge).toBeNull();
@@ -72,6 +88,70 @@ describe('arriving at a calculator from a project', () => {
     await render(<Probe />);
 
     expect(useCalcScratch.getState().patternGauge).toBeNull();
+  });
+
+
+  // The richest source, and the one this hook originally couldn't read: practically every pattern
+  // states a gauge, because that is what a pattern is obliged to say.
+  it('takes the pattern’s gauge from a pattern', async () => {
+    mockParams = { pattern: 'yoke' };
+
+    await render(<Probe />);
+
+    expect(useCalcScratch.getState().patternGauge).toEqual(metric);
+    expect(useCalcScratch.getState().patternGaugeFrom).toEqual({
+      label: 'Meadow yoke',
+      href: '/pattern/yoke',
+    });
+    // No swatch measured, so nothing is claimed about the knitter's own fabric. Filling it with the
+    // pattern's own gauge would answer every question with "they match".
+    expect(useCalcScratch.getState().myGauge).toBeNull();
+  });
+
+  it('takes your gauge too when the pattern has a measured swatch', async () => {
+    mockParams = { pattern: 'swatched' };
+
+    await render(<Probe />);
+
+    expect(useCalcScratch.getState().patternGauge).toEqual(metric);
+    expect(useCalcScratch.getState().myGauge).toEqual(mine);
+  });
+
+  // A ball band's figure describes what the yarn does, which is the nearest thing to a swatch
+  // before one is knitted — so it goes in as *yours*, not as the pattern's.
+  it('takes a yarn’s gauge as your own', async () => {
+    mockParams = { material: 'merino' };
+
+    await render(<Probe />);
+
+    expect(useCalcScratch.getState().myGauge).toEqual(mine);
+    expect(useCalcScratch.getState().myGaugeFrom).toEqual({
+      label: 'DROPS — Baby Merino',
+      href: '/material/merino',
+    });
+    expect(useCalcScratch.getState().patternGauge).toBeNull();
+  });
+
+  it('prefers a yarn’s per-craft gauge for the craft in hand', async () => {
+    useCalcScratch.getState().setCraft('crochet');
+    mockParams = { material: 'dual' };
+
+    await render(<Probe />);
+
+    expect(useCalcScratch.getState().myGauge?.stitches).toBe(14);
+  });
+
+  // A link can name more than one. The more specific wins, so a project's snapshot is not undone by
+  // the pattern it was made from.
+  it('lets a project override the pattern it came from', async () => {
+    mockParams = { project: 'hazel', pattern: 'yoke' };
+
+    await render(<Probe />);
+
+    expect(useCalcScratch.getState().patternGaugeFrom).toEqual({
+      label: 'Hazel cardigan',
+      href: '/project/hazel',
+    });
   });
 
   // The rule that makes this a prefill rather than a mode: once applied, it is the knitter's number

@@ -4,6 +4,7 @@ import {
   calculatorById,
   calculatorsInGroup,
 } from '@/lib/calculators';
+import { calculatorHref } from '@/components/calculators/calculator-link';
 import { KNIT_ICONS } from '@/components/icons/knit-icon-data';
 
 describe('the calculator registry', () => {
@@ -49,5 +50,27 @@ describe('the calculator registry', () => {
     expect(calculatorById('rescale')?.title).toBe('Rescale a stitch count');
     expect(calculatorById('nonsense')).toBeNull();
     expect(calculatorById(undefined)).toBeNull();
+  });
+});
+
+describe('calculatorHref', () => {
+  it('addresses a calculator with no context at all', () => {
+    expect(calculatorHref('rescale')).toBe('/calculator/rescale');
+    expect(calculatorHref('needle', {})).toBe('/calculator/needle');
+  });
+
+  it('carries the context it is given, and only that', () => {
+    expect(calculatorHref('rescale', { pattern: 'yoke' })).toBe('/calculator/rescale?pattern=yoke');
+    expect(calculatorHref('rescale', { project: 'hazel', pattern: undefined })).toBe(
+      '/calculator/rescale?project=hazel',
+    );
+  });
+
+  // Project keys and entity ids are generated, but a yarn imported from Ravelry can arrive with
+  // anything in its id, and an unescaped & would silently truncate the query.
+  it('escapes what it puts in the query string', () => {
+    expect(calculatorHref('measure', { material: 'a&b c' })).toBe(
+      '/calculator/measure?material=a%26b%20c',
+    );
   });
 });
