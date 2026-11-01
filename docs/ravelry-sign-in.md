@@ -107,6 +107,14 @@ Supabase Auth ── Bearer <ravelry token> ──▶ functions/v1/ravelry-useri
    to you@example.com". Something like: *"Confirm this is your address so you can always get back
    into Knitwit"*, with the `{{ .ConfirmationURL }}` link.
 
+6. Update the privacy statement (`src/lib/legal.ts`) in the same release that enables the
+   provider, not before. It does not mention Ravelry today, which is right while the buttons do
+   nothing. Once they work it has to say: signing in with Ravelry gives Knitwit a numeric Ravelry
+   id, the username, the first name and the profile photo link (`ravelry-userinfo/claims.ts`), and
+   no email; Ravelry is a separate service in the United States, used only
+   by knitters who choose it; and, once the import exists, which of their Ravelry things it reads.
+   The "Apple and Google" line under *Who processes data for us* is the natural place.
+
 ### Why "Enabled" waits for the app
 
 `/auth/v1/authorize?provider=custom:ravelry` is public. Enabled before the email gate is deployed,

@@ -27,8 +27,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -50,7 +49,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Knitwit needs your photo library so you can put a picture on a project, a pattern or a yarn in your stash.",
-          "cameraPermission": "Knitwit needs the camera so you can photograph a yarn's ball band and have its details read for you."
+          "cameraPermission": "Knitwit needs the camera so you can photograph a yarn's ball band and have its details read for you.",
+          "microphonePermission": false
         }
       ],
       "expo-sharing",
