@@ -26,6 +26,18 @@ const fail = (status: number, headers: Record<string, string> = {}) =>
     headers,
   });
 
+// What a reasoning model hands back when its thinking has eaten the whole `max_tokens` budget:
+// a 200, a finish_reason of 'length', and either nothing written down or an object that stops
+// mid-property.
+const outOfRoom = (content: string | null) =>
+  new Response(
+    JSON.stringify({
+      model: 'glm-5.2',
+      choices: [{ finish_reason: 'length', message: { content } }],
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+
 describe('which GreenPT failures are worth retrying', () => {
   it('retries the ones that mean “same request, later”', () => {
     for (const status of [408, 409, 429, 500, 502, 503, 504]) {
@@ -201,5 +213,81 @@ describe('a GreenPT call that hits a transient failure', () => {
     );
     // Once, plus the one-off json_object probe — never three.
     expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+});
+
+// The reported failure: a knitter writes a section's instructions, asks the AI to chart them, and
+// is told "Couldn't convert those rows: GreenPT returned no message content." Nothing is wrong
+// with the request — the model simply spent its budget thinking — so the provider asks again
+// rather than handing that sentence to someone who cannot act on it.
+describe('a GreenPT call that comes back unusable', () => {
+  const realFetch = global.fetch;
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    warn.mockRestore();
+    global.fetch = realFetch;
+  });
+
+  const settle = async <T,>(promise: Promise<T>): Promise<T> => {
+    const settled = promise.then(
+      (value) => ({ ok: true as const, value }),
+      (error) => ({ ok: false as const, error }),
+    );
+    await jest.advanceTimersByTimeAsync(60_000);
+    const result = await settled;
+    if (!result.ok) throw result.error;
+    return result.value;
+  };
+
+  it('asks again when the answer has no content at all', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(outOfRoom(null))
+      .mockResolvedValueOnce(ok());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await settle(greenptProvider('key').complete(request));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.text).toBe('{"a":1}');
+  });
+
+  it('asks again when the answer stops mid-object', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(outOfRoom('{"rows":[{"index":0,"stitches":[{"type":"kni'))
+      .mockResolvedValueOnce(ok());
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await settle(greenptProvider('key').complete(request));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.text).toBe('{"a":1}');
+  });
+
+  it('says what actually happened once asking again has not helped either', async () => {
+    const fetchMock = jest.fn().mockImplementation(() => Promise.resolve(outOfRoom(null)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(settle(greenptProvider('key').complete(request))).rejects.toThrow(/ran out of room/);
+    // Twice, not more: the same two attempts a 503 gets, on the same deadline.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a usable answer alone', async () => {
+    const fetchMock = jest.fn().mockImplementation(() => Promise.resolve(ok()));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await settle(greenptProvider('key').complete(request));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.text).toBe('{"a":1}');
   });
 });

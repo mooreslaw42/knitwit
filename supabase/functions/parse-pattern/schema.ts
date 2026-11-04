@@ -124,6 +124,11 @@ export type ModelRow = {
   // applied quietly — the stitch-count check catches most errors, but not all of them.
   confident: boolean;
   note: string;
+  // Section mode only (see SECTION_SCHEMA): in fill mode the client already knows what the row is
+  // called, which side it's on and what it says, and ROWS_SCHEMA doesn't ask for any of it.
+  label?: string;
+  side?: 'RS' | 'WS';
+  instruction?: string;
 };
 
 export type ParsePatternResponse = {

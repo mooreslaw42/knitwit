@@ -47,7 +47,6 @@ const MAX_SECTION_CHARS = 20_000;
 const MAX_ROWS = 40;
 const MAX_SIZES = 12;
 const MAX_INSTRUCTION_CHARS = 1_000;
-const MAX_OUTPUT_TOKENS = 8_000;
 // A data URL of a photo the client already downscales to roughly this. The client's own ceiling is
 // 1.5MB; this leaves room for the data: prefix rather than rejecting a picture it just accepted.
 const MAX_IMAGE_CHARS = 1_800_000;
@@ -244,6 +243,17 @@ function validateModelRows(parsed: unknown, sizeCount: number): ModelRow[] {
       // Absent means unconfident: the app reviews the row rather than applying it quietly.
       confident: r.confident === true && stitches.length > 0,
       note: typeof r.note === 'string' ? r.note.slice(0, 300) : '',
+      // Section mode's rows don't exist yet, so their identity comes from the model as well: the
+      // label the pattern gave the row, the side it's worked on, and its own wording — which has
+      // to survive, because it's what the knitter reads when the chart can't express something.
+      // Both the schema and the prompt ask for all three; this used to drop them on the floor, so
+      // an AI-charted section arrived as "Row 1…n" with every instruction blank. Absent in fill
+      // mode, where the client already has them and the schema doesn't offer them.
+      ...(typeof r.label === 'string' && r.label.trim() ? { label: r.label.slice(0, 80) } : {}),
+      ...(r.side === 'RS' || r.side === 'WS' ? { side: r.side } : {}),
+      ...(typeof r.instruction === 'string' && r.instruction.trim()
+        ? { instruction: r.instruction.slice(0, MAX_INSTRUCTION_CHARS) }
+        : {}),
     };
   });
 }
@@ -262,6 +272,14 @@ const MAX_DOCUMENT_OUTPUT_TOKENS = 32_000;
 // A section with its repeats expanded can run to a few hundred rows.
 const MAX_SECTION_OUTPUT_TOKENS = 24_000;
 
+// Fill mode asks about a handful of rows and its answer is a few hundred tokens, so this was
+// 8,000 — which is the size of the answer and not the size of the budget. A reasoning model
+// spends its thinking out of the same allowance: charting two rib rows was measured at 4,201
+// output tokens, so an 8,000 ceiling was one ordinary train of thought away from cutting the
+// answer off, and two calls in three came back unusable. Billing is by the token actually spent,
+// so a ceiling that is never reached costs nothing.
+const MAX_ROWS_OUTPUT_TOKENS = 24_000;
+
 async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Promise<Response> {
   // Section mode returns a whole section rather than a handful of rows, so it needs the richer
   // schema and more room to write.
@@ -271,7 +289,7 @@ async function handleRows(req: ParsePatternRequest, provider: ModelProvider): Pr
     user: buildUserMessage(req),
     schema: wholeSection ? SECTION_SCHEMA : ROWS_SCHEMA,
     model: req.model ?? provider.defaultModel,
-    maxTokens: wholeSection ? MAX_SECTION_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+    maxTokens: wholeSection ? MAX_SECTION_OUTPUT_TOKENS : MAX_ROWS_OUTPUT_TOKENS,
   });
 
   const rows = validateModelRows(JSON.parse(result.text), req.sizes.length);

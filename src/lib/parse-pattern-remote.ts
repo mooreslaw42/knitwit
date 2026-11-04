@@ -37,8 +37,11 @@ export type RemoteParseResult = {
   };
 };
 
-// A handful of rows is a small job; if it hasn't come back by now something is wrong.
-const ROWS_TIMEOUT_MS = 90_000;
+// A handful of rows is a small job, but the model thinks for thousands of tokens before it writes
+// one down — a measured fill call took 80 seconds — and an answer it cannot use is retried
+// server-side inside a 100-second deadline. This sits just above that, so a failure arrives as the
+// function's own explanation of what went wrong rather than as a timeout that explains nothing.
+const ROWS_TIMEOUT_MS = 120_000;
 
 let uid = 0;
 const nextId = () => `g${Date.now().toString(36)}${uid++}`;
