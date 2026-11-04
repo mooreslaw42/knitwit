@@ -130,6 +130,16 @@ what it can't chart faithfully, and only the refusals come here.
 **Response**: `{ model, rows: [{ index, stitches, confident, note }], usage }`. Counts come back as
 one integer per size; the client collapses a run that's the same for every size back to a scalar.
 
+An empty `rows` list is **section mode**: the deterministic parser read nothing, so there are no
+refusals to name and the model charts the whole section instead, expanding repeats. Those rows
+don't exist on the client yet, so each one also carries a `label`, a `side` and its `instruction`
+— the row's own wording, which is what the knitter reads when the chart can't express something.
+
+Both modes are allowed 24,000 output tokens. That is far more than either answer needs, and it is
+not optional: the model's thinking is spent out of the same allowance, and charting two rib rows
+was measured at 4,201 output tokens. The old 8,000 ceiling cut fill mode off mid-answer two calls
+in three. Billing is by the token actually spent, so the headroom is free.
+
 The client re-validates everything that comes back (`src/lib/parse-pattern-remote.ts`) and re-runs
 the stitch-count check over the merged section, so a bad response degrades to "flagged for review"
 rather than a wrong chart.
@@ -177,10 +187,16 @@ The same file is read automatically by `supabase functions serve` for local runs
 ### Providers
 
 **GreenPT (`provider-greenpt.ts`)** is the EU-hosted provider AGENTS.md names, reached through its
-OpenAI-compatible `/v1/chat/completions` endpoint — no SDK, just fetch. Default model
-`glm-5.3-flash` (€0.11/€0.44 per M tokens): the work is small and schema-constrained, so it does
-not want a flagship coding model — `glm-5.2` does the same job at ten times the price. Escalate
+OpenAI-compatible `/v1/chat/completions` endpoint — no SDK, just fetch. Default model `glm-5.2`,
+with `glm-5.3-flash` as the fallback: the cheaper model was the default, and stopped answering
+(see the comment on `DEFAULT_MODEL` for the measurement and for when to flip them back). Escalate
 per call if the reconcile rate justifies it.
+
+An answer that arrives and cannot be used — no content at all, or JSON that stops mid-property,
+both of which mean the model thought until it ran out of room — is retried on the same terms as a
+503: same two attempts, same backoff, same 100-second deadline. Thinking is stochastic, so the
+second attempt usually leaves itself room where the first did not. Watch for `ran out of room` in
+the logs; if it is frequent, raise the task's ceiling rather than the retry count.
 
 Whether that endpoint honours `response_format: {type:'json_schema'}` is **not documented**, so the
 provider discovers it at runtime: it asks for the schema, and on a 4xx retries once in plain JSON

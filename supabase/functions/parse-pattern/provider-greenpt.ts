@@ -68,6 +68,19 @@ const MAX_DELAY_MS = 4_000;
 const ATTEMPT_TIMEOUT_MS = 60_000;
 const DEADLINE_MS = 100_000;
 
+// An answer that arrived and cannot be used.
+//
+// glm-5.2 is a reasoning model and its thinking is spent out of the same `max_tokens` budget as
+// the answer: measured against the deployed function on 2026-11-04, charting *two* rib rows came
+// back having burned 4,201 output tokens, and a section pass burned 5,639. When the budget runs
+// out the answer either stops mid-object or never starts at all, and the knitter was told
+// "Couldn't convert those rows: GreenPT returned no message content." — two calls in three, on a
+// request with nothing whatever wrong with it.
+//
+// So it is treated as what it is: a transient failure, like a 503. There is nothing for the
+// knitter to fix and no reason to make them press the button again.
+class UnusableAnswer extends Error {}
+
 export function isRetryableStatus(status: number): boolean {
   return RETRY_STATUSES.has(status);
 }
@@ -96,7 +109,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type ChatResponse = {
   model?: string;
-  choices?: { message?: { content?: string } }[];
+  // `finish_reason` is the provider saying why it stopped. 'length' means it hit `max_tokens`,
+  // which is the difference between "the model had nothing to say" and "the model was cut off".
+  choices?: { finish_reason?: string; message?: { content?: string } }[];
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -209,80 +224,129 @@ export function greenptProvider(apiKey: string, baseUrl = BASE_URL): ModelProvid
     throw lastError ?? new Error('GreenPT could not be reached.');
   }
 
+  // One whole exchange: ask, fall back on model or schema mode if the request itself is refused,
+  // and hand back the answer — or, if the answer cannot be used, an UnusableAnswer for `complete`
+  // to retry.
+  async function ask(req: ModelRequest, deadline: number): Promise<ModelResult> {
+    let mode: 'json_schema' | 'json_object' = schemaMode === 'unknown' ? 'json_schema' : schemaMode;
+    let response = await postWithRetry(req, mode, deadline);
+
+    // The default model is down rather than busy — retries are spent and it is still failing
+    // transiently. Try the fallback once before giving up. Only for the default: a pinned model
+    // is a deliberate choice, and quietly answering with a different one would make a
+    // comparison run lie about what it measured.
+    if (
+      !response.ok &&
+      isRetryableStatus(response.status) &&
+      req.model === DEFAULT_MODEL &&
+      !req.image &&
+      Date.now() < deadline
+    ) {
+      console.warn(
+        `GreenPT: ${DEFAULT_MODEL} still failing with ${response.status} after ${MAX_ATTEMPTS} attempts; trying ${FALLBACK_MODEL}.`,
+      );
+      await response.body?.cancel().catch(() => {});
+      response = await postWithRetry({ ...req, model: FALLBACK_MODEL }, mode, deadline);
+    }
+
+    // A 4xx on the first attempt is most likely the unsupported `response_format` — retry once
+    // in plain JSON mode before giving up, and remember the answer. The retryable 4xx codes are
+    // excluded: a rate limit that outlasted its retries says nothing about schema support, and
+    // treating it as a rejection would spend one more call to learn the wrong lesson and
+    // strand the isolate in json_object mode for good.
+    if (
+      !response.ok &&
+      mode === 'json_schema' &&
+      response.status >= 400 &&
+      response.status < 500 &&
+      !isRetryableStatus(response.status)
+    ) {
+      console.warn(
+        `GreenPT rejected json_schema (${response.status}); falling back to json_object mode.`,
+      );
+      schemaMode = 'json_object';
+      mode = 'json_object';
+      response = await postWithRetry(req, mode, deadline);
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      const error = new Error(
+        `GreenPT returned ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`,
+      );
+      // Carried through so a rate limit reaches the client as one.
+      (error as { status?: number }).status = response.status;
+      throw error;
+    }
+
+    if (schemaMode === 'unknown') schemaMode = mode;
+
+    const body = (await response.json()) as ChatResponse;
+    const truncated = body.choices?.[0]?.finish_reason === 'length';
+    const content = body.choices?.[0]?.message?.content;
+    // These two sentences reach the knitter, under "Couldn't convert those rows:" — so they say
+    // what happened in words someone who has never heard of a token can act on.
+    if (!content) {
+      throw new UnusableAnswer(
+        truncated
+          ? 'the AI ran out of room to answer before it wrote anything down. Try again.'
+          : 'the AI answered with nothing at all. Try again.',
+      );
+    }
+
+    const text = extractJson(content);
+    // Parsed here as well as by the caller, because a half-written object is the shape a
+    // cut-off answer takes and the retry above is the only thing that can help it. The caller
+    // parses again to validate the contents; this only asks whether there is an object at all.
+    try {
+      JSON.parse(text);
+    } catch {
+      throw new UnusableAnswer(
+        truncated
+          ? 'the AI ran out of room and its answer stopped mid-sentence. Try again.'
+          : "the AI answered with something that isn't a chart. Try again.",
+      );
+    }
+
+    return {
+      text,
+      model: body.model ?? req.model,
+      usage: {
+        ...EMPTY_USAGE,
+        input_tokens: body.usage?.prompt_tokens ?? 0,
+        output_tokens: body.usage?.completion_tokens ?? 0,
+        cache_read_input_tokens: body.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      },
+    };
+  }
+
   return {
     name: 'greenpt',
     defaultModel: DEFAULT_MODEL,
 
     async complete(req: ModelRequest): Promise<ModelResult> {
       const deadline = Date.now() + DEADLINE_MS;
-      let mode: 'json_schema' | 'json_object' =
-        schemaMode === 'unknown' ? 'json_schema' : schemaMode;
-      let response = await postWithRetry(req, mode, deadline);
+      let unusable: UnusableAnswer | null = null;
 
-      // The default model is down rather than busy — retries are spent and it is still failing
-      // transiently. Try the fallback once before giving up. Only for the default: a pinned model
-      // is a deliberate choice, and quietly answering with a different one would make a
-      // comparison run lie about what it measured.
-      if (
-        !response.ok &&
-        isRetryableStatus(response.status) &&
-        req.model === DEFAULT_MODEL &&
-        !req.image &&
-        Date.now() < deadline
-      ) {
-        console.warn(
-          `GreenPT: ${DEFAULT_MODEL} still failing with ${response.status} after ${MAX_ATTEMPTS} attempts; trying ${FALLBACK_MODEL}.`,
-        );
-        await response.body?.cancel().catch(() => {});
-        response = await postWithRetry({ ...req, model: FALLBACK_MODEL }, mode, deadline);
+      // An answer that cannot be used is retried on the same terms as a request that never
+      // landed: same budget, same backoff, same deadline. Thinking is stochastic, so the next
+      // attempt usually leaves itself room where the last one did not.
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          return await ask(req, deadline);
+        } catch (error) {
+          if (!(error instanceof UnusableAnswer)) throw error;
+          unusable = error;
+          const delay = retryDelayMs(attempt, null);
+          if (attempt === MAX_ATTEMPTS || Date.now() + delay >= deadline) break;
+          console.warn(
+            `GreenPT answered unusably: ${error.message} Retrying (attempt ${attempt} of ${MAX_ATTEMPTS}).`,
+          );
+          await sleep(delay);
+        }
       }
 
-      // A 4xx on the first attempt is most likely the unsupported `response_format` — retry once
-      // in plain JSON mode before giving up, and remember the answer. The retryable 4xx codes are
-      // excluded: a rate limit that outlasted its retries says nothing about schema support, and
-      // treating it as a rejection would spend one more call to learn the wrong lesson and
-      // strand the isolate in json_object mode for good.
-      if (
-        !response.ok &&
-        mode === 'json_schema' &&
-        response.status >= 400 &&
-        response.status < 500 &&
-        !isRetryableStatus(response.status)
-      ) {
-        console.warn(
-          `GreenPT rejected json_schema (${response.status}); falling back to json_object mode.`,
-        );
-        schemaMode = 'json_object';
-        mode = 'json_object';
-        response = await postWithRetry(req, mode, deadline);
-      }
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => '');
-        const error = new Error(
-          `GreenPT returned ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-        );
-        // Carried through so a rate limit reaches the client as one.
-        (error as { status?: number }).status = response.status;
-        throw error;
-      }
-
-      if (schemaMode === 'unknown') schemaMode = mode;
-
-      const body = (await response.json()) as ChatResponse;
-      const content = body.choices?.[0]?.message?.content;
-      if (!content) throw new Error('GreenPT returned no message content.');
-
-      return {
-        text: extractJson(content),
-        model: body.model ?? req.model,
-        usage: {
-          ...EMPTY_USAGE,
-          input_tokens: body.usage?.prompt_tokens ?? 0,
-          output_tokens: body.usage?.completion_tokens ?? 0,
-          cache_read_input_tokens: body.usage?.prompt_tokens_details?.cached_tokens ?? 0,
-        },
-      };
+      throw unusable ?? new Error('GreenPT could not be reached.');
     },
   };
 }
