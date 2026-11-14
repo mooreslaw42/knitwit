@@ -1,129 +1,83 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Brand } from './brand';
-import { KnitIcon, type KnitIconName } from './icons/KnitIcon';
-import { ThemedText } from './themed-text';
+import { AccountLink, NAV_ITEMS, NavItem, navStyles, type NavLayout } from './web-nav';
 
-import { Colors, CompactNavBelow, MaxContentWidth, Spacing } from '@/constants/theme';
-
-const TABS = [
-  { name: 'home', href: '/', label: 'Home', icon: 'home' },
-  { name: 'projects', href: '/projects', label: 'Projects', icon: 'yarn' },
-  { name: 'library', href: '/library', label: 'Library', icon: 'library' },
-  { name: 'counter', href: '/counter', label: 'Counter', icon: 'counter' },
-  { name: 'calculator', href: '/calculator', label: 'Calculator', icon: 'gauge' },
-  { name: 'account', href: '/account', label: 'Account', icon: 'account' },
-] as const satisfies readonly { name: string; href: string; label: string; icon: KnitIconName }[];
+import type { KnitIconName } from './icons/KnitIcon';
+import { useNavLayout } from '@/lib/use-nav-layout';
 
 export default function AppTabs() {
-  const compact = useWindowDimensions().width < CompactNavBelow;
+  const layout = useNavLayout();
+  const triggers = NAV_ITEMS.map((tab) => (
+    <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
+      <TabButton icon={tab.icon} label={tab.label} layout={layout} />
+    </TabTrigger>
+  ));
+
+  // On a phone-sized window the bar goes along the bottom, where it is on iOS and where a thumb
+  // can reach it. Six icons and a logo across the top of a 375px screen did not fit: the logo was
+  // cut off on one side and Account on the other, and the whole page scrolled sideways to show it.
+  if (layout === 'bottom') {
+    return (
+      <Tabs style={styles.tabs}>
+        <TabSlot style={styles.slot} />
+        <TabList asChild>
+          <View style={navStyles.bottomBar}>{triggers}</View>
+        </TabList>
+      </Tabs>
+    );
+  }
+
   return (
     <Tabs style={styles.tabs}>
       <TabList asChild>
-        <CustomTabList compact={compact}>
-          {TABS.map((tab) => (
-            <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
-              <TabButton icon={tab.icon} compact={compact}>
-                {tab.label}
-              </TabButton>
-            </TabTrigger>
-          ))}
-        </CustomTabList>
+        <TopBar compact={layout === 'compact'}>{triggers}</TopBar>
       </TabList>
       <TabSlot style={styles.slot} />
     </Tabs>
   );
 }
 
-export function TabButton({
-  children,
-  isFocused,
-  icon,
-  compact,
-  ...props
-}: TabTriggerSlotProps & { icon?: KnitIconName; compact?: boolean }) {
+// The bar across the top, as a component that is handed the triggers as its own children.
+//
+// It has to be shaped this way. The router works out which screens exist by reading the triggers
+// directly under the TabList's child; bury them a few Views down, where the layout actually wants
+// them, and it finds none and the whole tab navigator fails to mount. So the triggers arrive here
+// as children and this is what puts them inside the logo-and-nav arrangement.
+function TopBar({ compact, children, ...props }: TabListProps & { compact: boolean }) {
   return (
-    <Pressable
-      {...props}
-      accessibilityLabel={compact && typeof children === 'string' ? children : undefined}
-      style={({ pressed }) => pressed && styles.pressed}>
-      <View style={[styles.tabButtonView, isFocused && styles.tabButtonViewSelected]}>
-        {icon && (
-          <KnitIcon
-            name={icon}
-            size={compact ? 22 : 18}
-            color={isFocused ? Colors.ink : Colors.inkSoft}
-            accent={isFocused ? Colors.white : undefined}
-          />
-        )}
-        {!compact && (
-          <ThemedText type="smallBold" themeColor={isFocused ? 'ink' : 'inkSoft'}>
-            {children}
-          </ThemedText>
-        )}
-      </View>
-    </Pressable>
-  );
-}
-
-export function CustomTabList({ compact, ...props }: TabListProps & { compact?: boolean }) {
-  return (
-    <View {...props} style={styles.tabListContainer}>
-      <View style={styles.innerContainer}>
+    <View {...props} style={navStyles.topBar}>
+      <View style={navStyles.topInner}>
         <Brand compact={compact} />
-        {/* The tabs sit in their own group pushed to the right, rather than trailing the logo.
-            Same reasoning as the header on the pushed screens, and the two have to agree —
-            navigating between them shouldn't move the menu. */}
-        <View style={styles.nav}>{props.children}</View>
+        <View style={navStyles.topNav}>
+          {children}
+          <AccountLink active={false} />
+        </View>
       </View>
     </View>
   );
 }
 
+function TabButton({
+  isFocused,
+  icon,
+  label,
+  layout,
+  ...props
+}: TabTriggerSlotProps & { icon: KnitIconName; label: string; layout: NavLayout }) {
+  return (
+    <Pressable
+      {...props}
+      // Icons-only still has to say what it is.
+      accessibilityLabel={layout === 'compact' ? label : undefined}
+      style={({ pressed }) => [layout === 'bottom' && navStyles.bottomSlot, pressed && navStyles.pressed]}>
+      <NavItem icon={icon} label={label} active={!!isFocused} layout={layout} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  tabs: {
-    flex: 1,
-  },
-  slot: {
-    flex: 1,
-  },
-  tabListContainer: {
-    width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    backgroundColor: Colors.creamDeep,
-  },
-  innerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginLeft: 'auto',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  tabButtonView: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one + Spacing.half,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    // Same as the pushed-screen header: a tab shows its icon and label at full size or goes to
-    // icons-only at the breakpoint — it never renders a compressed version of either.
-    flexShrink: 0,
-  },
-  tabButtonViewSelected: {
-    backgroundColor: Colors.blush,
-  },
+  tabs: { flex: 1 },
+  slot: { flex: 1 },
 });

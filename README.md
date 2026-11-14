@@ -4,10 +4,8 @@ A knitting/crochet companion app — row/stitch counter, pattern library, projec
 gauge calculator, and materials/tools manager. One Expo (React Native + React Native Web)
 codebase, targeting iOS (via TestFlight) and web.
 
-See [AGENTS.md](./AGENTS.md) for project conventions and layout, and the build-out plan at
-`/Users/pim/.claude/plans/currently-knitwit-is-just-noble-umbrella.md` for the phased roadmap
-(TestFlight milestone → Supabase backend → environments → GreenPT-powered AI pattern
-generation/import → web deploy).
+See [AGENTS.md](./AGENTS.md) for project conventions, the screen and navigation rules, and how
+the repo is set up for Claude Code. Feature plans are in [docs/plans](./docs/plans).
 
 ## Getting started
 

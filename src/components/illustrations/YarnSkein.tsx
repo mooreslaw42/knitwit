@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { Platform } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
 
 type Props = {
@@ -6,6 +7,14 @@ type Props = {
   color: string;
   size?: number;
 };
+
+// Hidden from screen readers in each platform's own words. `importantForAccessibility` is
+// native-only, and react-native-svg hands anything it does not recognise straight to the DOM
+// `<svg>` — where React warned about it on every yarn in the stash. Same split as KnitIcon.
+const HIDDEN = Platform.select<Record<string, unknown>>({
+  web: { 'aria-hidden': true },
+  default: { accessible: false, importantForAccessibility: 'no-hide-descendants' },
+});
 
 /**
  * Placeholder "photo" for a material without one: a yarn ball in the yarn's own colour.
@@ -15,7 +24,7 @@ type Props = {
 export function YarnSkein({ color, size = 56 }: Props) {
   const id = useId().replace(/:/g, '');
   return (
-    <Svg width={size} height={size} viewBox="0 0 120 120" aria-hidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 120 120" {...HIDDEN}>
       <Defs>
         <ClipPath id={`clip${id}`}>
           <Circle cx="60" cy="60" r="50" />

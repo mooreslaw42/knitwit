@@ -350,7 +350,7 @@ export function AccountSection() {
 
 const styles = StyleSheet.create({
   wrap: { gap: Spacing.two },
-  label: { marginTop: Spacing.four },
+  label: {},
   actions: { gap: Spacing.two, alignItems: "flex-start" },
   form: { gap: Spacing.two },
   row: { flexDirection: "row", alignItems: "center", gap: Spacing.two },

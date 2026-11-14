@@ -125,6 +125,18 @@ export function patternSectionMarkers(section: {
   return Array.from(new Set([...(section.markers ?? []), ...fromRows])).sort((a, b) => a - b);
 }
 
+// What Home says first. The hour decides the half of it, the knitter's name the rest — and with
+// no name saved it is simply the greeting, never "Good evening, " trailing off into nothing.
+//
+// This was a literal: "Good evening, Pim", at nine in the morning, to everybody.
+export function greeting(name: string | undefined, at: Date = new Date()): string {
+  const hour = at.getHours();
+  // Before five still belongs to the night before: nobody up at 3am knitting has had their morning.
+  const part = hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening';
+  const who = name?.trim();
+  return who ? `${part}, ${who}` : part;
+}
+
 // ---- Project / section helpers ----
 
 // What a project actually is right now. A stored status wins — frogged and finished are things

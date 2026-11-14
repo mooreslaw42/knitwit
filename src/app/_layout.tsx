@@ -18,10 +18,11 @@ import {
   usePathname,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
-import AppHeader from "@/components/app-header";
+import AppHeader, { AppFooter } from "@/components/app-header";
 import { Colors } from "@/constants/theme";
 import { CrashScreen } from "@/components/crash-screen";
 import { useKnitwitStore } from "@/store/useKnitwitStore";
@@ -56,7 +57,6 @@ const TAB_ROUTES = [
   "/library",
   "/counter",
   "/calculator",
-  "/account",
 ];
 
 // Readable without an account, and deliberately so.
@@ -86,6 +86,16 @@ const DETAIL_SCREEN = {
   headerStyle: { backgroundColor: Colors.cream },
   headerShadowVisible: false,
 } as const;
+
+const NO_HEADER = { headerShown: false } as const;
+
+// Dark clock and battery, always.
+//
+// Knitwit has one palette and it is a light one. Nothing ever told the status bar so: it followed
+// the phone, and on a phone in Dark Mode it drew white text over a cream screen — the time, the
+// signal and the battery all there and all invisible. app.json pins the interface style to light
+// for the same reason, so the keyboard, the pickers and the tab bar stop arriving in dark as well.
+const STATUS_BAR = <StatusBar style="dark" />;
 
 // Anything a screen throws while rendering lands here instead of taking the app down with it.
 //
@@ -175,6 +185,7 @@ export default function RootLayout() {
     reportProblem(new Error(hydrationError), { where: 'hydration' });
     return (
       <ThemeProvider value={DefaultTheme}>
+        {STATUS_BAR}
         <CrashScreen
           title="Knitwit couldn’t read your saved data"
           detail={hydrationError}
@@ -189,6 +200,7 @@ export default function RootLayout() {
   if (session.recovering) {
     return (
       <ThemeProvider value={DefaultTheme}>
+        {STATUS_BAR}
         <SetNewPassword />
       </ThemeProvider>
     );
@@ -202,6 +214,7 @@ export default function RootLayout() {
   ) {
     return (
       <ThemeProvider value={DefaultTheme}>
+        {STATUS_BAR}
         <SignInGate />
       </ThemeProvider>
     );
@@ -213,6 +226,7 @@ export default function RootLayout() {
   if (account.needsEmail && !PUBLIC_ROUTES.includes(pathname)) {
     return (
       <ThemeProvider value={DefaultTheme}>
+        {STATUS_BAR}
         <AddEmailGate />
       </ThemeProvider>
     );
@@ -220,40 +234,32 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={DefaultTheme}>
+        {STATUS_BAR}
       <View style={{ flex: 1, backgroundColor: Colors.cream }}>
         {!TAB_ROUTES.includes(pathname) && <AppHeader />}
+        {/* A pushed screen gets the header unless it says otherwise.
+
+            It was the other way round — no header by default, and a list of the screens that
+            should have one. A list like that only ever falls behind: Awards, the stitch editor,
+            "save as a pattern" and the technique form were never added to it, so on a phone each
+            of them opened with no back button and its title underneath the status bar. One entry
+            had gone stale as well, naming a route that had since become a folder.
+
+            The exceptions are the screens that draw their own top row: the tabs, and the three
+            wizards, whose back arrow steps through the wizard rather than leaving it. */}
         <Stack
           screenOptions={{
-            headerShown: false,
+            ...DETAIL_SCREEN,
             contentStyle: { backgroundColor: Colors.cream },
           }}
         >
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="project/new" options={{ headerShown: false }} />
-          <Stack.Screen name="pattern/new" options={{ headerShown: false }} />
-          <Stack.Screen name="pattern/[id]/index" options={DETAIL_SCREEN} />
-          <Stack.Screen
-            name="pattern/[id]/section/[index]"
-            options={DETAIL_SCREEN}
-          />
-          <Stack.Screen name="project/[key]/index" options={DETAIL_SCREEN} />
-          <Stack.Screen name="project/[key]/edit" options={DETAIL_SCREEN} />
-          <Stack.Screen
-            name="project/[key]/section/new"
-            options={DETAIL_SCREEN}
-          />
-          <Stack.Screen
-            name="project/[key]/section/[index]"
-            options={DETAIL_SCREEN}
-          />
-          <Stack.Screen name="calculator/[tool]" options={DETAIL_SCREEN} />
-          <Stack.Screen name="material/[id]" options={DETAIL_SCREEN} />
-          <Stack.Screen name="tool/[id]" options={DETAIL_SCREEN} />
-          <Stack.Screen name="technique/[id]" options={DETAIL_SCREEN} />
-          <Stack.Screen name="privacy" options={DETAIL_SCREEN} />
-          <Stack.Screen name="terms" options={DETAIL_SCREEN} />
-          <Stack.Screen name="accessibility" options={DETAIL_SCREEN} />
+          <Stack.Screen name="(tabs)" options={NO_HEADER} />
+          <Stack.Screen name="project/new" options={NO_HEADER} />
+          <Stack.Screen name="pattern/new" options={NO_HEADER} />
+          <Stack.Screen name="material/new" options={NO_HEADER} />
+          <Stack.Screen name="pattern/index" options={NO_HEADER} />
         </Stack>
+        {!TAB_ROUTES.includes(pathname) && <AppFooter />}
       </View>
     </ThemeProvider>
   );

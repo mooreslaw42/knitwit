@@ -170,7 +170,7 @@ export function DeleteAccountSection() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: Spacing.six, gap: Spacing.two },
+  wrap: { gap: Spacing.two },
   label: { color: Colors.coralDeep },
   trigger: { alignSelf: 'flex-start' },
   backdrop: {

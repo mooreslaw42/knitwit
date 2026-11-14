@@ -6,6 +6,7 @@ import {
   deriveProjectColors,
   formatClock,
   formatSizeRun,
+  greeting,
   formatStarted,
   inUseLabel,
   parseSizeRun,
@@ -574,5 +575,24 @@ describe('projectCost', () => {
     const p = project([section({ row: 5, totalRows: 20, seconds: 3600 })]);
     expect(projectCost(p, {}).laborCost).toBeNull();
     expect(projectCost(p, {}, 0).laborCost).toBeNull();
+  });
+});
+
+describe('greeting', () => {
+  const at = (hour: number) => new Date(2026, 10, 14, hour, 30);
+
+  it('follows the clock rather than always saying evening', () => {
+    expect(greeting('Pim', at(9))).toBe('Good morning, Pim');
+    expect(greeting('Pim', at(14))).toBe('Good afternoon, Pim');
+    expect(greeting('Pim', at(20))).toBe('Good evening, Pim');
+  });
+
+  it('counts the small hours as the night before', () => {
+    expect(greeting('Pim', at(2))).toBe('Good evening, Pim');
+  });
+
+  it('says nothing after the greeting when there is no name to say', () => {
+    expect(greeting(undefined, at(9))).toBe('Good morning');
+    expect(greeting('   ', at(9))).toBe('Good morning');
   });
 });

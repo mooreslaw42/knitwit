@@ -2,10 +2,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Card, ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import {
+  Card,
+  ConfirmButton,
+  FormField,
+  IconButton,
+  PillButton,
+  SelectField,
+} from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ExternalLink } from '@/components/external-link';
 import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-section-editor';
 import { SharePattern } from '@/components/share-pattern';
@@ -13,7 +20,6 @@ import { CalculatorLink } from '@/components/calculators/calculator-link';
 import { GaugeField } from '@/components/gauge-field';
 import { NotesCard } from '@/components/notes-card';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -25,7 +31,7 @@ import {
   describeToolSize,
   scaleForToolType,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
@@ -147,9 +153,7 @@ export default function PatternDetailScreen() {
   const view = editing && draft ? draft : pattern;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           {editing ? (
             <>
               <Pressable
@@ -197,11 +201,7 @@ export default function PatternDetailScreen() {
                 {/* Not offered mid-edit: what would be shared is the draft, and a knitter who has
                     not saved does not think of it as the pattern yet. */}
                 <SharePattern patternId={id} pattern={pattern} />
-                <Pressable hitSlop={8} onPress={startEditing}>
-                  <ThemedText type="smallBold" themeColor="blushDeep">
-                    Edit
-                  </ThemedText>
-                </Pressable>
+                <IconButton icon="edit" label={`Edit ${view.name}`} onPress={startEditing} />
               </View>
             )}
           </View>
@@ -210,22 +210,21 @@ export default function PatternDetailScreen() {
             <PillButton
               style={styles.startProjectBtn}
               onPress={() => router.push(`/project/new?pattern=${encodeURIComponent(id)}`)}>
-              <ThemedText type="smallBold" themeColor="white">
+              <ThemedText type="default" themeColor="white" style={styles.startProjectText}>
                 Start a project from this pattern
               </ThemedText>
             </PillButton>
           )}
 
-          {/* Outside the edit/view split on purpose: notes save as they're typed, so there is
-              nothing to put behind Edit and nothing to lose by leaving. */}
-          <NotesCard
-            value={pattern.notes}
-            onChange={(notes) => setPatternNotes(id, notes)}
-            hint="About the whole pattern. Saved as you type."
-          />
-
           {editing && draft ? (
             <>
+              {/* Notes save as they're typed, so they are never behind Edit — and they are the
+                  same card in both modes, here above the form and below the facts when reading. */}
+              <NotesCard
+                value={pattern.notes}
+                onChange={(notes) => setPatternNotes(id, notes)}
+                hint="About the whole pattern. Saved as you type."
+              />
               <FormField
                 label="Pattern name"
                 value={draft.name}
@@ -352,19 +351,25 @@ export default function PatternDetailScreen() {
             </>
           ) : (
             <>
-              <Field label="Craft" value={CRAFT_LABELS[pattern.craft]} />
-              <Field label="Category" value={CATEGORY_LABELS[pattern.category]} />
-              <Field
-                label="Difficulty"
-                value={LEVEL_OPTIONS.find((l) => l.value === pattern.level)?.label ?? pattern.level}
+              {/* The short facts, as one table. Each was a card of its own — seven white boxes holding
+                  one word apiece, and a full screen of scrolling before the pattern itself. Gauge
+                  is shown in the knitter's unit, with the pattern's own wording kept alongside
+                  when they differ — otherwise the screen and the printed pattern disagree and
+                  there's no way to tell which is right. */}
+              <Facts
+                rows={[
+                  ['Craft', CRAFT_LABELS[pattern.craft]],
+                  ['Category', CATEGORY_LABELS[pattern.category]],
+                  [
+                    'Difficulty',
+                    LEVEL_OPTIONS.find((l) => l.value === pattern.level)?.label ?? pattern.level,
+                  ],
+                  ['Sizes', (pattern.sizes ?? []).join(', ')],
+                  ['Needle / hook', pattern.needleSize || pattern.weight],
+                  ['Gauge', gaugeLine(pattern.gauge, unit)],
+                  ['Your swatch', gaugeLine(pattern.swatchGauge, unit)],
+                ]}
               />
-              <Field label="Sizes" value={(pattern.sizes ?? []).join(', ')} />
-              <Field label="Needle / hook size" value={pattern.needleSize || pattern.weight} />
-              {/* Shown in the knitter's unit, with the pattern's own wording kept alongside when
-                  they differ — otherwise the screen and the printed pattern disagree and there's
-                  no way to tell which is right. */}
-              <Field label="Gauge" value={gaugeLine(pattern.gauge, unit)} />
-              <Field label="Your swatch" value={gaugeLine(pattern.swatchGauge, unit)} />
               {/* Beside the two gauges, because that is the moment the question comes up: the
                   pattern says 22 and you got 20, so what do you cast on? Carries both numbers over
                   rather than making them be typed again. */}
@@ -419,6 +424,12 @@ export default function PatternDetailScreen() {
                 value={(pattern.techniques ?? [])
                   .map((t) => (t.note ? `${t.name} — ${t.note}` : t.name))
                   .join('\n')}
+              />
+
+              <NotesCard
+                value={pattern.notes}
+                onChange={(notes) => setPatternNotes(id, notes)}
+                hint="About the whole pattern. Saved as you type."
               />
 
               <ThemedText type="subtitle" style={styles.blockTitle}>
@@ -491,9 +502,7 @@ export default function PatternDetailScreen() {
               />
             </>
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -520,16 +529,43 @@ function Field({
   );
 }
 
+// The short facts about a pattern, label on the left and value on the right, in one card. Rows
+// the pattern never set are left out, and so is the card if that leaves nothing.
+function Facts({ rows }: { rows: [label: string, value: string | undefined][] }) {
+  const set = rows.filter(([, value]) => !!value);
+  if (set.length === 0) return null;
+  return (
+    <Card style={styles.facts}>
+      {set.map(([label, value], i) => (
+        <View key={label} style={[styles.fact, i > 0 && styles.factDivided]}>
+          <ThemedText type="caption" themeColor="inkSoft">
+            {label}
+          </ThemedText>
+          <ThemedText type="smallBold" style={styles.factValue}>
+            {value}
+          </ThemedText>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.two,
+  facts: { paddingVertical: Spacing.two },
+  fact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    paddingVertical: Spacing.two + Spacing.half,
   },
+  factDivided: { borderTopWidth: 1, borderTopColor: Colors.creamDeep },
+  // The value takes what the label leaves and wraps there, right-aligned, so a long gauge line
+  // stays in its own column rather than running under the label.
+  factValue: { flex: 1, textAlign: 'right' },
+  startProjectText: { fontFamily: Fonts.bodyExtrabold },
   hero: {
-    height: 120,
+    height: 160,
     borderRadius: Radii.large,
     marginBottom: Spacing.two,
     overflow: 'hidden',
@@ -555,7 +591,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: Spacing.one,
   },
-  titleActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -583,5 +619,5 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1, gap: 2 },
   saveBtn: { marginTop: Spacing.three },
-  startProjectBtn: { marginVertical: Spacing.two },
+  startProjectBtn: {},
 });

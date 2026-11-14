@@ -1,12 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { KnitIcon } from '@/components/icons/KnitIcon';
 import {
   Card,
   ConfirmButton,
   FormField,
+  IconButton,
   PillButton,
   ProgressBar,
   StatusBadge,
@@ -20,8 +21,8 @@ import {
 import { NotesCard } from '@/components/notes-card';
 import { resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Screen } from '@/components/screen';
+import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { formatClock, sectionStatus } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
@@ -78,28 +79,48 @@ export default function SectionDetailScreen() {
     .filter(Boolean)
     .join(' · ');
 
+  const complete = status === 'complete';
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen
+      kind="pushed"
+      // Pinned, not at the end of the scroll. Counting is what a section is for, and the button
+      // that starts it used to sit underneath every card on the screen — on a section with a few
+      // notes that was two screens down.
+      footer={
+        <PillButton
+          onPress={() => {
+            setActiveSection(key, sectionIndex);
+            router.push('/counter');
+          }}>
+          <View style={styles.continueInner}>
+            <KnitIcon name="play" size={16} color={Colors.white} accent={Colors.white} />
+            <ThemedText type="default" themeColor="white" style={styles.continueText}>
+              {complete ? 'Open in the counter' : section.row > 0 ? 'Continue counting' : 'Start counting'}
+            </ThemedText>
+          </View>
+        </PillButton>
+      }>
           <View style={styles.headerRow}>
-            <ThemedText type="title" heading={1}>{section.name}</ThemedText>
+            <ThemedText type="title" heading={1} style={styles.title}>
+              {section.name}
+            </ThemedText>
             <View style={styles.headerActions}>
-              <StatusBadge status={status} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={editing ? 'Stop editing this section' : 'Edit this section'}
-                hitSlop={8}
+              <View>
+                <StatusBadge status={status} />
+              </View>
+              <IconButton
+                icon={editing ? 'close' : 'edit'}
+                label={editing ? 'Stop editing this section' : 'Edit this section'}
                 onPress={() => {
                   setDraftName(section.name);
                   setDraftRows(String(section.totalRows));
                   setEditing((v) => !v);
-                }}>
-                <ThemedText type="default">✎</ThemedText>
-              </Pressable>
+                }}
+              />
             </View>
           </View>
-          <ThemedText type="default" themeColor="inkSoft">
+          <ThemedText type="body" themeColor="inkSoft">
             Row {section.row} of {section.totalRows}
           </ThemedText>
           <ProgressBar pct={pct} color={project.colorDeep} />
@@ -222,8 +243,10 @@ export default function SectionDetailScreen() {
 
           {sortedNotes.length > 0 && (
             <>
+              {/* "Row notes", because the card above is also called Notes and these are a different
+                  thing: left from the counter, each pinned to the row it was written on. */}
               <ThemedText type="subtitle" heading={2} style={styles.notesTitle}>
-                Notes
+                Row notes
               </ThemedText>
               <View style={styles.notesList}>
                 {sortedNotes.map((note) => (
@@ -237,43 +260,18 @@ export default function SectionDetailScreen() {
               </View>
             </>
           )}
-
-          <PillButton
-            style={styles.continueBtn}
-            onPress={() => {
-              setActiveSection(key, sectionIndex);
-              router.push('/counter');
-            }}>
-            <ThemedText type="smallBold" themeColor="white">
-              Continue counting →
-            </ThemedText>
-          </PillButton>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.two,
-  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
   },
+  title: { flex: 1 },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,7 +299,10 @@ const styles = StyleSheet.create({
   noteCard: {
     gap: 2,
   },
-  continueBtn: {
-    marginTop: Spacing.four,
+  continueInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
+  continueText: { fontFamily: Fonts.bodyExtrabold },
 });

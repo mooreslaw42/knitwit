@@ -98,7 +98,7 @@ export function SignOutSection() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: Spacing.six, gap: Spacing.two },
+  wrap: { gap: Spacing.two },
   confirm: { gap: Spacing.two },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   cancel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },

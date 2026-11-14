@@ -1,10 +1,11 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { CardLink } from '@/components/card-link';
 import { KnitIcon } from '@/components/icons/KnitIcon';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { RowSurface } from '@/components/knitwit-ui';
+import { Screen, ScreenHeader } from '@/components/screen';
+import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { CALCULATOR_GROUPS, calculatorsInGroup } from '@/lib/calculators';
 import { formatGaugeIn } from '@/lib/gauge';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -32,28 +33,27 @@ export default function CalculatorScreen() {
   const carryOver = activeKey && activeProject?.gauge ? { key: activeKey, project: activeProject } : null;
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title" heading={1}>
-          Calculator
-        </ThemedText>
-        <ThemedText type="small" themeColor="inkSoft">
-          Pick the question and Knitwit works it out on a screen of its own: the fields you fill in
-          on white, the answer in green underneath. Nothing is saved — it changes no pattern and no
-          project.
-        </ThemedText>
+    // Through Screen like every other tab. This one had no safe area at all — a ScrollView straight
+    // inside a View — so on a phone its title started underneath the status bar.
+    <Screen>
+        <ScreenHeader
+          title="Calculator"
+          subtitle="Pick a question. Nothing here is saved, and no pattern or project is changed."
+        />
 
         {carryOver ? (
           <CardLink
             href={`/calculator/rescale?project=${carryOver.key}`}
             style={styles.context}
             accessibilityLabel={`Use ${carryOver.project.name}'s gauge`}>
-            <KnitIcon name="counter" size={22} color={Colors.sageDeep} accent={Colors.sage} />
+            <View style={[styles.icon, styles.iconSage]}>
+              <KnitIcon name="counter" size={22} color={Colors.sageDeep} accent={Colors.white} />
+            </View>
             <View style={styles.rowInfo}>
-              <ThemedText type="smallBold" numberOfLines={1}>
+              <ThemedText type="default" numberOfLines={1} style={styles.rowTitle}>
                 {carryOver.project.name} is on the needles
               </ThemedText>
-              <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+              <ThemedText type="caption" themeColor="inkSoft" numberOfLines={1}>
                 Start with its gauge — {formatGaugeIn(carryOver.project.gauge?.mine, unit)}
               </ThemedText>
             </View>
@@ -67,61 +67,65 @@ export default function CalculatorScreen() {
           if (items.length === 0) return null;
           return (
             <View key={group.id} style={styles.group}>
-              <ThemedText type="smallBold" themeColor="inkSoft">
+              <ThemedText type="overline" themeColor="inkSoft" style={styles.groupLabel}>
                 {group.label}
               </ThemedText>
               {items.map((calc) => (
                 <CardLink key={calc.id} href={`/calculator/${calc.id}`} style={styles.row}>
-                  <KnitIcon
-                    name={calc.icon}
-                    size={22}
-                    color={Colors.coralDeep}
-                    accent={Colors.coral}
-                  />
+                  <View style={styles.icon}>
+                    <KnitIcon
+                      name={calc.icon}
+                      size={22}
+                      color={Colors.coralDeep}
+                      accent={Colors.coral}
+                    />
+                  </View>
                   <View style={styles.rowInfo}>
-                    <ThemedText type="smallBold">{calc.title}</ThemedText>
-                    <ThemedText type="small" themeColor="inkSoft">
+                    <ThemedText type="default" style={styles.rowTitle}>
+                      {calc.title}
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor="inkSoft">
                       {calc.question}
                     </ThemedText>
                   </View>
+                  <KnitIcon name="forward" size={16} color={Colors.inkSoft} />
                 </CardLink>
               ))}
             </View>
           );
         })}
-      </ScrollView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six + BottomTabInset,
-    gap: Spacing.three,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
-  },
   group: { gap: Spacing.two },
+  groupLabel: { marginTop: Spacing.two, marginLeft: Spacing.one },
   row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.three,
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-  },
-  context: {
+    ...RowSurface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    backgroundColor: Colors.cream,
-    borderRadius: Radii.medium,
+  },
+  // The icon in a disc of its own, the same size as a list thumbnail, so a calculator row and a
+  // project row line up. Bare, at 22 points, the icons were a speck beside two lines of text.
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radii.pill,
+    backgroundColor: Colors.creamDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconSage: { backgroundColor: Colors.sage },
+  context: {
+    ...RowSurface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
     borderLeftWidth: 4,
     borderLeftColor: Colors.sageDeep,
-    padding: Spacing.three,
   },
-  rowInfo: { gap: 2, flexShrink: 1 },
+  rowInfo: { gap: 2, flex: 1 },
+  rowTitle: { fontFamily: Fonts.bodyExtrabold },
 });

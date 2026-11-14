@@ -1,17 +1,25 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { PhotoImage } from '@/components/photo';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Card, InputStyle, PillButton, ProgressBar, StatusBadge } from '@/components/knitwit-ui';
+import { KnitIcon } from '@/components/icons/KnitIcon';
+import {
+  Card,
+  IconButton,
+  InputStyle,
+  PillButton,
+  ProgressBar,
+  RowSurface,
+  StatusBadge,
+} from '@/components/knitwit-ui';
+import { Screen, SectionHeader } from '@/components/screen';
 import { NotesCard } from '@/components/notes-card';
 import { RavelryProjectCard } from '@/components/ravelry-project-card';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Shadows, Spacing } from '@/constants/theme';
 import {
   currentSectionIndexOf,
   formatClock,
@@ -61,6 +69,9 @@ export default function ProjectDetailScreen() {
   const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
   const setMaterialSkeins = useKnitwitStore((state) => state.setMaterialSkeins);
   const setProjectPhoto = useKnitwitStore((state) => state.setProjectPhoto);
+  const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
+  const activeProjectKey = useKnitwitStore((state) => state.activeProjectKey);
+  const activeSectionIndex = useKnitwitStore((state) => state.activeSectionIndex);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   // The colour block is only a stand-in until there is a picture of the actual knitting, so it
@@ -83,7 +94,9 @@ export default function ProjectDetailScreen() {
   if (!project) return null;
 
   const pct = projectProgress(project).pct;
+  const state = projectState(project);
   const curIdx = currentSectionIndexOf(project);
+  const current = project.sections[curIdx];
   // Only the yarns that are actually in the stash: a section can still point at one the knitter
   // deleted, and a row with no name to put on it is no use to anybody.
   const yarns = projectMaterialIds(project).filter((id) => materials[id]);
@@ -95,9 +108,7 @@ export default function ProjectDetailScreen() {
   const showCost = cost.materialCost > 0 || cost.secondsSpent > 0;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <Pressable
             onPress={() => void choosePhoto()}
             accessibilityRole="button"
@@ -113,8 +124,12 @@ export default function ProjectDetailScreen() {
                 {project.photo ? 'Change photo' : '+ Add photo'}
               </ThemedText>
             </View>
+            {/* projectState, not the stored flag and not the row count: a project with every row
+                counted reads as finished whether or not anyone declared it so, and a frogged one
+                is frogged however far it got. This label used to read "In progress" on a frogged
+                project, directly above a chip that said "Frogged". */}
             <ThemedText type="smallBold" themeColor="white" style={styles.heroLabel}>
-              {pct >= 1 ? 'Complete' : 'In progress'}
+              {PROJECT_STATUS_LABELS[state]}
             </ThemedText>
           </Pressable>
           {/* Beneath rather than on the picture, as on the edit screen, so clearing it can't be a
@@ -134,27 +149,99 @@ export default function ProjectDetailScreen() {
               {photoError}
             </ThemedText>
           )}
-          <View style={styles.titleRow}>
-            <ThemedText type="title" heading={1}>{project.name}</ThemedText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Edit ${project.name}`}
-              hitSlop={8}
-              onPress={() => router.push(`/project/${key}/edit`)}>
-              <ThemedText type="default">✎</ThemedText>
-            </Pressable>
+          <View style={styles.heading}>
+            <View style={styles.titleRow}>
+              <ThemedText type="title" heading={1} style={styles.title}>
+                {project.name}
+              </ThemedText>
+              <IconButton
+                icon="edit"
+                label={`Edit ${project.name}`}
+                onPress={() => router.push(`/project/${key}/edit`)}
+              />
+            </View>
+            <ThemedText type="body" themeColor="inkSoft">
+              {[
+                // With no start date this says "Just cast on", which is only true of a project that
+                // has not been knitted yet.
+                project.startedOn || pct === 0 ? formatStarted(project.startedOn) : '',
+                formatFinished(project.finishedOn),
+                CRAFT_LABELS[project.craft],
+                `${Math.round(pct * 100)}% complete`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </ThemedText>
           </View>
-          <ThemedText type="default" themeColor="inkSoft">
-            {[
-              formatStarted(project.startedOn),
-              formatFinished(project.finishedOn),
-              CRAFT_LABELS[project.craft],
-              `${Math.round(pct * 100)}% complete`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </ThemedText>
 
+          {/* The reason anyone opens a project: to carry on with it. This was not on the screen at
+              all — the way back to the counter was to scroll past the yarn, the cost and the notes
+              to the section list, open the section, and scroll to the bottom of that. */}
+          {state === 'active' && current ? (
+            <View style={styles.continueCard}>
+              <View style={styles.continueInfo}>
+                <ThemedText type="overline" themeColor="inkSoft">
+                  Up next
+                </ThemedText>
+                <ThemedText type="subtitle" numberOfLines={1}>
+                  {current.name}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="inkSoft">
+                  Row {current.row} of {current.totalRows}
+                </ThemedText>
+              </View>
+              <PillButton
+                onPress={() => {
+                  // Only re-point the counter when it is somewhere else — re-selecting the section
+                  // it is already on would also clear a marker the knitter had dismissed.
+                  if (activeProjectKey !== key || activeSectionIndex !== curIdx) {
+                    setActiveSection(key, curIdx);
+                  }
+                  router.push('/counter');
+                }}
+                style={styles.continueButton}>
+                <View style={styles.continueButtonInner}>
+                  <KnitIcon name="play" size={16} color={Colors.white} accent={Colors.white} />
+                  <ThemedText type="default" themeColor="white" style={styles.continueButtonText}>
+                    {current.row > 0 ? 'Continue' : 'Start'}
+                  </ThemedText>
+                </View>
+              </PillButton>
+            </View>
+          ) : null}
+
+          <SectionHeader
+            title="Sections"
+            actionLabel="Add section"
+            actionIcon="plus"
+            onAction={() => router.push(`/project/${key}/section/new`)}
+          />
+          <View style={styles.sectionsList}>
+            {project.sections.map((s, i) => {
+              const status = sectionStatus(s);
+              const isCurrent = i === curIdx && status !== 'complete';
+              const secPct = s.totalRows ? s.row / s.totalRows : 0;
+              return (
+                <CardLink
+                  key={s.name + i}
+                  style={[styles.secCard, isCurrent && styles.secCardCurrent]}
+                  href={`/project/${key}/section/${i}`}>
+                  <View style={styles.secTop}>
+                    <ThemedText type="default" numberOfLines={1} style={styles.secName}>
+                      {s.name}
+                    </ThemedText>
+                    <StatusBadge status={status} />
+                  </View>
+                  <ProgressBar pct={secPct} color={project.colorDeep} />
+                  <ThemedText type="small" themeColor="inkSoft">
+                    Row {s.row} of {s.totalRows}
+                  </ThemedText>
+                </CardLink>
+              );
+            })}
+          </View>
+
+          <SectionHeader title="Details" />
           <Card style={styles.tagCard}>
             <ThemedText type="small" themeColor="inkSoft">
               Pattern
@@ -192,17 +279,6 @@ export default function ProjectDetailScreen() {
               </ThemedText>
             </Pressable>
           </Card>
-
-          {/* Read-only here. Changing it is an edit, and frogging in particular is the kind of
-              thing you shouldn't be one stray tap away from.
-              projectState, not the stored flag: a project with every row counted reads as
-              finished whether or not anyone declared it so, and this has to agree with the list
-              and the filter, which both already worked that way. */}
-          <View style={[styles.statusChip, styles.statusChipOn]}>
-            <ThemedText type="smallBold" themeColor="white">
-              {PROJECT_STATUS_LABELS[projectState(project)]}
-            </ThemedText>
-          </View>
 
           {/* How much yarn this make needs, in balls rather than in metres, because that is the
               unit a yarn shop sells in and the number a knitter checks before casting on.
@@ -324,44 +400,7 @@ export default function ProjectDetailScreen() {
               draws nothing otherwise. */}
           <RavelryProjectCard projectKey={key} project={project} />
 
-          <View style={styles.sectionsHeader}>
-            <ThemedText type="subtitle" heading={2}>Sections</ThemedText>
-            <PillButton
-              style={styles.addBtn}
-              onPress={() => router.push(`/project/${key}/section/new`)}>
-              <ThemedText type="smallBold" themeColor="white">
-                + Add section
-              </ThemedText>
-            </PillButton>
-          </View>
-          <View style={styles.sectionsList}>
-            {project.sections.map((s, i) => {
-              const status = sectionStatus(s);
-              const isCurrent = i === curIdx && status !== 'complete';
-              const secPct = s.totalRows ? s.row / s.totalRows : 0;
-              return (
-                <CardLink
-                  key={s.name + i}
-                  style={styles.secCard}
-                  href={`/project/${key}/section/${i}`}>
-                  <View style={styles.secTop}>
-                    <ThemedText type="smallBold">
-                      {s.name}
-                      {isCurrent ? ' · Currently on' : ''}
-                    </ThemedText>
-                    <StatusBadge status={status} />
-                  </View>
-                  <ProgressBar pct={secPct} color={project.colorDeep} />
-                  <ThemedText type="small" themeColor="inkSoft">
-                    Row {s.row} of {s.totalRows}
-                  </ThemedText>
-                </CardLink>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -407,20 +446,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.creamDeep,
   },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.two,
-  },
   heroPhoto: {
     position: 'absolute',
     top: 0,
@@ -439,7 +464,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hero: {
-    height: 140,
+    height: 180,
     borderRadius: Radii.large,
     padding: Spacing.three,
     justifyContent: 'flex-end',
@@ -461,7 +486,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   tagCard: {
-    marginTop: Spacing.two,
     gap: 2,
   },
   convertLink: {
@@ -474,37 +498,48 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
-  statusChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  statusChipOn: { backgroundColor: Colors.blushDeep },
-  sectionsHeader: {
+  heading: { gap: Spacing.one },
+  title: { flex: 1 },
+  continueCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.three,
+    backgroundColor: Colors.white,
+    borderRadius: Radii.large,
+    padding: Spacing.three,
+    paddingLeft: Spacing.four,
+    marginTop: Spacing.two,
+    ...Shadows.raised,
+  },
+  continueInfo: { flex: 1, gap: 2 },
+  continueButton: {
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  continueButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
-    marginTop: Spacing.three,
   },
-  addBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
+  continueButtonText: { fontFamily: Fonts.bodyExtrabold },
   sectionsList: {
     gap: Spacing.two,
   },
   secCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    gap: Spacing.one,
+    ...RowSurface,
+    gap: Spacing.two,
   },
+  // The section the counter will open on, marked by an edge in the project's own colour rather
+  // than by the words "Currently on" appended to its name.
+  secCardCurrent: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.blushDeep,
+  },
+  secName: { flex: 1, fontFamily: Fonts.bodyExtrabold },
   secTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
   },
 });

@@ -1,115 +1,83 @@
 import { Link, usePathname } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Brand } from './brand';
-import { KnitIcon, type KnitIconName } from './icons/KnitIcon';
-import { ThemedText } from './themed-text';
+import { AccountLink, NAV_ITEMS, NavItem, navStyles, type NavLayout } from './web-nav';
 
-import { Colors, CompactNavBelow, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useNavLayout } from '@/lib/use-nav-layout';
 
 // The same navigation the tab screens get, for screens pushed onto the root stack (pattern and
 // project detail, the wizards, the section/row editors). Those sit outside the (tabs) group, so
 // without this they'd strand the user with only a back arrow.
-const NAV = [
-  { href: '/', label: 'Home', icon: 'home' },
-  { href: '/projects', label: 'Projects', icon: 'yarn' },
-  { href: '/library', label: 'Library', icon: 'library' },
-  { href: '/counter', label: 'Counter', icon: 'counter' },
-  { href: '/calculator', label: 'Calculator', icon: 'gauge' },
-  { href: '/account', label: 'Account', icon: 'account' },
-] as const satisfies readonly { href: string; label: string; icon: KnitIconName }[];
+//
+// Two halves because the bar is in two places: across the top of a wide window, along the bottom
+// of a phone-sized one. Each half draws itself only when it is the one in use, so the root layout
+// can mount both without asking how wide the window is.
 
 // A detail screen still belongs to a section of the app — keep that tab lit while you're in it.
 function activeHref(pathname: string): string | null {
   if (pathname.startsWith('/pattern') || pathname.startsWith('/technique')) return '/library';
   if (pathname.startsWith('/project')) return '/projects';
-  // Yarn and tools live under the Library now, so their detail screens light it up too.
+  // Yarn and tools live under the Library, so their detail screens light it up too.
   if (pathname.startsWith('/material') || pathname.startsWith('/tool')) return '/library';
+  if (pathname.startsWith('/calculator')) return '/calculator';
   return null;
 }
 
-export default function AppHeader() {
-  const pathname = usePathname();
-  const active = activeHref(pathname);
-  // Same breakpoint as the tab screens' bar, so moving between them doesn't change the menu.
-  const compact = useWindowDimensions().width < CompactNavBelow;
-
+function NavLinks({ layout }: { layout: NavLayout }) {
+  const active = activeHref(usePathname());
   return (
-    <View style={styles.container}>
-      <View style={styles.inner}>
-        <Brand compact={compact} />
-        {/* The links sit in their own group pushed to the right, rather than trailing the logo.
-            It leaves the middle of the bar clear, and the nav lands where a browser's own
-            controls are — which is where the eye goes looking for it. */}
-        <View style={styles.nav}>
-          {NAV.map((item) => {
-          const isActive = item.href === active;
-          return (
-            // A real anchor rather than a Pressable that calls navigate: this is the site's main
-            // navigation, and it should be openable in a new tab and copyable like any other link.
-            <Link
-              key={item.href}
-              href={item.href}
-              // Announces "you are here" to a screen reader, which the pink pill only says
-              // visually.
-              aria-current={isActive ? 'page' : undefined}
-              accessibilityLabel={compact ? item.label : undefined}
-              style={[styles.link, isActive && styles.linkActive]}>
-              <KnitIcon
-                name={item.icon}
-                size={compact ? 22 : 18}
-                color={isActive ? Colors.ink : Colors.inkSoft}
-                accent={isActive ? Colors.white : undefined}
-              />
-              {!compact && (
-                <ThemedText type="smallBold" themeColor={isActive ? 'ink' : 'inkSoft'}>
-                  {item.label}
-                </ThemedText>
-              )}
-              </Link>
-            );
-          })}
+    <>
+      {NAV_ITEMS.map((item) => {
+        const isActive = item.href === active;
+        return (
+          // A real anchor rather than a Pressable that calls navigate: this is the site's main
+          // navigation, and it should be openable in a new tab and copyable like any other link.
+          <Link
+            key={item.href}
+            href={item.href}
+            // Announces "you are here" to a screen reader, which the pink pill only says visually.
+            aria-current={isActive ? 'page' : undefined}
+            accessibilityLabel={layout === 'compact' ? item.label : undefined}
+            style={layout === 'bottom' ? styles.bottomLink : styles.topLink}>
+            <NavItem icon={item.icon} label={item.label} active={isActive} layout={layout} />
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
+export default function AppHeader() {
+  const layout = useNavLayout();
+  const pathname = usePathname();
+  if (layout === 'bottom') return null;
+  return (
+    <View style={navStyles.topBar}>
+      <View style={navStyles.topInner}>
+        <Brand compact={layout === 'compact'} />
+        <View style={navStyles.topNav}>
+          <NavLinks layout={layout} />
+          <AccountLink active={pathname.startsWith('/account')} />
         </View>
       </View>
     </View>
   );
 }
 
+export function AppFooter() {
+  const layout = useNavLayout();
+  if (layout !== 'bottom') return null;
+  return (
+    <View style={navStyles.bottomBar}>
+      <NavLinks layout="bottom" />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    backgroundColor: Colors.creamDeep,
-  },
-  inner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginLeft: 'auto',
-  },
-  link: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one + Spacing.half,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    // A nav item is its logo and its word at full size or not at all — never a squashed version of
-    // either. If they ever don't fit, the compact breakpoint drops the labels; it is not this row's
-    // job to compress them.
-    flexShrink: 0,
-  },
-  linkActive: {
-    backgroundColor: Colors.blush,
-  },
+  topLink: { flexShrink: 0 },
+  // An anchor is inline by default, which would leave each link as wide as its label and bunch
+  // the five of them up at one end of the bar.
+  bottomLink: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' },
 });

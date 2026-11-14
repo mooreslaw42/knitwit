@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
 import { EmptyState } from '@/components/illustrations/EmptyState';
 import { Illustration, type IllustrationName } from '@/components/illustrations/Illustration';
-import { PillButton } from '@/components/knitwit-ui';
+import { IconButton, PillButton } from '@/components/knitwit-ui';
 import { Confetti } from '@/components/motion/Confetti';
 import { haptics, type HapticKind } from '@/components/motion/haptics';
 import { enterCard, exitCard } from '@/components/motion/presets';
@@ -17,7 +17,7 @@ import { TimerPulse } from '@/components/motion/TimerPulse';
 import { StitchChart, StitchRowStrip } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { formatClock } from '@/lib/knitwit-helpers';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -187,20 +187,36 @@ export default function CounterScreen() {
   const header = (
     <>
         <View style={[styles.topbar, twoUp && styles.topbarWide]}>
-          {/* Counter is a tab, so there is no reliable stack to go back through — arriving here
-              from the tab bar and from "Continue counting" leave different histories. It goes to
-              the section this counter is counting, which is the one answer that is always right.
-              The project/section heading below has always been a link to the same place, but it
-              reads as a title, so nobody found it. */}
+          {/* What is being counted, and the way to it. One block that reads as a title and opens
+              like a link: the project, the section, and a chevron to say it goes somewhere.
+
+              This row used to say the section's name twice — once in a "← Sleeve…" pill that was
+              too narrow to finish the word, and again in a heading underneath — beside a filled
+              pink "+ Add note" that was the loudest thing on a screen whose whole purpose is the
+              big button below. The note is an icon now, the name is said once, and the only
+              thing shouting is the one you press every row.
+
+              Counter is a tab, so there is no reliable stack to go back through — arriving here
+              from the tab bar and from "Continue knitting" leave different histories. The title
+              goes to the section this counter is counting, which is the one answer that is always
+              right. */}
           <Pressable
             onPress={() =>
               router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)
             }
-            style={styles.backBtn}
+            accessibilityRole="link"
+            accessibilityLabel={`${project.name}, ${section.name}. Opens the section.`}
+            style={styles.titleBlock}
             hitSlop={8}>
-            <ThemedText type="smallBold" themeColor="ink" numberOfLines={1}>
-              ← {section.name}
+            <ThemedText type="subtitle" numberOfLines={2}>
+              {project.name}
             </ThemedText>
+            <View style={styles.titleSection}>
+              <ThemedText type="caption" themeColor="inkSoft" numberOfLines={1} style={styles.titleSectionText}>
+                {section.name}
+              </ThemedText>
+              <KnitIcon name="forward" size={14} color={Colors.inkSoft} />
+            </View>
           </Pressable>
           <PressableScale
             onPress={toggleTimer}
@@ -220,29 +236,15 @@ export default function CounterScreen() {
               {formatClock(liveSeconds)}
             </ThemedText>
           </PressableScale>
-          <PillButton
-            style={styles.noteBtn}
+          <IconButton
+            icon="note"
+            label="Add a note to this row"
             onPress={() => {
               setNoteText('');
               openNoteForm();
-            }}>
-            <ThemedText type="smallBold" themeColor="white">
-              + Add note
-            </ThemedText>
-          </PillButton>
+            }}
+          />
         </View>
-
-        <Pressable
-          onPress={() => router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)}
-          style={styles.sectionLink}
-          hitSlop={8}>
-          <ThemedText type="smallBold" style={styles.label}>
-            {project.name}
-          </ThemedText>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.section}>
-            {section.name}
-          </ThemedText>
-        </Pressable>
     </>
   );
 
@@ -575,7 +577,8 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
+    // On a phone the safe area clears the status bar; a browser has nothing above this.
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.two,
     alignItems: 'center',
   },
   // Wider only when there are two columns to fill. The counter alone stays at reading width.
@@ -642,15 +645,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: Spacing.three,
   },
-  backBtn: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    // Yields to the timer and the note button, which are fixed width; a long section name
-    // truncates rather than pushing them off the row.
-    flexShrink: 1,
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
+  titleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
+  titleSectionText: { flexShrink: 1 },
   timerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,26 +663,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
+    height: 44,
     flexShrink: 0,
+    ...Shadows.card,
   },
   tabular: {
     fontVariant: ['tabular-nums'],
-  },
-  // Matches the "+ New pattern" pill used on the Library/Materials/Projects headers.
-  noteBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  sectionLink: {
-    alignItems: 'center',
-    marginBottom: Spacing.three,
-  },
-  label: {
-    alignSelf: 'center',
-  },
-  section: {
-    alignSelf: 'center',
   },
   counterArea: {
     // The row strip under it is capped at 100% of this — which only means something if this is
