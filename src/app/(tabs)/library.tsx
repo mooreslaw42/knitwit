@@ -27,6 +27,7 @@ import {
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { toolInUseCount } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import { summarizePattern } from '@/lib/pattern-summary';
 import type { PatternCategory, TechniqueCraft } from '@/types/knitwit';
 
 // Everything a knitter keeps rather than works on: patterns, the techniques they've noted down,
@@ -47,6 +48,9 @@ const NEW_ROUTE = {
   tools: '/tool/new',
 } as const satisfies Partial<Record<LibraryView, string>>;
 
+// Enough to recognise a palette by; the count in the line above says how many there are in all.
+const MAX_SWATCHES = 12;
+
 export default function LibraryScreen() {
   usePageTitle('Library');
   const router = useRouter();
@@ -60,6 +64,12 @@ export default function LibraryScreen() {
   const [craft, setCraft] = useState<'all' | TechniqueCraft>('all');
 
   const entries = Object.entries(patterns);
+  // How many projects have been made from each pattern — one of the few things that tells two
+  // similar patterns apart ("the one I knitted twice").
+  const projectCounts = new Map<string, number>();
+  for (const p of Object.values(projects)) {
+    if (p.patternId) projectCounts.set(p.patternId, (projectCounts.get(p.patternId) ?? 0) + 1);
+  }
 
   // A pattern marked 'both' shows under either craft, because it is either.
   const byCraft =
@@ -132,39 +142,53 @@ export default function LibraryScreen() {
               </ScrollView>
 
               <View style={styles.libList}>
-                {visible.map(([id, pt]) => (
-                  // The favourite toggle is a sibling of the link, not inside it. A button nested
-                  // in an anchor is invalid on web, and tapping the heart would follow the link as
-                  // well as toggling — so the row is a link and the heart sits beside it.
-                  <View key={id} style={styles.libRowWrap}>
-                    <CardLink href={`/pattern/${id}`} style={styles.libRow}>
-                      <Thumb photo={pt.photo} color={pt.accentColor} />
-                      <View style={styles.libInfo}>
-                        <ThemedText type="smallBold" numberOfLines={1}>
-                          {pt.name}
-                        </ThemedText>
-                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
-                          {CATEGORY_LABELS[pt.category]}
-                          {pt.needleSize || pt.weight ? ` · ${pt.needleSize || pt.weight}` : ''}
-                        </ThemedText>
-                      </View>
-                    </CardLink>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        pt.favorited ? `Unfavourite ${pt.name}` : `Favourite ${pt.name}`
-                      }
-                      onPress={() => toggleFavorite(id)}
-                      hitSlop={8}
-                      style={styles.heartBtn}>
-                      <KnitIcon
-                        name={pt.favorited ? 'bookmark-filled' : 'bookmark'}
-                        color={Colors.coralDeep}
-                        accent={pt.favorited ? undefined : Colors.coral}
-                      />
-                    </Pressable>
-                  </View>
-                ))}
+                {visible.map(([id, pt]) => {
+                  const summary = summarizePattern(pt, projectCounts.get(id) ?? 0);
+                  return (
+                    // The favourite toggle is a sibling of the link, not inside it. A button nested
+                    // in an anchor is invalid on web, and tapping the heart would follow the link as
+                    // well as toggling — so the row is a link and the heart sits beside it.
+                    <View key={id} style={styles.libRowWrap}>
+                      <CardLink href={`/pattern/${id}`} style={styles.libRow}>
+                        <Thumb photo={pt.photo} color={pt.accentColor} size={64} />
+                        <View style={styles.libInfo}>
+                          <ThemedText type="smallBold" numberOfLines={1}>
+                            {pt.name}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                            {summary.kind}
+                          </ThemedText>
+                          {summary.contents ? (
+                            <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                              {summary.contents}
+                            </ThemedText>
+                          ) : null}
+                          {summary.colors.length > 0 && (
+                            <View style={styles.swatches}>
+                              {summary.colors.slice(0, MAX_SWATCHES).map((c, i) => (
+                                <View key={i} style={[styles.swatch, { backgroundColor: c }]} />
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      </CardLink>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          pt.favorited ? `Unfavourite ${pt.name}` : `Favourite ${pt.name}`
+                        }
+                        onPress={() => toggleFavorite(id)}
+                        hitSlop={8}
+                        style={styles.heartBtn}>
+                        <KnitIcon
+                          name={pt.favorited ? 'bookmark-filled' : 'bookmark'}
+                          color={Colors.coralDeep}
+                          accent={pt.favorited ? undefined : Colors.coral}
+                        />
+                      </Pressable>
+                    </View>
+                  );
+                })}
               </View>
             </>
           ) : view === 'techniques' ? (
@@ -363,6 +387,19 @@ const styles = StyleSheet.create({
   libInfo: {
     gap: 2,
     flexShrink: 1,
+  },
+  swatches: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+    marginTop: 2,
+  },
+  swatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 59, 56, 0.15)',
   },
   heartBtn: {
     marginLeft: 'auto',
