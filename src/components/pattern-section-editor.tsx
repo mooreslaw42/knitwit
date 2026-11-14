@@ -50,6 +50,10 @@ type EditMaterial = {
   id: string;
   label: string;
   short: string;
+  // Not editable here, but carried through: a pixel pattern's slots are its colours, and dropping
+  // this on the way back out turned the whole chart monochrome the first time anyone so much as
+  // opened a yarn card.
+  color?: string;
   skeins: string;
   expanded: boolean;
 };
@@ -88,6 +92,7 @@ function kitToPattern(kit: EditKit): PatternKit {
         id: m.id,
         label: m.label.trim() || 'Yarn',
         short: m.short.trim(),
+        ...(m.color ? { color: m.color } : {}),
         // Left off entirely when the pattern doesn't say, rather than stored as a zero — "0
         // skeins" and "the pattern never said" are different answers.
         ...(skeins == null ? {} : { skeins }),
