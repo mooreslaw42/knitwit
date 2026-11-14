@@ -279,6 +279,13 @@ export default function NewPatternWizardScreen() {
     setStep((s) => s + 1);
   };
 
+  const save = () =>
+    savePattern(null, {
+      ...form,
+      name: form.name.trim(),
+      sizes: form.sizes.length ? form.sizes : ['One size'],
+    });
+
   const handleNext = () => {
     if (nameMissing) {
       setNameTouched(true);
@@ -288,12 +295,15 @@ export default function NewPatternWizardScreen() {
       setStep((s) => s + 1);
       return;
     }
-    savePattern(null, {
-      ...form,
-      name: form.name.trim(),
-      sizes: form.sizes.length ? form.sizes : ['One size'],
-    });
+    save();
     goBackOr(router, '/library');
+  };
+
+  // Writing a pattern is usually the step before knitting it. Replaced rather than pushed, so
+  // backing out of the project wizard doesn't land in a pattern wizard that has already saved.
+  const saveAndStartProject = () => {
+    const id = save();
+    router.replace(`/project/new?pattern=${encodeURIComponent(id)}`);
   };
 
   const handleBack = () => {
@@ -672,6 +682,13 @@ export default function NewPatternWizardScreen() {
             <PillButton style={styles.nextBtn} onPress={handleNext}>
               <ThemedText type="smallBold" themeColor="white">
                 {isLast ? 'Save pattern' : STEPS[step] === 'Start' ? 'Continue' : 'Next'}
+              </ThemedText>
+            </PillButton>
+          )}
+          {isLast && (
+            <PillButton variant="secondary" onPress={saveAndStartProject}>
+              <ThemedText type="smallBold" themeColor="ink">
+                Save &amp; start a project
               </ThemedText>
             </PillButton>
           )}

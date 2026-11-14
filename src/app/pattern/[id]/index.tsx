@@ -206,6 +206,16 @@ export default function PatternDetailScreen() {
             )}
           </View>
 
+          {!editing && (
+            <PillButton
+              style={styles.startProjectBtn}
+              onPress={() => router.push(`/project/new?pattern=${encodeURIComponent(id)}`)}>
+              <ThemedText type="smallBold" themeColor="white">
+                Start a project from this pattern
+              </ThemedText>
+            </PillButton>
+          )}
+
           {/* Outside the edit/view split on purpose: notes save as they're typed, so there is
               nothing to put behind Edit and nothing to lose by leaving. */}
           <NotesCard
@@ -573,4 +583,5 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1, gap: 2 },
   saveBtn: { marginTop: Spacing.three },
+  startProjectBtn: { marginVertical: Spacing.two },
 });

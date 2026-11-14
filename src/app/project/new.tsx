@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -57,16 +57,26 @@ export default function NewProjectWizardScreen() {
   const createProject = useKnitwitStore((state) => state.createProject);
   const setActiveSection = useKnitwitStore((state) => state.setActiveSection);
 
+  // Arriving from a pattern — its own page, or the end of the pattern wizard — the knitter has
+  // already said which pattern this is, so it starts chosen and lends the project its name, craft
+  // and category. All still editable; the Pattern step is still there to change it. An id that
+  // doesn't resolve (deleted since the link was made) is just ignored.
+  const params = useLocalSearchParams<{ pattern?: string }>();
+  const fromPatternId =
+    typeof params.pattern === 'string' && patterns[params.pattern] ? params.pattern : null;
+  const fromPattern = fromPatternId ? patterns[fromPatternId] : null;
+
   const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(fromPattern?.name ?? '');
   const [startedOn, setStartedOn] = useState<string | null>(localDate());
-  const [craft, setCraft] = useState<TechniqueCraft>('knit');
+  const [craft, setCraft] = useState<TechniqueCraft>(fromPattern?.craft ?? 'knit');
   // Read off the name until the knitter says otherwise, the same guess createProject would make —
-  // just made where they can see and correct it rather than behind their back.
-  const [category, setCategory] = useState<PatternCategory>('sweaters');
-  const [categoryTouched, setCategoryTouched] = useState(false);
+  // just made where they can see and correct it rather than behind their back. A pattern already
+  // knows what it is, which beats guessing from a name, so it counts as said.
+  const [category, setCategory] = useState<PatternCategory>(fromPattern?.category ?? 'sweaters');
+  const [categoryTouched, setCategoryTouched] = useState(!!fromPattern);
   const [labels, setLabels] = useState<string[]>([]);
-  const [patternId, setPatternId] = useState<string | null>(null);
+  const [patternId, setPatternId] = useState<string | null>(fromPatternId);
   // Picking a pattern moves the craft to match it — a project usually is whatever its pattern is,
   // and the selector stays there for the cases where it isn't.
   const [craftTouched, setCraftTouched] = useState(false);
