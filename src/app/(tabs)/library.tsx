@@ -38,7 +38,7 @@ type LibraryView = 'patterns' | 'techniques' | 'materials' | 'tools';
 const VIEWS: { id: LibraryView; label: string; singular: string }[] = [
   { id: 'patterns', label: 'Patterns', singular: 'pattern' },
   { id: 'techniques', label: 'Techniques', singular: 'technique' },
-  { id: 'materials', label: 'Yarn', singular: 'material' },
+  { id: 'materials', label: 'Yarn', singular: 'yarn' },
   { id: 'tools', label: 'Tools', singular: 'tool' },
 ];
 
@@ -76,10 +76,14 @@ export default function LibraryScreen() {
     craft === 'all'
       ? entries
       : entries.filter(([, p]) => p.craft === craft || p.craft === 'both');
-  const visible = filter === 'all' ? byCraft : byCraft.filter(([, p]) => p.category === filter);
   const usedCrafts = CRAFT_ORDER.filter((c) => entries.some(([, p]) => p.craft === c));
   // Categories follow the craft filter, so it never offers one with nothing behind it.
   const usedCategories = CATEGORY_ORDER.filter((c) => byCraft.some(([, p]) => p.category === c));
+  // A category that the chosen craft has nothing in is not a filter any more — it is an empty
+  // list with no chip left on screen to clear it. Picking "Socks" and then a craft with no socks
+  // did exactly that. The stored choice is kept, so going back to the first craft restores it.
+  const category = filter !== 'all' && usedCategories.includes(filter) ? filter : 'all';
+  const visible = category === 'all' ? byCraft : byCraft.filter(([, p]) => p.category === category);
 
   const singular = VIEWS.find((v) => v.id === view)?.singular;
   const openNew = () => {
@@ -129,12 +133,12 @@ export default function LibraryScreen() {
               {/* With one category there is nothing to choose between. */}
               {usedCategories.length > 1 && (
                 <ChipRow>
-                  <Chip label="All" selected={filter === 'all'} onPress={() => setFilter('all')} />
+                  <Chip label="All" selected={category === 'all'} onPress={() => setFilter('all')} />
                   {usedCategories.map((c) => (
                     <Chip
                       key={c}
                       label={CATEGORY_LABELS[c]}
-                      selected={filter === c}
+                      selected={category === c}
                       onPress={() => setFilter(c)}
                     />
                   ))}

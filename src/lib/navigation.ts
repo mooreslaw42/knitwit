@@ -14,3 +14,19 @@ export function goBackOr(router: Router, fallback: Parameters<Router['replace']>
     router.replace(fallback);
   }
 }
+
+// From a pushed screen, to the counter.
+//
+// The counter is a tab, and a pushed screen sits on top of the tabs. `router.push('/counter')`
+// from there does not switch tab: it pushes a second copy of the whole tab navigator on top of
+// the screen you were on. It looks right for a moment — the counter appears — but the tab bar
+// slides in as part of a new screen, its other four tabs are fresh instances with their scroll and
+// filters gone, swiping back lands on the project again, and every lap of project → Continue
+// stacks another set of tabs.
+//
+// `dismissTo` goes back down to the tabs that are already there and shows the counter in them. If
+// there are none underneath — the screen was opened cold from a link — it replaces the screen
+// with them instead.
+export function goToCounter(router: Router) {
+  router.dismissTo('/counter');
+}

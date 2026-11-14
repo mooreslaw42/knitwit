@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
@@ -34,6 +34,7 @@ export function Screen({
   scroll = true,
   contentStyle,
   footer,
+  scrollResetKey,
 }: {
   kind?: 'tab' | 'pushed' | 'wizard';
   children: ReactNode;
@@ -43,7 +44,16 @@ export function Screen({
   contentStyle?: StyleProp<ViewStyle>;
   // Pinned beneath the scrolling content: the one action a screen exists for.
   footer?: ReactNode;
+  // When this changes, the screen scrolls back to the top. A wizard passes its step: each step is
+  // a new page, and pressing Next at the foot of a long one used to open the following step
+  // already scrolled past its own heading.
+  scrollResetKey?: string | number;
 }) {
+  const scroller = useRef<ScrollView>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo({ y: 0, animated: false });
+  }, [scrollResetKey]);
+
   const edges: Edge[] =
     kind === 'tab'
       ? ['top', 'left', 'right']
@@ -60,8 +70,15 @@ export function Screen({
       <SafeAreaView style={styles.safeArea} edges={edges}>
         {scroll ? (
           <ScrollView
+            ref={scroller}
             contentContainerStyle={content}
             keyboardShouldPersistTaps="handled"
+            // The field being typed in stays above the keyboard, and a drag puts the keyboard
+            // away. Neither was set anywhere, so on a phone the lower half of every form —
+            // including its Save button — sat underneath the keyboard with no way to reach it
+            // but to dismiss the keyboard first. Owning the scroll view means fixing it once.
+            automaticallyAdjustKeyboardInsets
+            keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
@@ -139,6 +156,7 @@ export function WizardHeader({
         </PressableScale>
         <View
           style={styles.wizardDots}
+          accessible
           accessibilityRole="progressbar"
           accessibilityLabel={`Step ${step + 1} of ${total}`}>
           {Array.from({ length: total }, (_, i) => (

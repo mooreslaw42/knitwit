@@ -1,4 +1,5 @@
 import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
+import { KnitTexture } from '@/components/knit-texture';
 import { AnimatedProgressBar } from '@/components/motion/AnimatedProgressBar';
 import { PressableScale } from '@/components/motion/PressableScale';
 import { PhotoImage } from '@/components/photo';
@@ -29,6 +30,7 @@ import {
   Spacing,
   type ThemeColor,
 } from '@/constants/theme';
+import { darken } from '@/lib/knitwit-helpers';
 import type { ProjectStatus, SectionStatus } from '@/types/knitwit';
 
 // The one text-input look, exported so the platform-split AutoGrowInput can wear it without
@@ -428,6 +430,9 @@ export function SelectField<T extends string>({
 //
 // Shared because three lists each wrote `backgroundColor: photo ? undefined : color` and then
 // never drew the photo, so anything with one showed a blank square. One place to get it right.
+//
+// With neither a photo nor an icon it is knitted in its own colour rather than left as a flat
+// square — see KnitTexture.
 export function Thumb({
   photo,
   color,
@@ -445,7 +450,11 @@ export function Thumb({
         styles.thumb,
         { width: size, height: size, backgroundColor: color ?? Colors.creamDeep },
       ]}>
-      {photo ? <PhotoImage photo={photo} style={styles.thumbPhoto} /> : children}
+      {photo ? (
+        <PhotoImage photo={photo} style={styles.thumbPhoto} />
+      ) : (
+        (children ?? (color ? <KnitTexture color={darken(color, 0.22)} stitch={size / 3.4} /> : null))
+      )}
     </View>
   );
 }
@@ -517,8 +526,11 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     ...Shadows.card,
   },
+  // A minimum, not a fixed height: at the largest accessibility text sizes the label has to be
+  // able to push the pill taller rather than be cut off inside it.
   chip: {
-    height: 36,
+    minHeight: 36,
+    paddingVertical: Spacing.one,
     justifyContent: 'center',
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -533,13 +545,20 @@ const styles = StyleSheet.create({
   chipText: { maxWidth: 200 },
   // Bleeds through the page gutter and pads itself back in, so the first chip lines up with
   // everything else on the screen and the last one can scroll right to the edge.
+  //
+  // The same trick vertically, by four points: a scroll view clips touches to its own frame, so a
+  // chip's hit slop did nothing in a row exactly as tall as the chip. The padding gives the slop
+  // somewhere to be and the negative margin gives the space back to the layout.
   chipRow: {
     flexGrow: 0,
     marginHorizontal: -ScreenPadding,
+    marginVertical: -Spacing.one,
   },
   chipRowContent: {
     paddingHorizontal: ScreenPadding,
+    paddingVertical: Spacing.one,
     gap: Spacing.two,
+    alignItems: 'center',
   },
   iconButton: {
     borderRadius: Radii.pill,

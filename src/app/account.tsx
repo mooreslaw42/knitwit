@@ -94,7 +94,11 @@ export default function AccountScreen() {
       hourlyFee: fee.trim() && Number.isFinite(n) && n >= 0 ? n : undefined,
     });
   };
-  const feeChanged = fee.trim() !== (savedFee == null ? '' : String(savedFee));
+  // Compared as numbers, the way it is saved: "12,5" and 12.5 are the same fee, and comparing the
+  // text left the Save button up after it had done its job.
+  const parsedFee = parseFloat(fee.replace(',', '.'));
+  const feeValue = fee.trim() && Number.isFinite(parsedFee) && parsedFee >= 0 ? parsedFee : undefined;
+  const feeChanged = feeValue !== savedFee;
 
   // Settings, in groups.
   //
@@ -147,7 +151,9 @@ export default function AccountScreen() {
                 }}
               />
               <PillButton
-                disabled={!name.trim()}
+                // Nothing typed and nothing saved is nothing to save; but clearing a name that is
+                // saved is a real change, and the button has to allow it as the return key does.
+                disabled={!name.trim() && !displayName}
                 onPress={() => {
                   updateSettings({ displayName: name.trim() });
                   setEditingName(false);
@@ -195,6 +201,28 @@ export default function AccountScreen() {
                 onPress={() => updateSettings({ gaugeUnit: u.id })}
               />
             ))}
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.field}>
+          <ThemedText type="smallBold">Screen while counting</ThemedText>
+          <ThemedText type="caption" themeColor="inkSoft">
+            Keeps the phone from locking while the counter is open, so it is still on when you
+            look up from your needles. Turn it off to let the screen sleep as usual.
+          </ThemedText>
+          <View style={styles.inline}>
+            <Chip
+              label="Stay on"
+              selected={settings.keepScreenOn !== false}
+              onPress={() => updateSettings({ keepScreenOn: true })}
+            />
+            <Chip
+              label="Sleep as usual"
+              selected={settings.keepScreenOn === false}
+              onPress={() => updateSettings({ keepScreenOn: false })}
+            />
           </View>
         </View>
 
@@ -358,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // Rows run edge to edge inside the card, so the card gives up its own padding to them.
-  listCard: { padding: 0, overflow: 'hidden' },
+  listCard: { padding: 0 },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',

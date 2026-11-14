@@ -57,6 +57,17 @@ not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENT
   width and the scroll, so a new screen cannot get them subtly wrong. A tab's title is a
   `ScreenHeader`; a group heading is a `SectionHeader`. The only screens outside it are the
   counter (which lays itself out to the full height) and the sign-in gates.
+- **From a pushed screen, the counter is reached with `goToCounter(router)`** (`src/lib/navigation.ts`),
+  never `router.push('/counter')`. The counter is a tab; pushing it from the root stack stacks a
+  second copy of the whole tab navigator. The root layout's `unstable_settings.anchor` keeps the
+  tabs underneath a screen opened cold from a link.
+- **A wizard passes its step to `Screen` as `scrollResetKey`** so each step opens at its top.
+  `Screen`'s scroll view also keeps the focused field above the keyboard — don't add a second
+  keyboard-avoiding wrapper inside it.
+- **No photo means knitted, not blank**: `Thumb` and the detail heroes draw `KnitTexture` in the
+  item's own colour when there is no picture.
+- **The counter keeps the screen on** while it is focused (`useKeepAwakeWhileFocused`), unless
+  the knitter turns it off in Account (`settings.keepScreenOn`).
 - **A pushed screen has the native header by default** (`DETAIL_SCREEN` in `src/app/_layout.tsx`).
   Only screens that draw their own top row opt out, by name, with `NO_HEADER`. It used to be the
   other way round and four screens were missed.

@@ -319,7 +319,7 @@ export default function NewPatternWizardScreen() {
   };
 
   return (
-    <Screen kind="wizard">
+    <Screen kind="wizard" scrollResetKey={step}>
           <WizardHeader step={step} total={STEPS.length} label={STEPS[step]} onBack={handleBack} />
 
           {STEPS[step] === 'Start' && mode === null && (

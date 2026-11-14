@@ -219,7 +219,7 @@ export default function NewMaterialWizardScreen() {
   };
 
   return (
-    <Screen kind="wizard">
+    <Screen kind="wizard" scrollResetKey={step}>
           <WizardHeader step={step} total={STEPS.length} label={STEPS[step]} onBack={handleBack} />
 
           <View style={styles.body}>

@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Card, ProgressBar } from '@/components/knitwit-ui';
@@ -8,7 +7,6 @@ import { usePageTitle } from '@/lib/use-page-title';
 import { Colors, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday, longestStreak } from '@/lib/achievements';
 import { allProgress, GROUP_LABELS, GROUP_ORDER, standing } from '@/lib/awards';
-import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 function hours(seconds: number): string {
@@ -18,7 +16,6 @@ function hours(seconds: number): string {
 
 export default function AwardsScreen() {
   usePageTitle('Awards');
-  const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
 
   const progress = allProgress(achievements);
@@ -96,14 +93,6 @@ export default function AwardsScreen() {
               </View>
             );
           })}
-
-          <ThemedText
-            type="smallBold"
-            themeColor="blushDeep"
-            style={styles.back}
-            onPress={() => goBackOr(router, '/')}>
-            ← Back
-          </ThemedText>
     </Screen>
   );
 }
@@ -119,5 +108,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  back: { marginTop: Spacing.two },
 });

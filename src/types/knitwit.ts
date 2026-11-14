@@ -44,6 +44,10 @@ export type UserSettings = {
   // which reads as "not said": the cost section then simply shows materials and time, not a
   // made-up labour figure.
   hourlyFee?: number;
+  // Whether the counter keeps the phone from locking while it is open. Absent on every device
+  // that predates it, which reads as on: it is what a knitter with both hands full wants, and a
+  // setting nobody has touched should not be the one that lets the screen go dark mid-row.
+  keepScreenOn?: boolean;
 };
 
 // One entry per day the knitter actually knitted. Keyed by *local* date, because a streak is

@@ -238,7 +238,7 @@ export default function NewProjectWizardScreen() {
   };
 
   return (
-    <Screen kind="wizard">
+    <Screen kind="wizard" scrollResetKey={step}>
           <WizardHeader step={step} total={steps.length} label={current.label} onBack={handleBack} />
 
           {current.id === 'basics' && (

@@ -4,6 +4,7 @@ import { PhotoImage } from '@/components/photo';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { KnitIcon } from '@/components/icons/KnitIcon';
+import { KnitTexture } from '@/components/knit-texture';
 import {
   Card,
   IconButton,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/knitwit-helpers';
 import { materialLabel } from '@/components/stash-picker';
 import { formatGaugeIn } from '@/lib/gauge';
+import { goToCounter } from '@/lib/navigation';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -40,6 +42,12 @@ import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 // Euros, the currency the stash is priced in (see the material form). Always two places: this is
 // money, and "€12.5" reads like a typo where "€12.50" reads like a price.
+const SECTION_STATUS_WORDS = {
+  'not-started': 'not started',
+  'in-progress': 'in progress',
+  complete: 'complete',
+} as const;
+
 function formatEuros(amount: number): string {
   return `€${amount.toFixed(2)}`;
 }
@@ -113,12 +121,16 @@ export default function ProjectDetailScreen() {
             onPress={() => void choosePhoto()}
             accessibilityRole="button"
             accessibilityLabel={project.photo ? 'Change the project photo' : 'Add a project photo'}
-            style={[styles.hero, { backgroundColor: project.colorDeep }]}>
+            // The project's light colour, knitted in its deep one. It was a flat block of the deep
+            // colour, which for most palettes is a muddy mid-tone, 180 points tall.
+            style={[styles.hero, { backgroundColor: project.color }]}>
             {/* The background was already being cleared for a photo that nothing ever drew, so a
                 project with one showed an empty block. */}
             {project.photo ? (
               <PhotoImage photo={project.photo} style={styles.heroPhoto} />
-            ) : null}
+            ) : (
+              <KnitTexture color={project.colorDeep} stitch={30} opacity={0.32} />
+            )}
             <View style={styles.heroPhotoBtn}>
               <ThemedText type="smallBold" themeColor="ink">
                 {project.photo ? 'Change photo' : '+ Add photo'}
@@ -197,7 +209,7 @@ export default function ProjectDetailScreen() {
                   if (activeProjectKey !== key || activeSectionIndex !== curIdx) {
                     setActiveSection(key, curIdx);
                   }
-                  router.push('/counter');
+                  goToCounter(router);
                 }}
                 style={styles.continueButton}>
                 <View style={styles.continueButtonInner}>
@@ -219,13 +231,22 @@ export default function ProjectDetailScreen() {
           <View style={styles.sectionsList}>
             {project.sections.map((s, i) => {
               const status = sectionStatus(s);
-              const isCurrent = i === curIdx && status !== 'complete';
+              // Only a project still on the needles has a section that is "next". A frogged one
+              // was showing the marker on wherever it had been abandoned.
+              const isCurrent = state === 'active' && i === curIdx && status !== 'complete';
               const secPct = s.totalRows ? s.row / s.totalRows : 0;
               return (
                 <CardLink
                   key={s.name + i}
-                  style={[styles.secCard, isCurrent && styles.secCardCurrent]}
-                  href={`/project/${key}/section/${i}`}>
+                  style={[
+                    styles.secCard,
+                    isCurrent && styles.secCardCurrent,
+                    isCurrent && { borderLeftColor: project.colorDeep },
+                  ]}
+                  href={`/project/${key}/section/${i}`}
+                  // The edge marks the current section for the eye; this says it to a screen
+                  // reader, which the edge alone does not.
+                  accessibilityLabel={`${s.name}${isCurrent ? ', up next' : ''}, row ${s.row} of ${s.totalRows}, ${SECTION_STATUS_WORDS[status]}`}>
                   <View style={styles.secTop}>
                     <ThemedText type="default" numberOfLines={1} style={styles.secName}>
                       {s.name}
@@ -464,6 +485,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hero: {
+    overflow: 'hidden',
     height: 180,
     borderRadius: Radii.large,
     padding: Spacing.three,
@@ -492,9 +514,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingTop: Spacing.two,
   },
+  // Top-aligned: beside a name that wraps to several lines, a centred button floats in the middle
+  // of the paragraph instead of sitting with its first line.
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
@@ -533,7 +557,6 @@ const styles = StyleSheet.create({
   // than by the words "Currently on" appended to its name.
   secCardCurrent: {
     borderLeftWidth: 4,
-    borderLeftColor: Colors.blushDeep,
   },
   secName: { flex: 1, fontFamily: Fonts.bodyExtrabold },
   secTop: {

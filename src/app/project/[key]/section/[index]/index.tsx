@@ -24,7 +24,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/screen';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { formatClock, sectionStatus } from '@/lib/knitwit-helpers';
-import { goBackOr } from '@/lib/navigation';
+import { goBackOr, goToCounter } from '@/lib/navigation';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -91,7 +91,7 @@ export default function SectionDetailScreen() {
         <PillButton
           onPress={() => {
             setActiveSection(key, sectionIndex);
-            router.push('/counter');
+            goToCounter(router);
           }}>
           <View style={styles.continueInner}>
             <KnitIcon name="play" size={16} color={Colors.white} accent={Colors.white} />

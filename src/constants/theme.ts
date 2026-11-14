@@ -96,7 +96,7 @@ export const PhoneNavBelow = 600;
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
-// Below this window width the web nav bar shows icons only (labels stay for screen readers): six
+// Below this window width the web nav bar shows icons only (labels stay for screen readers): the
 // labelled tabs and the logo no longer fit beside each other.
 //
 // The nav lives inside the MaxContentWidth (800px) cap, and the logo plus the six labels measure

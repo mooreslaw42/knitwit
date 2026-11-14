@@ -12,6 +12,7 @@ import { Confetti } from '@/components/motion/Confetti';
 import { haptics, type HapticKind } from '@/components/motion/haptics';
 import { enterCard, exitCard } from '@/components/motion/presets';
 import { PressableScale } from '@/components/motion/PressableScale';
+import { ProgressRing } from '@/components/motion/ProgressRing';
 import { RowCount } from '@/components/motion/RowCount';
 import { TimerPulse } from '@/components/motion/TimerPulse';
 import { StitchChart, StitchRowStrip } from '@/components/stitch-chart';
@@ -19,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts, MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { formatClock } from '@/lib/knitwit-helpers';
+import { useKeepAwakeWhileFocused } from '@/lib/use-keep-awake';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useWideLayout } from '@/lib/use-wide-layout';
@@ -73,6 +75,10 @@ export default function CounterScreen() {
   const timerKey = useKnitwitStore((state) => state.timerKey);
   const isTimerRunning = timerKey === `${activeProjectKey}|${activeSectionIndex}`;
   const liveSeconds = useLiveSeconds(activeProjectKey, activeSectionIndex);
+
+  // On while there is something to count and the knitter has not asked for it off. See the hook.
+  const keepScreenOn = useKnitwitStore((state) => state.settings.keepScreenOn !== false);
+  useKeepAwakeWhileFocused(keepScreenOn && !!section);
 
   const [noteText, setNoteText] = useState('');
   // Hooks run before the empty-state return below, so these cannot move down with the layout.
@@ -357,12 +363,11 @@ export default function CounterScreen() {
                   showStitchCount
                   materials={patternMaterials}
                 />
+                {/* What to knit on this row, at a size that can be read from the arm of a chair.
+                    It was set in the 12-point detail style, in grey — the one sentence on the
+                    screen a knitter actually needs, and the hardest one to read. */}
                 {chartRow?.instruction ? (
-                  <ThemedText
-                    type="small"
-                    themeColor="inkSoft"
-                    numberOfLines={2}
-                    style={styles.rowInstruction}>
+                  <ThemedText type="default" numberOfLines={3} style={styles.rowInstruction}>
                     {chartRow.instruction}
                   </ThemedText>
                 ) : null}
@@ -385,21 +390,32 @@ export default function CounterScreen() {
                 style={[styles.cntBtnMinus, section.row <= 0 && styles.disabled]}>
                 <KnitIcon name="minus" size={28} color={Colors.inkSoft} />
               </PressableScale>
-              <PressableScale
-                onPress={() => changeRow(1)}
-                scaleTo={0.92}
-                accessibilityRole="button"
-                accessibilityLabel="Next row"
-                // Only locked while the bind-off prompt is still standing. Once it's been
-                // declined the knitter has said they aren't finished, so counting on has to work
-                // — the store grows the section to match.
-                disabled={section.row >= section.totalRows && !castOffDismissed}
-                style={[
-                  styles.cntBtnPlus,
-                  section.row >= section.totalRows && !castOffDismissed && styles.disabled,
-                ]}>
-                <KnitIcon name="plus" size={64} color={Colors.white} />
-              </PressableScale>
+              {/* The section's progress, drawn round the button that makes it. Every press moves
+                  the ring a little, so the count is something you can see filling as well as a
+                  number going up — and how far there is to go is readable without doing the
+                  subtraction. */}
+              <ProgressRing
+                progress={section.totalRows ? section.row / section.totalRows : 0}
+                size={178}
+                strokeWidth={7}
+                color={Colors.coralDeep}
+                trackColor={Colors.creamDeep}>
+                <PressableScale
+                  onPress={() => changeRow(1)}
+                  scaleTo={0.92}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next row"
+                  // Only locked while the bind-off prompt is still standing. Once it's been
+                  // declined the knitter has said they aren't finished, so counting on has to work
+                  // — the store grows the section to match.
+                  disabled={section.row >= section.totalRows && !castOffDismissed}
+                  style={[
+                    styles.cntBtnPlus,
+                    section.row >= section.totalRows && !castOffDismissed && styles.disabled,
+                  ]}>
+                  <KnitIcon name="plus" size={64} color={Colors.white} />
+                </PressableScale>
+              </ProgressRing>
             </View>
             <View style={styles.shortcuts}>
               <PressableScale
@@ -663,7 +679,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
-    height: 44,
+    minHeight: 44,
     flexShrink: 0,
     ...Shadows.card,
   },
@@ -686,6 +702,7 @@ const styles = StyleSheet.create({
   },
   rowInstruction: {
     textAlign: 'center',
+    marginTop: Spacing.one,
   },
   cntNumber: {
     fontFamily: Fonts.headingBold,
@@ -708,6 +725,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadows.card,
   },
   cntBtnPlus: {
     width: 150,

@@ -160,7 +160,11 @@ export default function HomeScreen() {
             </View>
           </PillButton>
         </View>
-      ) : (
+      ) : incomplete.length > 0 ? null : (
+        // Only when there is truly nothing on the needles. A project can be active and have no
+        // sections yet (a Ravelry import, mid-sync), which leaves nothing to resume — and this
+        // card then said "everything you started is finished" directly above a list of the
+        // projects that were not.
         <View style={styles.emptyHero}>
           <EmptyState
             illustration="no-projects"
@@ -168,7 +172,7 @@ export default function HomeScreen() {
             message={
               entries.length === 0
                 ? 'Give it a name, pick a pattern or go without one, and Knitwit keeps count from the first row.'
-                : 'Everything you started is finished. Time for the next one.'
+                : 'Nothing in progress right now. Time for the next one.'
             }
             action={
               <PillButton onPress={() => router.push('/project/new')} style={styles.emptyButton}>
@@ -206,7 +210,7 @@ export default function HomeScreen() {
       {incomplete.length > 0 && (
         <>
           <SectionHeader
-            title={others.length > 0 ? 'Also on the needles' : 'On the needles'}
+            title={resume && others.length > 0 ? 'Also on the needles' : 'On the needles'}
             actionLabel="New project"
             actionIcon="plus"
             onAction={() => router.push('/project/new')}
@@ -225,7 +229,7 @@ export default function HomeScreen() {
                     key={key}
                     style={styles.row}
                     href={`/project/${key}`}
-                    accessibilityLabel={`${p.name}, ${Math.round(pct * 100)}% complete`}>
+                    accessibilityLabel={`${p.name}${cur ? `, ${cur.name}, row ${cur.row} of ${cur.totalRows}` : ''}, ${Math.round(pct * 100)}% complete`}>
                     <Thumb photo={p.photo} color={p.color} size={48} />
                     <View style={styles.rowInfo}>
                       <ThemedText type="default" numberOfLines={1} style={styles.rowTitle}>

@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { KnitTexture } from '@/components/knit-texture';
 import { PhotoImage } from '@/components/photo';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -86,7 +87,9 @@ export default function ProjectsScreen() {
   // The craft row only earns its place once there is more than one craft to choose between; a
   // knitter who has never crocheted does not need a row of filters that all return everything.
   const crafts = new Set(Object.values(projects).map((p) => p.craft));
-  const showCrafts = crafts.size > 1;
+  // …and it stays for as long as one is selected, or the last crochet project being deleted would
+  // leave "Nothing matches" with no filter on screen to clear.
+  const showCrafts = crafts.size > 1 || craftFilter !== 'all';
 
   return (
     <Screen>
@@ -185,7 +188,9 @@ export default function ProjectsScreen() {
                     <View style={[styles.projThumb, { backgroundColor: p.color }]}>
                       {p.photo ? (
                         <PhotoImage photo={p.photo} style={styles.projPhoto} />
-                      ) : null}
+                      ) : (
+                        <KnitTexture color={p.colorDeep} stitch={26} opacity={0.3} />
+                      )}
                       <ThemedText type="smallBold" themeColor="white" style={styles.projPct}>
                         {Math.round(pct * 100)}%
                       </ThemedText>
@@ -261,8 +266,8 @@ const styles = StyleSheet.create({
     width: '50%',
     padding: Spacing.two,
   },
-  // The lift is on the card and the clipping is on the picture inside it. Both on one view and
-  // the overflow would cut the shadow off along with the photo's corners.
+  // The lift is on the card and the clipping is on the picture inside it, so the card's shadow
+  // is never at the mercy of how a platform combines `overflow` with a shadow.
   projCard: {
     width: '100%',
     backgroundColor: Colors.white,

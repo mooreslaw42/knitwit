@@ -89,6 +89,14 @@ const DETAIL_SCREEN = {
 
 const NO_HEADER = { headerShown: false } as const;
 
+// The tabs are underneath every other screen, even one the app was opened straight into.
+//
+// Without this a cold start on a link — the password-reset email comes back to `/account` — gives
+// a stack with that one screen in it: a header with no back button, no tab bar, and nothing on the
+// page that leads anywhere else. Account used to be a tab, so this could not happen to it; now
+// that it is pushed, it can. The anchor puts the tabs below whatever the link opened.
+export const unstable_settings = { anchor: "(tabs)" };
+
 // Dark clock and battery, always.
 //
 // Knitwit has one palette and it is a light one. Nothing ever told the status bar so: it followed

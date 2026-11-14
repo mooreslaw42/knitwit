@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
+import { KnitTexture } from '@/components/knit-texture';
 import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -34,7 +35,7 @@ import {
   scaleForToolType,
 } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
-import { patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
+import { darken, patternSectionMarkers, skeinsLabel } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { formatGauge, formatGaugeIn } from '@/lib/gauge';
@@ -190,7 +191,9 @@ export default function PatternDetailScreen() {
             <View style={[styles.hero, { backgroundColor: view.accentColor }]}>
               {view.photo ? (
                 <PhotoImage photo={view.photo} style={styles.heroPhoto} />
-              ) : null}
+              ) : (
+                <KnitTexture color={darken(view.accentColor, 0.25)} stitch={30} opacity={0.32} />
+              )}
             </View>
           )}
 
