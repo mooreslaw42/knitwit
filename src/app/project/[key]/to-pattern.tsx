@@ -1,12 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
 import { GaugeField } from '@/components/gauge-field';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -14,7 +13,7 @@ import {
   CRAFT_ORDER,
   toolSizeOptions,
 } from '@/constants/catalogs';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import { describeConversion, projectToPattern } from '@/lib/project-to-pattern';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -82,9 +81,7 @@ export default function ProjectToPatternScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Save as pattern</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             Everything {project.name} is made of becomes a pattern you can knit again — its
@@ -165,20 +162,11 @@ export default function ProjectToPatternScreen() {
               </ThemedText>
             </PillButton>
           </View>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   summary: { gap: Spacing.one },
   actions: { gap: Spacing.two, marginTop: Spacing.two },
 });

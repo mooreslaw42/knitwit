@@ -1,10 +1,9 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
 import { KnitIcon } from '@/components/icons/KnitIcon';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 
 // One calculator, on a screen of its own, with the two halves told apart by more than a shade.
 //
@@ -40,9 +39,7 @@ export function CalcScreen({
   children: React.ReactNode;
 }) {
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.content}>
+    <Screen kind="pushed">
           <View style={styles.heading}>
             <ThemedText type="title" heading={1}>
               {title}
@@ -57,9 +54,7 @@ export function CalcScreen({
               Nothing here is saved — it changes no pattern and no project.
             </ThemedText>
           ) : null}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -185,13 +180,6 @@ export function Caution({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.four,
-  },
   heading: { gap: Spacing.one },
   group: { gap: Spacing.two },
   halfLabel: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },

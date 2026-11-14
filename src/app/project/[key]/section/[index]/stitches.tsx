@@ -1,11 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SectionStitchEditor } from '@/components/section-stitch-editor';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { sizeValue } from '@/lib/knitwit-helpers';
 import { goBackOr } from '@/lib/navigation';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -29,9 +26,7 @@ export default function ProjectSectionStitchesScreen() {
   if (!project || !section) return null;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>{section.name}</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             {project.name} · stitch-by-stitch
@@ -69,18 +64,6 @@ export default function ProjectSectionStitchesScreen() {
               goBackOr(router, `/project/${key}/section/${sectionIndex}`);
             }}
           />
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
-});

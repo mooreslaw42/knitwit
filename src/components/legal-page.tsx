@@ -1,9 +1,8 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import type { LegalDocument } from '@/lib/legal';
 
 // One renderer for all three documents, so they cannot drift apart in how they look and so the
@@ -14,9 +13,7 @@ import type { LegalDocument } from '@/lib/legal';
 // pages can do, given one of them is about exactly that.
 export function LegalPage({ document }: { document: LegalDocument }) {
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>
             {document.title}
           </ThemedText>
@@ -52,16 +49,11 @@ export function LegalPage({ document }: { document: LegalDocument }) {
               ))}
             </View>
           ))}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safe: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scroll: { padding: Spacing.four, paddingBottom: Spacing.six * 2, gap: Spacing.two },
   section: { gap: Spacing.two, marginTop: Spacing.four },
   item: { flexDirection: 'row', gap: Spacing.two, paddingRight: Spacing.two },
   bullet: { lineHeight: 24 },

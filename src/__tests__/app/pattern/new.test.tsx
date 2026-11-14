@@ -79,7 +79,7 @@ describe('the first step of the new-pattern wizard', () => {
     await fireEvent.press(screen.getByText('Write pattern'));
     expect(screen.queryByText('How do you want to start?')).toBeNull();
 
-    await fireEvent.press(screen.getByText('←'));
+    await fireEvent.press(screen.getByLabelText('Back'));
     expect(screen.getByText('How do you want to start?')).toBeTruthy();
   });
 

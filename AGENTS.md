@@ -52,11 +52,11 @@ not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENT
   wide web window. The web keeps the same five in the same order — `src/components/web-nav.tsx`
   is the one list, and it sits along the bottom below `PhoneNavBelow`, across the top above it.
 - **Every screen stands in `Screen`** (`src/components/screen.tsx`): `kind="tab"` for the five
-  tabs, `kind="pushed"` for everything on the root stack. It owns the safe area, the gutter, the
-  max width and the scroll, so a new screen cannot get them subtly wrong. A tab's title is a
-  `ScreenHeader`; a group heading is a `SectionHeader`. Screens still on the older hand-rolled
-  `ThemedView`/`SafeAreaView`/`ScrollView` frame (the wizards, the editors, material/tool/technique
-  detail) should move across when they are next touched.
+  tabs, `kind="pushed"` for everything on the root stack, `kind="wizard"` for the three wizards
+  that draw their own top row with `WizardHeader`. It owns the safe area, the gutter, the max
+  width and the scroll, so a new screen cannot get them subtly wrong. A tab's title is a
+  `ScreenHeader`; a group heading is a `SectionHeader`. The only screens outside it are the
+  counter (which lays itself out to the full height) and the sign-in gates.
 - **A pushed screen has the native header by default** (`DETAIL_SCREEN` in `src/app/_layout.tsx`).
   Only screens that draw their own top row opt out, by name, with `NO_HEADER`. It used to be the
   other way round and four screens were missed.
@@ -64,7 +64,7 @@ not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENT
   Continue knitting on Home and on a project, Start a project on a pattern, the pinned
   Continue counting on a section. "Add" in a tab header is the round `IconButton`; an action in a
   section heading is text. Filters are `Chip`s in a `ChipRow` and are ink when selected — never
-  the primary pink.
+  the primary pink. A chip that has to be drawn by hand wears `ChipStyle`/`ChipSelectedStyle`.
 - **A project's state has one set of words**: `PROJECT_STATUS_LABELS` (On the needles, Finished,
   Frogged), read through `projectState()`. Badges, filters and the hero all use them.
 - Type scale is in `ThemedText`: `largeTitle` names a tab, `title` a pushed screen, `subtitle` a
@@ -107,7 +107,8 @@ not update those, so copy changed files across by hand. See `brand-kit/IMPLEMENT
 - `npm run typecheck` — `tsc --noEmit`, run after any non-trivial change.
 - `npm run lint` — ESLint via `expo lint`.
 - `npm test` — Jest (`jest-expo` preset + `@testing-library/react-native`); prioritize testing
-  pure logic (counter math, gauge calculations) over UI snapshot tests. Render tests earn their
+  pure logic (counter math, gauge calculations) over UI snapshot tests. Device storage is mocked
+  once in `jest.setup.js`, so a test can import the UI kit without mocking the photo store. Render tests earn their
   place where a mistake is only visible on screen — see `charts.test.tsx` and
   `src/__tests__/app/pattern/new.test.tsx`. Tests sit beside what they test, **except tests of a
   route screen**, which mirror the route path under `src/__tests__/app/` — anything ending `.tsx`

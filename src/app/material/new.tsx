@@ -2,16 +2,15 @@ import { useRouter } from 'expo-router';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { CareSymbolsField } from '@/components/care-symbols-field';
 import { GaugeField } from '@/components/gauge-field';
 import { SwatchField } from '@/components/swatch-field';
+import { Screen, WizardHeader } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage, takePhoto } from '@/lib/pick-image';
 import { SourceBadge, type FieldSource } from '@/components/source-badge';
@@ -24,7 +23,7 @@ import {
 import { WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, MaxNameLength, Radii, Spacing } from '@/constants/theme';
+import { Colors, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material } from '@/types/knitwit';
 
@@ -220,34 +219,8 @@ export default function NewMaterialWizardScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        {/* The whole wizard scrolls, the way the pattern wizard's does. Without this the steps were
-            laid out in a box the height of the window and anything past the fold was simply cut
-            off — on the Care step, which is the tallest, that took the Next button with it and
-            left no way to finish the yarn or go back to it. */}
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.topbar}>
-            <Pressable onPress={handleBack} hitSlop={8}>
-              <ThemedText type="default">←</ThemedText>
-            </Pressable>
-            <View style={styles.dots}>
-              {STEPS.map((s, i) => (
-                <View
-                  key={s}
-                  style={[
-                    styles.dot,
-                    i === step && styles.dotActive,
-                    i < step && styles.dotDone,
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={styles.topbarSpacer} />
-          </View>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
-          </ThemedText>
+    <Screen kind="wizard">
+          <WizardHeader step={step} total={STEPS.length} label={STEPS[step]} onBack={handleBack} />
 
           <View style={styles.body}>
             {step === 0 && (
@@ -510,9 +483,7 @@ export default function NewMaterialWizardScreen() {
               </ThemedText>
             </PillButton>
           </View>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -551,50 +522,8 @@ const styles = StyleSheet.create({
   scanNoteUnsure: {
     borderLeftColor: Colors.coralDeep,
   },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
   // The padding lives on the scrolling content rather than the frame around it, so the scrollbar
   // runs down the edge of the screen instead of down the middle of the margin.
-  scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-  },
-  topbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  topbarSpacer: {
-    width: 20,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.creamDeep,
-  },
-  dotActive: {
-    backgroundColor: Colors.blushDeep,
-  },
-  dotDone: {
-    backgroundColor: Colors.sage,
-  },
-  caption: {
-    textAlign: 'center',
-    marginTop: Spacing.two,
-    marginBottom: Spacing.four,
-  },
   body: {
     gap: Spacing.three,
     paddingBottom: Spacing.six,

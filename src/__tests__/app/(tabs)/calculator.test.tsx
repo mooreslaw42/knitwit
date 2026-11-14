@@ -9,9 +9,6 @@ import type { Gauge } from '@/types/knitwit';
 // entry that never reaches the screen is exactly the kind of mistake that looks right in the diff.
 
 jest.mock('@/lib/use-page-title', () => ({ usePageTitle: jest.fn() }));
-// The hub's rows wear the shared row surface from the UI kit, and the kit reaches the photo store,
-// which wants real device storage. Nothing here draws a photo.
-jest.mock('@/lib/photo-store', () => ({ putPhoto: jest.fn(), PHOTO_STORAGE_FULL: '' }));
 jest.mock('expo-router', () => {
   const { View } = jest.requireActual('react-native');
   return {

@@ -26,6 +26,8 @@ import {
 //   - 'tab'    sits under the status bar and above the tab bar, so it pads for both.
 //   - 'pushed' sits under the native stack header, which has already cleared the status bar, and
 //              runs to the bottom of the screen.
+//   - 'wizard' has no header of its own kind at all — it draws its top row itself (WizardHeader)
+//              — so it clears the status bar and the home indicator both.
 export function Screen({
   kind = 'tab',
   children,
@@ -33,7 +35,7 @@ export function Screen({
   contentStyle,
   footer,
 }: {
-  kind?: 'tab' | 'pushed';
+  kind?: 'tab' | 'pushed' | 'wizard';
   children: ReactNode;
   // False for a screen that lays itself out to the full height — the counter, whose big button
   // has to stay under a thumb rather than scroll away from it.
@@ -42,10 +44,15 @@ export function Screen({
   // Pinned beneath the scrolling content: the one action a screen exists for.
   footer?: ReactNode;
 }) {
-  const edges: Edge[] = kind === 'tab' ? ['top', 'left', 'right'] : ['left', 'right', 'bottom'];
+  const edges: Edge[] =
+    kind === 'tab'
+      ? ['top', 'left', 'right']
+      : kind === 'wizard'
+        ? ['top', 'left', 'right', 'bottom']
+        : ['left', 'right', 'bottom'];
   const content = [
     styles.content,
-    kind === 'tab' ? styles.contentTab : styles.contentPushed,
+    kind === 'tab' ? styles.contentTab : kind === 'wizard' ? styles.contentWizard : styles.contentPushed,
     contentStyle,
   ];
   return (
@@ -94,6 +101,63 @@ export function ScreenHeader({
         ) : null}
       </View>
       {trailing ? <View style={styles.headerTrailing}>{trailing}</View> : null}
+    </View>
+  );
+}
+
+// The top of a wizard: the way back, where you are, and what this step is called.
+//
+// The three wizards — new project, new pattern, new yarn — each had their own copy of this, down
+// to the 20-point spacer that balanced a text arrow. The arrow was the character "←" set in body
+// type, which is a small, thin target for the one control that gets you out.
+//
+// `onBack` steps back through the wizard and only leaves it from the first step; that is the
+// caller's to decide, which is why these screens draw this instead of taking the native header.
+export function WizardHeader({
+  step,
+  total,
+  label,
+  onBack,
+}: {
+  // Zero-based.
+  step: number;
+  total: number;
+  label: string;
+  onBack: () => void;
+}) {
+  return (
+    <View style={styles.wizard}>
+      <View style={styles.wizardBar}>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          hitSlop={8}
+          haptic="none"
+          onPress={onBack}
+          style={styles.wizardBack}>
+          <KnitIcon name="back" size={20} color={Colors.ink} />
+        </PressableScale>
+        <View
+          style={styles.wizardDots}
+          accessibilityRole="progressbar"
+          accessibilityLabel={`Step ${step + 1} of ${total}`}>
+          {Array.from({ length: total }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.wizardDot,
+                i < step && styles.wizardDotDone,
+                i === step && styles.wizardDotActive,
+              ]}
+            />
+          ))}
+        </View>
+        {/* Balances the back button so the dots sit in the true centre. */}
+        <View style={styles.wizardBack} />
+      </View>
+      <ThemedText type="small" themeColor="inkSoft" style={styles.wizardCaption}>
+        Step {step + 1} of {total} · {label}
+      </ThemedText>
     </View>
   );
 }
@@ -165,6 +229,41 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     paddingBottom: Spacing.five,
   },
+  contentWizard: {
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.six,
+  },
+  wizard: { gap: Spacing.two },
+  wizardBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  wizardBack: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Pulled out by the icon's own inset so the arrow, not the invisible square around it, lines
+    // up with the page gutter.
+    marginLeft: -12,
+    marginRight: -12,
+  },
+  wizardDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one + Spacing.half,
+  },
+  wizardDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.creamDeep,
+  },
+  wizardDotDone: { backgroundColor: Colors.sage },
+  // The step you are on is a bar, not a dot, so it reads at a glance without relying on colour.
+  wizardDotActive: { width: 20, backgroundColor: Colors.blushDeep },
+  wizardCaption: { textAlign: 'center' },
   footer: {
     paddingHorizontal: ScreenPadding,
     paddingTop: Spacing.two,

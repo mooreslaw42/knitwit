@@ -1,12 +1,11 @@
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
 import { Card, ProgressBar } from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday, longestStreak } from '@/lib/achievements';
 import { allProgress, GROUP_LABELS, GROUP_ORDER, standing } from '@/lib/awards';
 import { goBackOr } from '@/lib/navigation';
@@ -29,9 +28,7 @@ export default function AwardsScreen() {
   const { totals } = achievements;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.content}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Awards</ThemedText>
 
           <Card style={styles.levelCard}>
@@ -107,20 +104,11 @@ export default function AwardsScreen() {
             onPress={() => goBackOr(router, '/')}>
             ← Back
           </ThemedText>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   levelCard: { gap: Spacing.two },
   group: { gap: Spacing.two },
   award: { gap: Spacing.one },

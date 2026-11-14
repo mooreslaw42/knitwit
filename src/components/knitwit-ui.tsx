@@ -70,6 +70,26 @@ export const RowSurface = {
   ...Shadows.card,
 } as const;
 
+// The chip's two looks, as styles, for the places that draw their own chip because it holds more
+// than a label — a colour swatch, a remove button — or sits in a wrapping row rather than a
+// scrolling one. They wear these so "selected" is the same ink everywhere; each of them used to
+// keep a private copy, most filled in the primary button's pink and one in lavender.
+export const ChipStyle = {
+  minHeight: 36,
+  justifyContent: 'center',
+  backgroundColor: Colors.white,
+  borderWidth: 1,
+  borderColor: Colors.creamDeep,
+  borderRadius: Radii.pill,
+  paddingHorizontal: Spacing.three,
+  paddingVertical: Spacing.one,
+} as const;
+
+export const ChipSelectedStyle = {
+  backgroundColor: Colors.ink,
+  borderColor: Colors.ink,
+} as const;
+
 // A filter, not an action.
 //
 // The selected chip used to be filled in the primary button's pink — and on Projects, in lavender

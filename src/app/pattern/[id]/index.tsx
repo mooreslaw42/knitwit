@@ -6,6 +6,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   Card,
+  ChipSelectedStyle,
+  ChipStyle,
   ConfirmButton,
   FormField,
   IconButton,
@@ -600,13 +602,8 @@ const styles = StyleSheet.create({
   fieldCard: { gap: 2 },
   field: { gap: Spacing.one },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.blushDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
   blockTitle: { marginTop: Spacing.three },
   sectionsList: { gap: Spacing.two },
   secRow: {

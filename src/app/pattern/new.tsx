@@ -2,8 +2,7 @@ import { useRouter } from 'expo-router';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AutoGrowInput } from '@/components/auto-grow-input';
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
@@ -11,9 +10,9 @@ import { PatternKitEditor, PatternSectionsEditor } from '@/components/pattern-se
 import { PixelPatternBuilder, type PixelPatternResult } from '@/components/pixel-pattern-builder';
 import { GaugeField } from '@/components/gauge-field';
 import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
+import { Screen, WizardHeader } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
 import { importPatternDocument, type ImportedPattern } from '@/lib/import-pattern-document';
 import { goBackOr } from '@/lib/navigation';
@@ -27,7 +26,7 @@ import {
   SIZE_OPTIONS,
   toolSizeOptions,
 } from '@/constants/catalogs';
-import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Pattern, PatternCategory, PatternLevel, TechniqueCraft } from '@/types/knitwit';
 
@@ -320,26 +319,8 @@ export default function NewPatternWizardScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.topbar}>
-            <Pressable onPress={handleBack} hitSlop={8}>
-              <ThemedText type="default">←</ThemedText>
-            </Pressable>
-            <View style={styles.dots}>
-              {STEPS.map((s, i) => (
-                <View
-                  key={s}
-                  style={[styles.dot, i === step && styles.dotActive, i < step && styles.dotDone]}
-                />
-              ))}
-            </View>
-            <View style={styles.topbarSpacer} />
-          </View>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
-          </ThemedText>
+    <Screen kind="wizard">
+          <WizardHeader step={step} total={STEPS.length} label={STEPS[step]} onBack={handleBack} />
 
           {STEPS[step] === 'Start' && mode === null && (
             <>
@@ -692,55 +673,11 @@ export default function NewPatternWizardScreen() {
               </ThemedText>
             </PillButton>
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
-  },
-  topbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  topbarSpacer: {
-    width: 20,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.creamDeep,
-  },
-  dotActive: {
-    backgroundColor: Colors.blushDeep,
-  },
-  dotDone: {
-    backgroundColor: Colors.sage,
-  },
-  caption: {
-    textAlign: 'center',
-  },
   field: {
     gap: Spacing.one,
   },

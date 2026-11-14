@@ -1,9 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import {
+  ChipSelectedStyle,
+  ChipStyle,
+  FormField,
+  PillButton,
+  SelectField,
+} from '@/components/knitwit-ui';
 import { DateField } from '@/components/date-field';
 import { GaugeField } from '@/components/gauge-field';
 import {
@@ -12,9 +17,9 @@ import {
   type DraftSection,
 } from '@/components/project-sections-editor';
 import { EMPTY_KIT, SectionKitEditor, type SectionKit } from '@/components/stash-picker';
+import { Screen, WizardHeader } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -24,7 +29,7 @@ import {
   describeToolSize,
   scaleForToolType,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 
 import { localDate } from '@/lib/achievements';
 import { goBackOr } from '@/lib/navigation';
@@ -233,26 +238,8 @@ export default function NewProjectWizardScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.topbar}>
-            <Pressable onPress={handleBack} hitSlop={8}>
-              <ThemedText type="default">←</ThemedText>
-            </Pressable>
-            <View style={styles.dots}>
-              {steps.map((s, i) => (
-                <View
-                  key={s.id}
-                  style={[styles.dot, i === step && styles.dotActive, i < step && styles.dotDone]}
-                />
-              ))}
-            </View>
-            <View style={styles.topbarSpacer} />
-          </View>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.caption}>
-            Step {step + 1} of {steps.length} · {current.label}
-          </ThemedText>
+    <Screen kind="wizard">
+          <WizardHeader step={step} total={steps.length} label={current.label} onBack={handleBack} />
 
           {current.id === 'basics' && (
             <>
@@ -483,9 +470,7 @@ export default function NewProjectWizardScreen() {
               {isLast ? 'Save project' : 'Next'}
             </ThemedText>
           </PillButton>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -521,48 +506,6 @@ function ChoiceCard({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
-  },
-  topbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  topbarSpacer: {
-    width: 20,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.creamDeep,
-  },
-  dotActive: {
-    backgroundColor: Colors.blushDeep,
-  },
-  dotDone: {
-    backgroundColor: Colors.sage,
-  },
-  caption: {
-    textAlign: 'center',
-  },
   choiceCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -606,11 +549,6 @@ const styles = StyleSheet.create({
   },
   field: { gap: Spacing.one },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.blushDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
 });

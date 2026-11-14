@@ -1,13 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
 
 import { Card, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
-import { MaxContentWidth, MaxNameLength, Spacing } from '@/constants/theme';
+import { MaxNameLength, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
@@ -42,9 +41,7 @@ export default function NewTechniqueScreen() {
   const named = name.trim().length > 0;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Add a technique</ThemedText>
 
           <Card style={styles.card}>
@@ -100,27 +97,11 @@ export default function NewTechniqueScreen() {
               Cancel
             </ThemedText>
           </PillButton>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   card: { gap: Spacing.two },
   saveBtn: { marginTop: Spacing.two },
   cancelBtn: { alignSelf: 'flex-start' },

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Card, Spinner } from '@/components/knitwit-ui';
+import { Card, ChipSelectedStyle, ChipStyle, Spinner } from '@/components/knitwit-ui';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  tabOn: { backgroundColor: Colors.blushDeep },
+  tabOn: { backgroundColor: Colors.ink },
   search: {
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
@@ -244,13 +244,8 @@ const styles = StyleSheet.create({
     color: Colors.ink,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.lavenderDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
   notice: { gap: Spacing.one, alignItems: 'flex-start' },
   retry: { paddingTop: Spacing.one },
   group: { gap: Spacing.two, marginTop: Spacing.two },

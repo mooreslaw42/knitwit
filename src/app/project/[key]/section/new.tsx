@@ -1,14 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
 
 import { FormField, PillButton } from '@/components/knitwit-ui';
 import { EMPTY_KIT, SectionKitEditor } from '@/components/stash-picker';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
@@ -23,9 +22,7 @@ export default function NewSectionScreen() {
   const [kit, setKit] = useState(EMPTY_KIT);
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Add a section</ThemedText>
           <ThemedText type="small" themeColor="inkSoft">
             Sections split a project into the parts you knit one at a time — a body, a sleeve, a
@@ -61,19 +58,10 @@ export default function NewSectionScreen() {
               Add section
             </ThemedText>
           </PillButton>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   saveBtn: { marginTop: Spacing.two },
 });
