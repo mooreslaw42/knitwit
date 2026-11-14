@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { PhotoImage } from '@/components/photo';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,8 @@ import {
 } from '@/lib/knitwit-helpers';
 import { materialLabel } from '@/components/stash-picker';
 import { formatGaugeIn } from '@/lib/gauge';
+import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
+import { pickImage, pickImageMessage } from '@/lib/pick-image';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
@@ -57,6 +60,25 @@ export default function ProjectDetailScreen() {
   usePageTitle(project?.name);
   const setProjectNotes = useKnitwitStore((state) => state.setProjectNotes);
   const setMaterialSkeins = useKnitwitStore((state) => state.setMaterialSkeins);
+  const setProjectPhoto = useKnitwitStore((state) => state.setProjectPhoto);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // The colour block is only a stand-in until there is a picture of the actual knitting, so it
+  // takes one where it stands rather than sending the knitter through the edit form for it.
+  const choosePhoto = async () => {
+    const result = await pickImage();
+    if (result.status === 'picked') {
+      try {
+        setProjectPhoto(key, await putPhoto(result.dataUrl));
+        setPhotoError(null);
+      } catch {
+        // Out of room. Said plainly rather than leaving the tap looking like it did nothing.
+        setPhotoError(PHOTO_STORAGE_FULL);
+      }
+    } else {
+      setPhotoError(pickImageMessage(result.status));
+    }
+  };
 
   if (!project) return null;
 
@@ -76,16 +98,42 @@ export default function ProjectDetailScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={[styles.hero, { backgroundColor: project.colorDeep }]}>
+          <Pressable
+            onPress={() => void choosePhoto()}
+            accessibilityRole="button"
+            accessibilityLabel={project.photo ? 'Change the project photo' : 'Add a project photo'}
+            style={[styles.hero, { backgroundColor: project.colorDeep }]}>
             {/* The background was already being cleared for a photo that nothing ever drew, so a
                 project with one showed an empty block. */}
             {project.photo ? (
               <PhotoImage photo={project.photo} style={styles.heroPhoto} />
             ) : null}
+            <View style={styles.heroPhotoBtn}>
+              <ThemedText type="smallBold" themeColor="ink">
+                {project.photo ? 'Change photo' : '+ Add photo'}
+              </ThemedText>
+            </View>
             <ThemedText type="smallBold" themeColor="white" style={styles.heroLabel}>
               {pct >= 1 ? 'Complete' : 'In progress'}
             </ThemedText>
-          </View>
+          </Pressable>
+          {/* Beneath rather than on the picture, as on the edit screen, so clearing it can't be a
+              mis-tap on "change". */}
+          {project.photo && (
+            <Pressable
+              hitSlop={6}
+              style={styles.photoClear}
+              onPress={() => setProjectPhoto(key, null)}>
+              <ThemedText type="smallBold" themeColor="coralDeep">
+                Remove photo
+              </ThemedText>
+            </Pressable>
+          )}
+          {photoError && (
+            <ThemedText type="small" themeColor="coralDeep">
+              {photoError}
+            </ThemedText>
+          )}
           <View style={styles.titleRow}>
             <ThemedText type="title" heading={1}>{project.name}</ThemedText>
             <Pressable
@@ -396,6 +444,21 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     justifyContent: 'flex-end',
     marginBottom: Spacing.two,
+  },
+  // Top right, opposite the status label, on its own backing so it reads on any photo.
+  heroPhotoBtn: {
+    position: 'absolute',
+    top: Spacing.three,
+    right: Spacing.three,
+    backgroundColor: Colors.cream,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  photoClear: {
+    alignSelf: 'flex-start',
+    marginTop: -Spacing.one,
+    paddingVertical: Spacing.one,
   },
   tagCard: {
     marginTop: Spacing.two,

@@ -152,6 +152,10 @@ type KnitwitState = {
   // Free-text notes, saved as they're typed. No Save button: a notes box that can lose what you
   // wrote by navigating away is worse than no notes box.
   setProjectNotes: (projectKey: string, notes: string) => void;
+  // Just the picture, from the project page itself. Not through updateProject, which takes the whole
+  // edit form and re-derives the project's colours from its pattern — neither of which a photo has
+  // anything to do with. Null removes it.
+  setProjectPhoto: (projectKey: string, photo: string | null) => void;
   // How many skeins of one yarn this project needs. Null clears it, which is not the same as zero:
   // "I haven't worked it out" and "none" are different answers and the card shows them differently.
   setMaterialSkeins: (projectKey: string, materialId: string, skeins: number | null) => void;
@@ -900,6 +904,13 @@ export const useKnitwitStore = create<KnitwitState>()(
         const project = projects[projectKey];
         if (!project) return;
         set({ projects: { ...projects, [projectKey]: { ...project, notes } } });
+      },
+
+      setProjectPhoto: (projectKey, photo) => {
+        const { projects } = get();
+        const project = projects[projectKey];
+        if (!project) return;
+        set({ projects: { ...projects, [projectKey]: { ...project, photo } } });
       },
 
       setMaterialSkeins: (projectKey, materialId, skeins) => {
