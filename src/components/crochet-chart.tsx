@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useRef, type ReactNode } from 'react';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
@@ -46,6 +47,40 @@ const HEIGHTS: Record<string, number> = {
 // Shared with the knitting chart, and deliberately generous: the old ceiling of 40 stitches was
 // narrower than an ordinary blanket row, and it was enforced without a word.
 const LIMITS = CROCHET_CHART_LIMITS;
+
+// The sideways scroller every chart and row strip sits in, this one's and the knitting chart's.
+//
+// Capped at its parent's width, because every parent these sit in centres its children and a
+// centred child is as wide as its content: uncapped, the scroller was never narrower than the
+// chart, never scrolled, and a 60-stitch row spilled out over the counter beside it.
+//
+// Opens at the right-hand end by default. A chart is read from the right — stitch 1 and the row
+// numbers are there — so a wide one opening at its left edge hid exactly the part you start from.
+// Re-anchored whenever the content changes width, which is when the counter moves to a row of a
+// different length.
+//
+// The bar shows on the web: a phone finds out a chart scrolls with a swipe, a mouse has no swipe.
+export function ChartScroller({
+  startAtEnd = true,
+  children,
+}: {
+  startAtEnd?: boolean;
+  children: ReactNode;
+}) {
+  const ref = useRef<ScrollView>(null);
+  return (
+    <ScrollView
+      ref={ref}
+      horizontal
+      style={styles.hscroll}
+      showsHorizontalScrollIndicator={Platform.OS === 'web'}
+      onContentSizeChange={
+        startAtEnd ? () => ref.current?.scrollToEnd({ animated: false }) : undefined
+      }>
+      {children}
+    </ScrollView>
+  );
+}
 
 const heightOf = (type: string) => (HEIGHTS[type] ?? 1) * UNIT;
 
@@ -233,7 +268,8 @@ export function CrochetRowStrip({
   const width = stitches.length * COL + 12;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+    // A wrong-side row is worked left-to-right, so that is the end it starts at.
+    <ChartScroller startAtEnd={!reversed}>
       <Svg width={width} height={tall + 8}>
         {stitches.map((s, j) => {
           const slot = reversed ? j : stitches.length - 1 - j;
@@ -244,7 +280,7 @@ export function CrochetRowStrip({
           );
         })}
       </Svg>
-    </ScrollView>
+    </ChartScroller>
   );
 }
 
@@ -302,7 +338,7 @@ export function CrochetChart({
 
   return (
     <View style={styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ChartScroller>
         <Svg width={chartWidth} height={chartHeight}>
           {drawn.map((d, i) => {
             // The work is turned every row, so a wrong-side row is read the other way. Drawing it
@@ -361,7 +397,7 @@ export function CrochetChart({
             );
           })}
         </Svg>
-      </ScrollView>
+      </ChartScroller>
 
       {note ? (
         <ThemedText type="small" themeColor="coralDeep">
@@ -398,7 +434,9 @@ export function CrochetChart({
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: Spacing.two },
+  // Capped like the scroller inside it, and for the same reason: see ChartScroller.
+  wrap: { gap: Spacing.two, maxWidth: '100%' },
+  hscroll: { maxWidth: '100%', flexGrow: 0 },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',

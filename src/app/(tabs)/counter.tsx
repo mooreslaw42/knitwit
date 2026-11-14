@@ -680,6 +680,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   counterArea: {
+    // The row strip under it is capped at 100% of this — which only means something if this is
+    // capped too. Left to grow, a 60-stitch strip widened the whole area past its column and
+    // painted itself over the chart beside it.
+    maxWidth: '100%',
     alignItems: 'center',
     marginTop: Spacing.five,
   },
