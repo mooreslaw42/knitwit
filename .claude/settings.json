@@ -1,5 +1,31 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run typecheck:functions)",
+      "Bash(npm run lint)",
+      "Bash(npm test)",
+      "Bash(npm test -- *)",
+      "Bash(npx jest *)",
+      "Bash(npx expo export --platform web)",
+      "Bash(npx expo install --check)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { [ -d node_modules ] || npm install --no-audit --no-fund; }",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
   }
 }
