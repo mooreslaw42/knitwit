@@ -1,24 +1,26 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
 import { EmptyState } from '@/components/illustrations/EmptyState';
 import { Illustration, type IllustrationName } from '@/components/illustrations/Illustration';
-import { PillButton } from '@/components/knitwit-ui';
+import { IconButton, PillButton } from '@/components/knitwit-ui';
 import { Confetti } from '@/components/motion/Confetti';
 import { haptics, type HapticKind } from '@/components/motion/haptics';
 import { enterCard, exitCard } from '@/components/motion/presets';
 import { PressableScale } from '@/components/motion/PressableScale';
+import { ProgressRing } from '@/components/motion/ProgressRing';
 import { RowCount } from '@/components/motion/RowCount';
 import { TimerPulse } from '@/components/motion/TimerPulse';
 import { StitchChart, StitchRowStrip } from '@/components/stitch-chart';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { formatClock } from '@/lib/knitwit-helpers';
+import { useKeepAwakeWhileFocused } from '@/lib/use-keep-awake';
 import { useLiveSeconds } from '@/lib/use-live-seconds';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useWideLayout } from '@/lib/use-wide-layout';
@@ -73,6 +75,10 @@ export default function CounterScreen() {
   const timerKey = useKnitwitStore((state) => state.timerKey);
   const isTimerRunning = timerKey === `${activeProjectKey}|${activeSectionIndex}`;
   const liveSeconds = useLiveSeconds(activeProjectKey, activeSectionIndex);
+
+  // On while there is something to count and the knitter has not asked for it off. See the hook.
+  const keepScreenOn = useKnitwitStore((state) => state.settings.keepScreenOn !== false);
+  useKeepAwakeWhileFocused(keepScreenOn && !!section);
 
   const [noteText, setNoteText] = useState('');
   // Hooks run before the empty-state return below, so these cannot move down with the layout.
@@ -187,20 +193,36 @@ export default function CounterScreen() {
   const header = (
     <>
         <View style={[styles.topbar, twoUp && styles.topbarWide]}>
-          {/* Counter is a tab, so there is no reliable stack to go back through — arriving here
-              from the tab bar and from "Continue counting" leave different histories. It goes to
-              the section this counter is counting, which is the one answer that is always right.
-              The project/section heading below has always been a link to the same place, but it
-              reads as a title, so nobody found it. */}
+          {/* What is being counted, and the way to it. One block that reads as a title and opens
+              like a link: the project, the section, and a chevron to say it goes somewhere.
+
+              This row used to say the section's name twice — once in a "← Sleeve…" pill that was
+              too narrow to finish the word, and again in a heading underneath — beside a filled
+              pink "+ Add note" that was the loudest thing on a screen whose whole purpose is the
+              big button below. The note is an icon now, the name is said once, and the only
+              thing shouting is the one you press every row.
+
+              Counter is a tab, so there is no reliable stack to go back through — arriving here
+              from the tab bar and from "Continue knitting" leave different histories. The title
+              goes to the section this counter is counting, which is the one answer that is always
+              right. */}
           <Pressable
             onPress={() =>
               router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)
             }
-            style={styles.backBtn}
+            accessibilityRole="link"
+            accessibilityLabel={`${project.name}, ${section.name}. Opens the section.`}
+            style={styles.titleBlock}
             hitSlop={8}>
-            <ThemedText type="smallBold" themeColor="ink" numberOfLines={1}>
-              ← {section.name}
+            <ThemedText type="subtitle" numberOfLines={2}>
+              {project.name}
             </ThemedText>
+            <View style={styles.titleSection}>
+              <ThemedText type="caption" themeColor="inkSoft" numberOfLines={1} style={styles.titleSectionText}>
+                {section.name}
+              </ThemedText>
+              <KnitIcon name="forward" size={14} color={Colors.inkSoft} />
+            </View>
           </Pressable>
           <PressableScale
             onPress={toggleTimer}
@@ -220,29 +242,15 @@ export default function CounterScreen() {
               {formatClock(liveSeconds)}
             </ThemedText>
           </PressableScale>
-          <PillButton
-            style={styles.noteBtn}
+          <IconButton
+            icon="note"
+            label="Add a note to this row"
             onPress={() => {
               setNoteText('');
               openNoteForm();
-            }}>
-            <ThemedText type="smallBold" themeColor="white">
-              + Add note
-            </ThemedText>
-          </PillButton>
+            }}
+          />
         </View>
-
-        <Pressable
-          onPress={() => router.push(`/project/${activeProjectKey}/section/${activeSectionIndex}`)}
-          style={styles.sectionLink}
-          hitSlop={8}>
-          <ThemedText type="smallBold" style={styles.label}>
-            {project.name}
-          </ThemedText>
-          <ThemedText type="small" themeColor="inkSoft" style={styles.section}>
-            {section.name}
-          </ThemedText>
-        </Pressable>
     </>
   );
 
@@ -355,12 +363,11 @@ export default function CounterScreen() {
                   showStitchCount
                   materials={patternMaterials}
                 />
+                {/* What to knit on this row, at a size that can be read from the arm of a chair.
+                    It was set in the 12-point detail style, in grey — the one sentence on the
+                    screen a knitter actually needs, and the hardest one to read. */}
                 {chartRow?.instruction ? (
-                  <ThemedText
-                    type="small"
-                    themeColor="inkSoft"
-                    numberOfLines={2}
-                    style={styles.rowInstruction}>
+                  <ThemedText type="default" numberOfLines={3} style={styles.rowInstruction}>
                     {chartRow.instruction}
                   </ThemedText>
                 ) : null}
@@ -383,21 +390,32 @@ export default function CounterScreen() {
                 style={[styles.cntBtnMinus, section.row <= 0 && styles.disabled]}>
                 <KnitIcon name="minus" size={28} color={Colors.inkSoft} />
               </PressableScale>
-              <PressableScale
-                onPress={() => changeRow(1)}
-                scaleTo={0.92}
-                accessibilityRole="button"
-                accessibilityLabel="Next row"
-                // Only locked while the bind-off prompt is still standing. Once it's been
-                // declined the knitter has said they aren't finished, so counting on has to work
-                // — the store grows the section to match.
-                disabled={section.row >= section.totalRows && !castOffDismissed}
-                style={[
-                  styles.cntBtnPlus,
-                  section.row >= section.totalRows && !castOffDismissed && styles.disabled,
-                ]}>
-                <KnitIcon name="plus" size={64} color={Colors.white} />
-              </PressableScale>
+              {/* The section's progress, drawn round the button that makes it. Every press moves
+                  the ring a little, so the count is something you can see filling as well as a
+                  number going up — and how far there is to go is readable without doing the
+                  subtraction. */}
+              <ProgressRing
+                progress={section.totalRows ? section.row / section.totalRows : 0}
+                size={178}
+                strokeWidth={7}
+                color={Colors.coralDeep}
+                trackColor={Colors.creamDeep}>
+                <PressableScale
+                  onPress={() => changeRow(1)}
+                  scaleTo={0.92}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next row"
+                  // Only locked while the bind-off prompt is still standing. Once it's been
+                  // declined the knitter has said they aren't finished, so counting on has to work
+                  // — the store grows the section to match.
+                  disabled={section.row >= section.totalRows && !castOffDismissed}
+                  style={[
+                    styles.cntBtnPlus,
+                    section.row >= section.totalRows && !castOffDismissed && styles.disabled,
+                  ]}>
+                  <KnitIcon name="plus" size={64} color={Colors.white} />
+                </PressableScale>
+              </ProgressRing>
             </View>
             <View style={styles.shortcuts}>
               <PressableScale
@@ -575,7 +593,8 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
+    // On a phone the safe area clears the status bar; a browser has nothing above this.
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.two,
     alignItems: 'center',
   },
   // Wider only when there are two columns to fill. The counter alone stays at reading width.
@@ -642,15 +661,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: Spacing.three,
   },
-  backBtn: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    // Yields to the timer and the note button, which are fixed width; a long section name
-    // truncates rather than pushing them off the row.
-    flexShrink: 1,
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
+  titleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
+  titleSectionText: { flexShrink: 1 },
   timerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,28 +679,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
+    minHeight: 44,
     flexShrink: 0,
+    ...Shadows.card,
   },
   tabular: {
     fontVariant: ['tabular-nums'],
   },
-  // Matches the "+ New pattern" pill used on the Library/Materials/Projects headers.
-  noteBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  sectionLink: {
-    alignItems: 'center',
-    marginBottom: Spacing.three,
-  },
-  label: {
-    alignSelf: 'center',
-  },
-  section: {
-    alignSelf: 'center',
-  },
   counterArea: {
+    // The row strip under it is capped at 100% of this — which only means something if this is
+    // capped too. Left to grow, a 60-stitch strip widened the whole area past its column and
+    // painted itself over the chart beside it.
+    maxWidth: '100%',
     alignItems: 'center',
     marginTop: Spacing.five,
   },
@@ -691,6 +702,7 @@ const styles = StyleSheet.create({
   },
   rowInstruction: {
     textAlign: 'center',
+    marginTop: Spacing.one,
   },
   cntNumber: {
     fontFamily: Fonts.headingBold,
@@ -713,6 +725,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadows.card,
   },
   cntBtnPlus: {
     width: 150,

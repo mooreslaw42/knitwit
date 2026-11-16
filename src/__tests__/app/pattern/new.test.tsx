@@ -19,14 +19,26 @@ import NewPatternWizardScreen from '@/app/pattern/new';
 jest.mock('@/lib/supabase', () => ({ getSupabase: jest.fn() }));
 // Reaches AsyncStorage's native module, which isn't there under Jest. Nothing here stores a photo.
 jest.mock('@/lib/photo-store', () => ({ putPhoto: jest.fn(), PHOTO_STORAGE_FULL: '' }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: mockReplace }),
+}));
 jest.mock('@/lib/use-page-title', () => ({ usePageTitle: jest.fn() }));
 jest.mock('@/lib/read-pattern-file', () => ({ pickPatternFile: jest.fn() }));
 jest.mock('@/lib/pick-image', () => ({ pickImage: jest.fn(), pickImageMessage: () => '' }));
 
+const mockSavePattern = jest.fn((_id: string | null, _data: unknown) => 'p9');
 jest.mock('@/store/useKnitwitStore', () => ({
   useKnitwitStore: (select: (s: unknown) => unknown) =>
-    select({ savePattern: jest.fn(), catalogue: null, loadCatalogue: jest.fn() }),
+    select({
+      savePattern: mockSavePattern,
+      catalogue: null,
+      loadCatalogue: jest.fn(),
+      settings: { gaugeUnit: 'cm' },
+      materials: {},
+      tools: {},
+      techniques: {},
+    }),
 }));
 
 describe('the first step of the new-pattern wizard', () => {
@@ -67,7 +79,7 @@ describe('the first step of the new-pattern wizard', () => {
     await fireEvent.press(screen.getByText('Write pattern'));
     expect(screen.queryByText('How do you want to start?')).toBeNull();
 
-    await fireEvent.press(screen.getByText('←'));
+    await fireEvent.press(screen.getByLabelText('Back'));
     expect(screen.getByText('How do you want to start?')).toBeTruthy();
   });
 
@@ -78,5 +90,24 @@ describe('the first step of the new-pattern wizard', () => {
     // Straight past the reading step to the details, which is what skipping always meant.
     expect(screen.queryByText('How do you want to start?')).toBeNull();
     expect(screen.getByText(/Step 2 of 5/)).toBeTruthy();
+  });
+});
+
+describe('the last step of the new-pattern wizard', () => {
+  it('can save the pattern and go straight on to a project made from it', async () => {
+    await render(<NewPatternWizardScreen />);
+    await fireEvent.press(screen.getByText('Fill it in myself'));
+    await fireEvent.changeText(screen.getByPlaceholderText('e.g. Meadow Cardigan'), 'Granny square');
+    // Basics → Gauge → Materials → Sections.
+    for (let i = 0; i < 3; i++) await fireEvent.press(screen.getByText('Next'));
+    expect(screen.getByText(/Step 5 of 5/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Save & start a project'));
+
+    expect(mockSavePattern).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ name: 'Granny square' }),
+    );
+    expect(mockReplace).toHaveBeenCalledWith('/project/new?pattern=p9');
   });
 });

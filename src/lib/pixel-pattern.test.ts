@@ -1,8 +1,11 @@
 import { resolveRowGroups } from '@/lib/knitwit-helpers';
 import {
   buildPixelPattern,
+  cellsBetween,
   colorTag,
+  compactPalette,
   gridHeight,
+  paintCell,
   quantize,
   rgbToHex,
   type ImageSample,
@@ -103,6 +106,76 @@ describe('buildPixelPattern', () => {
     expect(screenColor(section, materials, 0, 1)).toBe('#ffffff'); // bottom-right
     expect(screenColor(section, materials, 1, 0)).toBe('#ff0000'); // top-left
     expect(screenColor(section, materials, 1, 1)).toBe('#00ff00'); // top-right
+  });
+});
+
+describe('paintCell', () => {
+  const grid = quantize(sample(2, 2, ['#ff0000', '#00ff00', '#0000ff', '#ffffff']), 2, 4);
+
+  it('repaints one stitch and leaves the original grid alone', () => {
+    const next = paintCell(grid, 0, grid.cells[3]);
+    expect(next.cells[0]).toBe(grid.cells[3]);
+    expect(next.cells.slice(1)).toEqual(grid.cells.slice(1));
+    expect(grid.cells[0]).not.toBe(grid.cells[3]);
+  });
+
+  // A drag passes over the same cell again and again; the same object back is what lets the
+  // editor know nothing needs drawing.
+  it('hands back the same grid when nothing changes', () => {
+    expect(paintCell(grid, 0, grid.cells[0])).toBe(grid);
+    expect(paintCell(grid, -1, 0)).toBe(grid);
+    expect(paintCell(grid, 99, 0)).toBe(grid);
+    expect(paintCell(grid, 0, 99)).toBe(grid);
+  });
+
+  it('carries hand edits through into the chart', () => {
+    // Paint the top-left (red) stitch white.
+    const white = grid.cells[3];
+    const { materials, section } = buildPixelPattern(compactPalette(paintCell(grid, 0, white)), 'knit');
+    expect(screenColor(section, materials, 1, 0)).toBe('#ffffff');
+  });
+});
+
+describe('cellsBetween', () => {
+  it('is just the one cell when both ends are the same', () => {
+    expect(cellsBetween({ x: 2, y: 3 }, { x: 2, y: 3 })).toEqual([{ x: 2, y: 3 }]);
+  });
+
+  it('fills a fast horizontal drag with every stitch it crossed', () => {
+    expect(cellsBetween({ x: 0, y: 1 }, { x: 4, y: 1 }).map((c) => c.x)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('runs backwards as well as forwards', () => {
+    expect(cellsBetween({ x: 3, y: 0 }, { x: 0, y: 0 }).map((c) => c.x)).toEqual([3, 2, 1, 0]);
+  });
+
+  it('leaves no gaps on a diagonal', () => {
+    const line = cellsBetween({ x: 0, y: 0 }, { x: 5, y: 2 });
+    expect(line[0]).toEqual({ x: 0, y: 0 });
+    expect(line[line.length - 1]).toEqual({ x: 5, y: 2 });
+    for (let i = 1; i < line.length; i++) {
+      expect(Math.abs(line[i].x - line[i - 1].x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(line[i].y - line[i - 1].y)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('compactPalette', () => {
+  const grid = quantize(sample(2, 2, ['#ff0000', '#00ff00', '#0000ff', '#ffffff']), 2, 4);
+
+  it('drops a colour painted out entirely, so it does not become a yarn nobody uses', () => {
+    const red = grid.cells[0];
+    const painted = paintCell(grid, 0, grid.cells[1]);
+    const compact = compactPalette(painted);
+    expect(compact.palette).toHaveLength(3);
+    expect(compact.palette).not.toContainEqual(grid.palette[red]);
+    // Every cell still shows the colour it did before renumbering.
+    compact.cells.forEach((c, i) => expect(compact.palette[c]).toEqual(painted.palette[painted.cells[i]]));
+    expect(buildPixelPattern(compact, 'knit').materials).toHaveLength(3);
+  });
+
+  it('leaves a grid that uses every colour untouched', () => {
+    expect(compactPalette(grid)).toBe(grid);
   });
 });
 

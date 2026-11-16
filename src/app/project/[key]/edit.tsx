@@ -2,17 +2,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PHOTO_STORAGE_FULL, putPhoto } from '@/lib/photo-store';
 import { PhotoImage } from '@/components/photo';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AutoGrowInput } from '@/components/auto-grow-input';
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { DateField } from '@/components/date-field';
 import { LabelField } from '@/components/label-field';
 import { labelsInUse } from '@/lib/labels';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -92,9 +91,7 @@ export default function ProjectEditScreen() {
   ];
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Edit project</ThemedText>
 
           {/* Same idiom as a pattern's picture: tap the hero to pick one, with a separate remove
@@ -256,20 +253,11 @@ export default function ProjectEditScreen() {
               router.replace('/');
             }}
           />
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   saveBtn: { marginTop: Spacing.two },
   field: { gap: Spacing.one },
   pasteBox: {

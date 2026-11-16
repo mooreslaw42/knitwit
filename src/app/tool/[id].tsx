@@ -1,18 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
 
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { goBackOr } from '@/lib/navigation';
 import { inUseLabel } from '@/lib/knitwit-helpers';
 import { TOOL_TYPE_LABELS,
   toolSizeOptions,
   scaleForToolType,
 } from '@/constants/catalogs';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Tool, ToolType } from '@/types/knitwit';
@@ -56,9 +55,7 @@ export default function ToolEditScreen() {
   const owned = Math.max(1, parseInt(qty, 10) || 1);
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>{isNew ? 'New tool' : 'Edit tool'}</ThemedText>
 
           <SelectField
@@ -132,27 +129,11 @@ export default function ToolEditScreen() {
               }}
             />
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   saveBtn: {
     marginTop: Spacing.two,
   },

@@ -1,0 +1,10 @@
+# Gitignored files that a fresh Claude Code worktree still needs. Same syntax as .gitignore;
+# only files that are also gitignored are copied.
+#
+# Without the Supabase env the app cannot reach its backend, and without the Vercel link
+# `vercel` asks which project this is all over again.
+.env
+.env.local
+.env*.local
+.claude/settings.local.json
+.vercel/**

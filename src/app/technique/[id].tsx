@@ -1,15 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ExternalLink } from '@/components/external-link';
 import { Card, ConfirmButton } from '@/components/knitwit-ui';
 import { NotesCard } from '@/components/notes-card';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { CRAFT_LABELS } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 import { goBackOr } from '@/lib/navigation';
 import {
   FAMILY_LABELS,
@@ -53,9 +52,7 @@ export default function TechniqueScreen() {
   const unknown = catalogueReady && !catalogue[id] && !mine;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <Screen kind="pushed">
           <View style={styles.titleRow}>
             <ThemedText type="title" heading={1}>{technique.name}</ThemedText>
             {/* The short form as a tag rather than in the heading: it is what a pattern writes, so
@@ -169,9 +166,7 @@ export default function TechniqueScreen() {
               }}
             />
           ) : null}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -188,13 +183,6 @@ const styles = StyleSheet.create({
     borderRadius: Radii.pill,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.half,
-  },
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
   },
   card: { gap: Spacing.two },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },

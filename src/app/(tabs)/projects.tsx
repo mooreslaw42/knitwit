@@ -1,17 +1,26 @@
 import { useRouter } from 'expo-router';
+import { KnitTexture } from '@/components/knit-texture';
 import { PhotoImage } from '@/components/photo';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
-import { Card, PillButton, ProgressBar, ProjectStatusBadge } from '@/components/knitwit-ui';
+import { EmptyState } from '@/components/illustrations/EmptyState';
+import {
+  Chip,
+  ChipRow,
+  IconButton,
+  PillButton,
+  ProgressBar,
+  ProjectStatusBadge,
+  SearchField,
+} from '@/components/knitwit-ui';
 import { CardLink } from '@/components/card-link';
+import { Screen, ScreenHeader } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
-import { CRAFT_LABELS, CRAFT_ORDER } from '@/constants/catalogs';
+import { CRAFT_LABELS, CRAFT_ORDER, PROJECT_STATUS_LABELS } from '@/constants/catalogs';
 import { hasLabel, labelKey, labelsInUse } from '@/lib/labels';
-import { Colors, Fonts, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
 import {
   currentSectionOf,
   matchesCraft,
@@ -24,11 +33,14 @@ import type { TechniqueCraft } from '@/types/knitwit';
 type StatusFilter = 'all' | 'active' | 'finished' | 'frogged';
 type CraftFilter = 'all' | TechniqueCraft;
 
+// The same three words the badge on each card uses. The filter used to say "In progress" and
+// "Completed" over cards that said "On the needles" and "Finished" — one state, two names, on the
+// same screen.
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'active', label: 'In progress' },
-  { value: 'finished', label: 'Completed' },
-  { value: 'frogged', label: 'Frogged' },
+  { value: 'active', label: PROJECT_STATUS_LABELS.active },
+  { value: 'finished', label: PROJECT_STATUS_LABELS.finished },
+  { value: 'frogged', label: PROJECT_STATUS_LABELS.frogged },
 ];
 
 const CRAFT_FILTERS: { value: CraftFilter; label: string }[] = [
@@ -72,102 +84,90 @@ export default function ProjectsScreen() {
 
   const total = Object.keys(projects).length;
 
+  // The craft row only earns its place once there is more than one craft to choose between; a
+  // knitter who has never crocheted does not need a row of filters that all return everything.
+  const crafts = new Set(Object.values(projects).map((p) => p.craft));
+  // …and it stays for as long as one is selected, or the last crochet project being deleted would
+  // leave "Nothing matches" with no filter on screen to clear.
+  const showCrafts = crafts.size > 1 || craftFilter !== 'all';
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.headerRow}>
-            <ThemedText type="title" heading={1}>Projects</ThemedText>
-            <PillButton style={styles.newBtn} onPress={() => router.push('/project/new')}>
-              <ThemedText type="smallBold" themeColor="white">
-                + New project
-              </ThemedText>
-            </PillButton>
-          </View>
-
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search projects"
-            placeholderTextColor={Colors.inkSoft}
-            style={styles.search}
+    <Screen>
+      <ScreenHeader
+        title="Projects"
+        trailing={
+          <IconButton
+            icon="plus"
+            label="New project"
+            variant="primary"
+            onPress={() => router.push('/project/new')}
           />
+        }
+      />
 
-          <View style={styles.filters}>
+      {total > 0 && (
+        <>
+          <SearchField value={query} onChangeText={setQuery} placeholder="Search projects" />
+
+          <ChipRow>
             {FILTERS.map((f) => (
-              <Pressable
+              <Chip
                 key={f.value}
+                label={f.label}
+                selected={filter === f.value}
                 onPress={() => setFilter(f.value)}
-                style={[styles.chip, filter === f.value && styles.chipActive]}>
-                <ThemedText type="smallBold" themeColor={filter === f.value ? 'white' : 'inkSoft'}>
-                  {f.label}
-                </ThemedText>
-              </Pressable>
+              />
             ))}
-          </View>
+          </ChipRow>
 
           {/* A second row rather than one long one: these are two independent questions, and
               "All" meaning two different things in the same row would read as a single choice. */}
-          <View style={styles.filters}>
-            {CRAFT_FILTERS.map((f) => (
-              <Pressable
-                key={f.value}
-                onPress={() => setCraftFilter(f.value)}
-                style={[styles.chip, craftFilter === f.value && styles.chipCraftActive]}>
-                <ThemedText
-                  type="smallBold"
-                  themeColor={craftFilter === f.value ? 'white' : 'inkSoft'}>
-                  {f.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* A third filter row, and only when there is something to filter by. Its own accent
-              again, so which of the three is set is readable without reading them. */}
-          {labels.length > 0 && (
-            <View style={styles.filters}>
-              <Pressable
-                onPress={() => setLabelFilter(null)}
-                style={[styles.chip, labelFilter === null && styles.chipLabelActive]}>
-                <ThemedText type="smallBold" themeColor={labelFilter === null ? 'white' : 'inkSoft'}>
-                  Any label
-                </ThemedText>
-              </Pressable>
-              {labels.map((l) => {
-                const on = labelFilter !== null && labelKey(l) === labelKey(labelFilter);
-                return (
-                  <Pressable
-                    key={l}
-                    onPress={() => setLabelFilter(on ? null : l)}
-                    style={[styles.chip, on && styles.chipLabelActive]}>
-                    <ThemedText
-                      type="smallBold"
-                      numberOfLines={1}
-                      style={styles.chipText}
-                      themeColor={on ? 'white' : 'inkSoft'}>
-                      {l}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </View>
+          {showCrafts && (
+            <ChipRow>
+              {CRAFT_FILTERS.map((f) => (
+                <Chip
+                  key={f.value}
+                  label={f.label}
+                  selected={craftFilter === f.value}
+                  onPress={() => setCraftFilter(f.value)}
+                />
+              ))}
+            </ChipRow>
           )}
 
+          {/* A third filter row, and only when there is something to filter by. */}
+          {labels.length > 0 && (
+            <ChipRow>
+              <Chip label="Any label" selected={labelFilter === null} onPress={() => setLabelFilter(null)} />
+              {labels.map((l) => {
+                const on = labelFilter !== null && labelKey(l) === labelKey(labelFilter);
+                return <Chip key={l} label={l} selected={on} onPress={() => setLabelFilter(on ? null : l)} />;
+              })}
+            </ChipRow>
+          )}
+        </>
+      )}
+
           {total === 0 ? (
-            <Card style={styles.emptyCard}>
-              <ThemedText type="smallBold">No projects yet</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Tap “+ New project” to cast on your first one.
-              </ThemedText>
-            </Card>
+            <EmptyState
+              illustration="no-projects"
+              title="No projects yet"
+              message="A project is one thing you are making: its sections, its row counts, its yarn and its notes."
+              action={
+                <PillButton onPress={() => router.push('/project/new')} style={styles.emptyButton}>
+                  <ThemedText type="default" themeColor="white">
+                    Start a project
+                  </ThemedText>
+                </PillButton>
+              }
+            />
           ) : visible.length === 0 ? (
-            <Card style={styles.emptyCard}>
-              <ThemedText type="smallBold">Nothing matches</ThemedText>
-              <ThemedText type="small" themeColor="inkSoft">
-                Try a different search or filter.
-              </ThemedText>
-            </Card>
+            <EmptyState
+              compact
+              illustration="nothing-here"
+              title="Nothing matches"
+              message="Try a different search, or clear a filter."
+            />
           ) : (
             <View style={styles.projGrid}>
               {visible.map(([key, p]) => {
@@ -188,7 +188,9 @@ export default function ProjectsScreen() {
                     <View style={[styles.projThumb, { backgroundColor: p.color }]}>
                       {p.photo ? (
                         <PhotoImage photo={p.photo} style={styles.projPhoto} />
-                      ) : null}
+                      ) : (
+                        <KnitTexture color={p.colorDeep} stitch={26} opacity={0.3} />
+                      )}
                       <ThemedText type="smallBold" themeColor="white" style={styles.projPct}>
                         {Math.round(pct * 100)}%
                       </ThemedText>
@@ -232,69 +234,15 @@ export default function ProjectsScreen() {
               })}
             </View>
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
+  emptyButton: {
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.five,
   },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  newBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  search: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 15,
-    color: Colors.ink,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipActive: {
-    backgroundColor: Colors.blushDeep,
-  },
-  // A different accent from the status row, so which of the two filters is set is readable at a
-  // glance rather than by counting rows.
-  chipCraftActive: {
-    backgroundColor: Colors.lavenderDeep,
-  },
-  chipLabelActive: {
-    backgroundColor: Colors.coralDeep,
-  },
-  // A group name can be a sentence, so it has to be allowed to truncate rather than push the
-  // row's progress bar off the card.
   chipText: { maxWidth: 200 },
   labelPill: {
     backgroundColor: Colors.coral,
@@ -303,26 +251,34 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     flexShrink: 1,
   },
-  emptyCard: {
-    gap: Spacing.one,
-  },
+  // Two to a row, sharing the width exactly. It was 47% each, which left the grid a few points
+  // short of the right-hand margin that everything above it lines up with.
+  //
+  // Half each, with the gutter as padding and the grid pulled out by the same amount to cancel it
+  // at the edges — the one arrangement where a card on a row of its own is exactly as wide as the
+  // cards in the row above.
   projGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
+    margin: -Spacing.two,
   },
   projCardWrap: {
-    width: '47%',
+    width: '50%',
+    padding: Spacing.two,
   },
+  // The lift is on the card and the clipping is on the picture inside it, so the card's shadow
+  // is never at the mercy of how a platform combines `overflow` with a shadow.
   projCard: {
     width: '100%',
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
-    overflow: 'hidden',
+    ...Shadows.card,
   },
   projThumb: {
     aspectRatio: 1,
     overflow: 'hidden',
+    borderTopLeftRadius: Radii.medium,
+    borderTopRightRadius: Radii.medium,
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
     padding: Spacing.two,
@@ -344,7 +300,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   projInfo: {
-    padding: Spacing.two,
+    padding: Spacing.three,
     gap: Spacing.one,
   },
   projMeta: {

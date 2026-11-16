@@ -70,10 +70,33 @@ export const Radii = {
   pill: 999,
 } as const;
 
+// Depth, in the one place it is defined.
+//
+// White cards on a cream page are a 1.07:1 difference — close enough that a card's edge was being
+// carried entirely by its corner radius, and a screen of them read as flat paper with rounded
+// holes in it. One soft, warm shadow (ink, not black) is what separates "a thing you can pick up"
+// from the page it sits on. `raised` is for the single element on a screen that is the next thing
+// to do; if two things wear it, neither does.
+export const Shadows = {
+  card: { boxShadow: '0 1px 2px rgba(74, 59, 56, 0.04), 0 6px 18px rgba(74, 59, 56, 0.06)' },
+  raised: { boxShadow: '0 2px 4px rgba(74, 59, 56, 0.06), 0 14px 32px rgba(74, 59, 56, 0.12)' },
+} as const;
+
+// The page gutter. Every screen's content starts this far from the edge, so moving between tabs
+// never shifts the left margin — it was 24 on most screens and 16 or 0 on a few.
+export const ScreenPadding = Spacing.four;
+
+// Room at the foot of a tab screen's scroll for the tab bar to float over.
+export const TabBarClearance = Spacing.six * 2;
+
+// Below this the web build is a phone: the navigation moves to a bar along the bottom, where a
+// thumb is, the way it sits on iOS. Above it there is room for the bar across the top.
+export const PhoneNavBelow = 600;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
-// Below this window width the web nav bar shows icons only (labels stay for screen readers): six
+// Below this window width the web nav bar shows icons only (labels stay for screen readers): the
 // labelled tabs and the logo no longer fit beside each other.
 //
 // The nav lives inside the MaxContentWidth (800px) cap, and the logo plus the six labels measure

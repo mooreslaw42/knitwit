@@ -1,21 +1,36 @@
+import { KnitIcon, type KnitIconName } from '@/components/icons/KnitIcon';
+import { KnitTexture } from '@/components/knit-texture';
 import { AnimatedProgressBar } from '@/components/motion/AnimatedProgressBar';
+import { PressableScale } from '@/components/motion/PressableScale';
 import { PhotoImage } from '@/components/photo';
 import { SelectControl } from '@/components/select-control';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
   type PressableProps,
+  type StyleProp,
   type TextInputProps,
   type ViewProps,
+  type ViewStyle,
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { PROJECT_STATUS_LABELS } from '@/constants/catalogs';
-import { Colors, Fonts, Radii, Spacing, type ThemeColor } from '@/constants/theme';
+import {
+  Colors,
+  Fonts,
+  Radii,
+  ScreenPadding,
+  Shadows,
+  Spacing,
+  type ThemeColor,
+} from '@/constants/theme';
+import { darken } from '@/lib/knitwit-helpers';
 import type { ProjectStatus, SectionStatus } from '@/types/knitwit';
 
 // The one text-input look, exported so the platform-split AutoGrowInput can wear it without
@@ -45,6 +60,173 @@ export const PlaceholderColor = '#B9ABA6';
 
 export function Card({ style, ...props }: ViewProps) {
   return <View style={[styles.card, style]} {...props} />;
+}
+
+// What a tappable row in a list looks like: the same white, the same corner and the same lift as
+// a Card, at the tighter padding a row wants. Exported as a style because the rows are CardLinks
+// and each lays its own contents out — but the surface they sit on should not be theirs to choose.
+export const RowSurface = {
+  backgroundColor: Colors.white,
+  borderRadius: Radii.medium,
+  padding: Spacing.three,
+  ...Shadows.card,
+} as const;
+
+// The chip's two looks, as styles, for the places that draw their own chip because it holds more
+// than a label — a colour swatch, a remove button — or sits in a wrapping row rather than a
+// scrolling one. They wear these so "selected" is the same ink everywhere; each of them used to
+// keep a private copy, most filled in the primary button's pink and one in lavender.
+export const ChipStyle = {
+  minHeight: 36,
+  justifyContent: 'center',
+  backgroundColor: Colors.white,
+  borderWidth: 1,
+  borderColor: Colors.creamDeep,
+  borderRadius: Radii.pill,
+  paddingHorizontal: Spacing.three,
+  paddingVertical: Spacing.one,
+} as const;
+
+export const ChipSelectedStyle = {
+  backgroundColor: Colors.ink,
+  borderColor: Colors.ink,
+} as const;
+
+// A filter, not an action.
+//
+// The selected chip used to be filled in the primary button's pink — and on Projects, in lavender
+// on the second row and coral on the third. Three accents to say "selected" meant a knitter had to
+// learn the screen before they could read it, and the pink ones competed with the real button
+// above them. Selected is ink now, on every row of every screen: unmistakably on, and nothing like
+// a call to action.
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      // The chip is 36 tall, which is as tall as a row of them can be without crowding; the slop
+      // makes up the difference to a full-size touch target.
+      hitSlop={{ top: 4, bottom: 4 }}
+      style={({ pressed }) => [styles.chip, selected && styles.chipSelected, pressed && styles.pressed]}>
+      <ThemedText
+        type="smallBold"
+        numberOfLines={1}
+        themeColor={selected ? 'white' : 'ink'}
+        style={styles.chipText}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+// A row of chips that scrolls sideways and runs off the edge of the screen.
+//
+// Running off the edge is the point: a half-visible chip is how a row says there is more of it.
+// The rows on Projects were plain Views, so a fourth filter simply was not there on a phone — it
+// was cut off at the margin with nothing to suggest it existed.
+export function ChipRow({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={[styles.chipRow, style]}
+      contentContainerStyle={styles.chipRowContent}>
+      {children}
+    </ScrollView>
+  );
+}
+
+// A round button that is only an icon. `label` is not optional: with no words on it, the label is
+// the only thing a screen reader has to say.
+export function IconButton({
+  icon,
+  label,
+  onPress,
+  variant = 'surface',
+  size = 44,
+}: {
+  icon: KnitIconName;
+  label: string;
+  onPress: () => void;
+  // 'primary' is the one thing to do on this screen; 'surface' is everything else.
+  variant?: 'primary' | 'surface';
+  size?: number;
+}) {
+  const primary = variant === 'primary';
+  return (
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={4}
+      onPress={onPress}
+      style={[
+        styles.iconButton,
+        { width: size, height: size },
+        primary ? styles.iconButtonPrimary : styles.iconButtonSurface,
+      ]}>
+      <KnitIcon
+        name={icon}
+        size={Math.round(size * 0.5)}
+        color={primary ? Colors.white : Colors.ink}
+        accent={primary ? Colors.white : undefined}
+      />
+    </PressableScale>
+  );
+}
+
+// The one search box. It was a bare TextInput restyled on each screen that had one.
+export function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <View style={styles.search}>
+      <KnitIcon name="search" size={18} color={Colors.inkSoft} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.inkSoft}
+        accessibilityLabel={placeholder}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        clearButtonMode="while-editing"
+        style={styles.searchInput}
+      />
+    </View>
+  );
+}
+
+// The knitter, as a circle with their initial in it. Where there is no name yet it shows the
+// account icon instead — a blank disc, or a "?" would read as something having gone wrong.
+export function Avatar({ name, size = 44 }: { name?: string; size?: number }) {
+  const initial = name?.trim().charAt(0).toUpperCase();
+  return (
+    <View style={[styles.avatar, { width: size, height: size }]}>
+      {initial ? (
+        <ThemedText type="subtitle" themeColor="ink">
+          {initial}
+        </ThemedText>
+      ) : (
+        <KnitIcon name="account" size={Math.round(size * 0.5)} color={Colors.ink} accent={Colors.white} />
+      )}
+    </View>
+  );
 }
 
 // Fills up smoothly when the value changes, and honours Reduce Motion — see
@@ -248,6 +430,9 @@ export function SelectField<T extends string>({
 //
 // Shared because three lists each wrote `backgroundColor: photo ? undefined : color` and then
 // never drew the photo, so anything with one showed a blank square. One place to get it right.
+//
+// With neither a photo nor an icon it is knitted in its own colour rather than left as a flat
+// square — see KnitTexture.
 export function Thumb({
   photo,
   color,
@@ -265,7 +450,11 @@ export function Thumb({
         styles.thumb,
         { width: size, height: size, backgroundColor: color ?? Colors.creamDeep },
       ]}>
-      {photo ? <PhotoImage photo={photo} style={styles.thumbPhoto} /> : children}
+      {photo ? (
+        <PhotoImage photo={photo} style={styles.thumbPhoto} />
+      ) : (
+        (children ?? (color ? <KnitTexture color={darken(color, 0.22)} stitch={size / 3.4} /> : null))
+      )}
     </View>
   );
 }
@@ -335,6 +524,77 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.large,
     padding: Spacing.four,
+    ...Shadows.card,
+  },
+  // A minimum, not a fixed height: at the largest accessibility text sizes the label has to be
+  // able to push the pill taller rather than be cut off inside it.
+  chip: {
+    minHeight: 36,
+    paddingVertical: Spacing.one,
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.creamDeep,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.three,
+  },
+  chipSelected: {
+    backgroundColor: Colors.ink,
+    borderColor: Colors.ink,
+  },
+  chipText: { maxWidth: 200 },
+  // Bleeds through the page gutter and pads itself back in, so the first chip lines up with
+  // everything else on the screen and the last one can scroll right to the edge.
+  //
+  // The same trick vertically, by four points: a scroll view clips touches to its own frame, so a
+  // chip's hit slop did nothing in a row exactly as tall as the chip. The padding gives the slop
+  // somewhere to be and the negative margin gives the space back to the layout.
+  chipRow: {
+    flexGrow: 0,
+    marginHorizontal: -ScreenPadding,
+    marginVertical: -Spacing.one,
+  },
+  chipRowContent: {
+    paddingHorizontal: ScreenPadding,
+    paddingVertical: Spacing.one,
+    gap: Spacing.two,
+    alignItems: 'center',
+  },
+  iconButton: {
+    borderRadius: Radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonPrimary: {
+    backgroundColor: Colors.blushDeep,
+    ...Shadows.card,
+  },
+  iconButtonSurface: {
+    backgroundColor: Colors.white,
+    ...Shadows.card,
+  },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.creamDeep,
+    borderRadius: Radii.medium,
+    paddingHorizontal: Spacing.three,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 13,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 15,
+    color: Colors.ink,
+  },
+  avatar: {
+    borderRadius: Radii.pill,
+    backgroundColor: Colors.blush,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     borderRadius: Radii.pill,

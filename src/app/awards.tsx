@@ -1,15 +1,12 @@
-import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
 import { Card, ProgressBar } from '@/components/knitwit-ui';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 import { currentStreak, knittedToday, longestStreak } from '@/lib/achievements';
 import { allProgress, GROUP_LABELS, GROUP_ORDER, standing } from '@/lib/awards';
-import { goBackOr } from '@/lib/navigation';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 
 function hours(seconds: number): string {
@@ -19,7 +16,6 @@ function hours(seconds: number): string {
 
 export default function AwardsScreen() {
   usePageTitle('Awards');
-  const router = useRouter();
   const achievements = useKnitwitStore((state) => state.achievements);
 
   const progress = allProgress(achievements);
@@ -29,9 +25,7 @@ export default function AwardsScreen() {
   const { totals } = achievements;
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.content}>
+    <Screen kind="pushed">
           <ThemedText type="title" heading={1}>Awards</ThemedText>
 
           <Card style={styles.levelCard}>
@@ -99,28 +93,11 @@ export default function AwardsScreen() {
               </View>
             );
           })}
-
-          <ThemedText
-            type="smallBold"
-            themeColor="blushDeep"
-            style={styles.back}
-            onPress={() => goBackOr(router, '/')}>
-            ← Back
-          </ThemedText>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
-  safeArea: { flex: 1, width: '100%', maxWidth: MaxContentWidth },
-  content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   levelCard: { gap: Spacing.two },
   group: { gap: Spacing.two },
   award: { gap: Spacing.one },
@@ -131,5 +108,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  back: { marginTop: Spacing.two },
 });

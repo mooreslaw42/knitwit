@@ -1,6 +1,6 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { CrochetChart, CrochetRowStrip } from '@/components/crochet-chart';
+import { ChartScroller, CrochetChart, CrochetRowStrip } from '@/components/crochet-chart';
 import { ThemedText } from '@/components/themed-text';
 import { STITCHES } from '@/constants/catalogs';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
@@ -100,7 +100,7 @@ export function StitchRowStrip({
       {crochet ? (
         <CrochetRowStrip row={row} before={before[rowIndex]} sizeIndex={sizeIndex} />
       ) : (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ChartScroller>
         <View style={styles.strip}>
           {clipped && (
             <View style={[styles.cell, ws && styles.cellWs, styles.clipCell]}>
@@ -115,7 +115,7 @@ export function StitchRowStrip({
             </View>
           ))}
         </View>
-      </ScrollView>
+      </ChartScroller>
       )}
     </View>
   );
@@ -191,7 +191,7 @@ export function StitchChart({
 
   return (
     <View style={styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ChartScroller>
         <View>
           {/* Stitch numbers, right-to-left like the chart below them. */}
           <View style={styles.line}>
@@ -271,7 +271,7 @@ export function StitchChart({
             );
           })}
         </View>
-      </ScrollView>
+      </ChartScroller>
 
       {note ? (
         <ThemedText type="small" themeColor="coralDeep">
@@ -328,8 +328,10 @@ const styles = StyleSheet.create({
     color: Colors.blushDeep,
     fontFamily: Fonts.bodySemibold,
   },
+  // Capped like the scroller inside it, and for the same reason: see ChartScroller.
   wrap: {
     gap: Spacing.two,
+    maxWidth: '100%',
   },
   line: {
     flexDirection: 'row',
@@ -394,6 +396,7 @@ const styles = StyleSheet.create({
     color: Colors.inkSoft,
   },
   stripWrap: {
+    maxWidth: '100%',
     alignItems: 'center',
     gap: Spacing.one,
   },

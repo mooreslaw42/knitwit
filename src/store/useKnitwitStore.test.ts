@@ -661,6 +661,26 @@ describe('createProject', () => {
   });
 });
 
+describe('setProjectPhoto', () => {
+  // Set from the project page, where the colour block is tapped for a picture. It must leave the
+  // project's colours alone: updateProject re-derives them from the pattern, and a photo is no
+  // reason to repaint anything.
+  it('sets and clears the photo and touches nothing else', () => {
+    const before = useKnitwitStore.getState().projects.meadow;
+    useKnitwitStore.getState().setProjectPhoto('meadow', 'photo_abc');
+    expect(useKnitwitStore.getState().projects.meadow).toEqual({ ...before, photo: 'photo_abc' });
+
+    useKnitwitStore.getState().setProjectPhoto('meadow', null);
+    expect(useKnitwitStore.getState().projects.meadow).toEqual({ ...before, photo: null });
+  });
+
+  it('ignores a project that does not exist', () => {
+    const before = useKnitwitStore.getState().projects;
+    useKnitwitStore.getState().setProjectPhoto('nope', 'photo_abc');
+    expect(useKnitwitStore.getState().projects).toBe(before);
+  });
+});
+
 describe('updateProject', () => {
   it('moves the colour with the pattern when relinking', () => {
     const patterns = useKnitwitStore.getState().patterns;

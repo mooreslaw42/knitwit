@@ -14,6 +14,23 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+// The drawings carry `role="img"` and an `aria-label` on their own <svg>, which is right for the
+// loose files in brand-kit and wrong here twice over. react-native-svg hands them to the DOM as
+// `ariaLabel`, which is not an attribute and which React warns about on every empty screen; and
+// the view around the drawing already decides whether a screen reader hears it, so a label inside
+// a hidden wrapper is a contradiction. Stripped once per drawing, at first use.
+const cleaned = new Map<IllustrationName, string>();
+function markup(name: IllustrationName): string {
+  let xml = cleaned.get(name);
+  if (xml === undefined) {
+    xml = ILLUSTRATIONS[name].replace(/^<svg\b[^>]*>/, (tag) =>
+      tag.replace(/\s(?:role|aria-label)="[^"]*"/g, ''),
+    );
+    cleaned.set(name, xml);
+  }
+  return xml;
+}
+
 export function Illustration({ name, width = 200, accessibilityLabel, style }: Props) {
   const labelled = !!accessibilityLabel;
   return (
@@ -24,7 +41,7 @@ export function Illustration({ name, width = 200, accessibilityLabel, style }: P
       accessibilityLabel={accessibilityLabel}
       aria-hidden={!labelled}
       importantForAccessibility={labelled ? 'yes' : 'no-hide-descendants'}>
-      <SvgXml xml={ILLUSTRATIONS[name]} width={width} height={width * 0.8} />
+      <SvgXml xml={markup(name)} width={width} height={width * 0.8} />
     </View>
   );
 }

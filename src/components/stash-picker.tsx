@@ -1,9 +1,10 @@
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { ChipSelectedStyle, ChipStyle } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { describeToolSize, scaleForToolType, TOOL_TYPE_LABELS } from '@/constants/catalogs';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { resolveTechnique, techniqueLabel } from '@/lib/technique-catalogue';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { Material, ProjectSection, Technique, Tool } from '@/types/knitwit';
@@ -181,13 +182,8 @@ const styles = StyleSheet.create({
   wrap: { gap: Spacing.three },
   group: { gap: Spacing.one },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.blushDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
   // A chip grows to its text; without a ceiling one long yarn name pushes past the card edge.
   chipText: { maxWidth: 260 },
   addLink: { alignSelf: 'flex-start', paddingVertical: Spacing.one },

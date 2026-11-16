@@ -1,17 +1,17 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { KnitIcon } from '@/components/icons/KnitIcon';
 import { YarnSkein } from '@/components/illustrations/YarnSkein';
 import { yarnSwatchColor } from '@/components/illustrations/yarn-colors';
-import { PillButton, Thumb } from '@/components/knitwit-ui';
+import { EmptyState } from '@/components/illustrations/EmptyState';
+import { Chip, ChipRow, IconButton, PillButton, RowSurface, Thumb } from '@/components/knitwit-ui';
+import { Screen, ScreenHeader } from '@/components/screen';
 import { TechniqueLibrary } from '@/components/technique-library';
 import { CardLink } from '@/components/card-link';
 import { ThemedText } from '@/components/themed-text';
 import { usePageTitle } from '@/lib/use-page-title';
-import { ThemedView } from '@/components/themed-view';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -24,9 +24,10 @@ import {
   describeToolSize,
   scaleForToolType,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
 import { toolInUseCount } from '@/lib/knitwit-helpers';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
+import { summarizePattern } from '@/lib/pattern-summary';
 import type { PatternCategory, TechniqueCraft } from '@/types/knitwit';
 
 // Everything a knitter keeps rather than works on: patterns, the techniques they've noted down,
@@ -37,7 +38,7 @@ type LibraryView = 'patterns' | 'techniques' | 'materials' | 'tools';
 const VIEWS: { id: LibraryView; label: string; singular: string }[] = [
   { id: 'patterns', label: 'Patterns', singular: 'pattern' },
   { id: 'techniques', label: 'Techniques', singular: 'technique' },
-  { id: 'materials', label: 'Yarn', singular: 'material' },
+  { id: 'materials', label: 'Yarn', singular: 'yarn' },
   { id: 'tools', label: 'Tools', singular: 'tool' },
 ];
 
@@ -46,6 +47,9 @@ const NEW_ROUTE = {
   materials: '/material/new',
   tools: '/tool/new',
 } as const satisfies Partial<Record<LibraryView, string>>;
+
+// Enough to recognise a palette by; the count in the line above says how many there are in all.
+const MAX_SWATCHES = 12;
 
 export default function LibraryScreen() {
   usePageTitle('Library');
@@ -60,33 +64,44 @@ export default function LibraryScreen() {
   const [craft, setCraft] = useState<'all' | TechniqueCraft>('all');
 
   const entries = Object.entries(patterns);
+  // How many projects have been made from each pattern — one of the few things that tells two
+  // similar patterns apart ("the one I knitted twice").
+  const projectCounts = new Map<string, number>();
+  for (const p of Object.values(projects)) {
+    if (p.patternId) projectCounts.set(p.patternId, (projectCounts.get(p.patternId) ?? 0) + 1);
+  }
 
   // A pattern marked 'both' shows under either craft, because it is either.
   const byCraft =
     craft === 'all'
       ? entries
       : entries.filter(([, p]) => p.craft === craft || p.craft === 'both');
-  const visible = filter === 'all' ? byCraft : byCraft.filter(([, p]) => p.category === filter);
   const usedCrafts = CRAFT_ORDER.filter((c) => entries.some(([, p]) => p.craft === c));
   // Categories follow the craft filter, so it never offers one with nothing behind it.
   const usedCategories = CATEGORY_ORDER.filter((c) => byCraft.some(([, p]) => p.category === c));
+  // A category that the chosen craft has nothing in is not a filter any more — it is an empty
+  // list with no chip left on screen to clear it. Picking "Socks" and then a craft with no socks
+  // did exactly that. The stored choice is kept, so going back to the first craft restores it.
+  const category = filter !== 'all' && usedCategories.includes(filter) ? filter : 'all';
+  const visible = category === 'all' ? byCraft : byCraft.filter(([, p]) => p.category === category);
+
+  const singular = VIEWS.find((v) => v.id === view)?.singular;
+  const openNew = () => {
+    if (view !== 'techniques') router.push(NEW_ROUTE[view] as Parameters<typeof router.push>[0]);
+  };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.headerRow}>
-            <ThemedText type="title" heading={1}>Library</ThemedText>
-            {/* No "+ New technique": a technique is picked from the shared catalogue, not
-                written. The techniques view has its own Browse tab for that. */}
-            {view !== 'techniques' && (
-              <PillButton style={styles.newBtn} onPress={() => router.push(NEW_ROUTE[view] as Parameters<typeof router.push>[0])}>
-                <ThemedText type="smallBold" themeColor="white">
-                  + New {VIEWS.find((v) => v.id === view)?.singular}
-                </ThemedText>
-              </PillButton>
-            )}
-          </View>
+    <Screen>
+      <ScreenHeader
+        title="Library"
+        // No "new technique": a technique is picked from the shared catalogue, not written. The
+        // techniques view has its own Browse tab for that.
+        trailing={
+          view !== 'techniques' ? (
+            <IconButton icon="plus" label={`New ${singular}`} variant="primary" onPress={openNew} />
+          ) : undefined
+        }
+      />
 
           <View style={styles.segment}>
             {VIEWS.map((v) => (
@@ -103,74 +118,119 @@ export default function LibraryScreen() {
             <>
               {/* Only worth showing once there's more than one kind in the library. */}
               {usedCrafts.length > 1 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-                  <FilterChip label="All crafts" active={craft === 'all'} onPress={() => setCraft('all')} />
+                <ChipRow>
+                  <Chip label="All crafts" selected={craft === 'all'} onPress={() => setCraft('all')} />
                   {usedCrafts.map((c) => (
-                    <FilterChip
+                    <Chip
                       key={c}
                       label={CRAFT_LABELS[c]}
-                      active={craft === c}
+                      selected={craft === c}
                       onPress={() => setCraft(c)}
                     />
                   ))}
-                </ScrollView>
+                </ChipRow>
               )}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-                <FilterChip
-                  label="All"
-                  active={filter === 'all'}
-                  onPress={() => setFilter('all')}
+              {/* With one category there is nothing to choose between. */}
+              {usedCategories.length > 1 && (
+                <ChipRow>
+                  <Chip label="All" selected={category === 'all'} onPress={() => setFilter('all')} />
+                  {usedCategories.map((c) => (
+                    <Chip
+                      key={c}
+                      label={CATEGORY_LABELS[c]}
+                      selected={category === c}
+                      onPress={() => setFilter(c)}
+                    />
+                  ))}
+                </ChipRow>
+              )}
+
+              {entries.length === 0 && (
+                <EmptyState
+                  illustration="no-patterns"
+                  title="No patterns yet"
+                  message="Upload a PDF, paste the text, or chart one yourself. Knitwit reads it into sections and rows you can count through."
+                  action={
+                    <PillButton onPress={openNew} style={styles.emptyButton}>
+                      <ThemedText type="default" themeColor="white">
+                        Add a pattern
+                      </ThemedText>
+                    </PillButton>
+                  }
                 />
-                {usedCategories.map((c) => (
-                  <FilterChip
-                    key={c}
-                    label={CATEGORY_LABELS[c]}
-                    active={filter === c}
-                    onPress={() => setFilter(c)}
-                  />
-                ))}
-              </ScrollView>
+              )}
 
               <View style={styles.libList}>
-                {visible.map(([id, pt]) => (
-                  // The favourite toggle is a sibling of the link, not inside it. A button nested
-                  // in an anchor is invalid on web, and tapping the heart would follow the link as
-                  // well as toggling — so the row is a link and the heart sits beside it.
-                  <View key={id} style={styles.libRowWrap}>
-                    <CardLink href={`/pattern/${id}`} style={styles.libRow}>
-                      <Thumb photo={pt.photo} color={pt.accentColor} />
-                      <View style={styles.libInfo}>
-                        <ThemedText type="smallBold" numberOfLines={1}>
-                          {pt.name}
-                        </ThemedText>
-                        <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
-                          {CATEGORY_LABELS[pt.category]}
-                          {pt.needleSize || pt.weight ? ` · ${pt.needleSize || pt.weight}` : ''}
-                        </ThemedText>
+                {visible.map(([id, pt]) => {
+                  const summary = summarizePattern(pt, projectCounts.get(id) ?? 0);
+                  return (
+                    // The favourite toggle is a sibling of the link, not inside it. A button nested
+                    // in an anchor is invalid on web, and tapping the heart would follow the link as
+                    // well as toggling — so the row is a link and the heart sits beside it.
+                    <View key={id} style={styles.libRowWrap}>
+                      {/* The link gets the width; see libRowLink. */}
+                      <View style={styles.libRowLink}>
+                      <CardLink href={`/pattern/${id}`} style={styles.libRow}>
+                        <Thumb photo={pt.photo} color={pt.accentColor} size={64} />
+                        <View style={styles.libInfo}>
+                          <ThemedText type="smallBold" numberOfLines={1}>
+                            {pt.name}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                            {summary.kind}
+                          </ThemedText>
+                          {summary.contents ? (
+                            <ThemedText type="small" themeColor="inkSoft" numberOfLines={1}>
+                              {summary.contents}
+                            </ThemedText>
+                          ) : null}
+                          {summary.colors.length > 0 && (
+                            <View style={styles.swatches}>
+                              {summary.colors.slice(0, MAX_SWATCHES).map((c, i) => (
+                                <View key={i} style={[styles.swatch, { backgroundColor: c }]} />
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      </CardLink>
                       </View>
-                    </CardLink>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        pt.favorited ? `Unfavourite ${pt.name}` : `Favourite ${pt.name}`
-                      }
-                      onPress={() => toggleFavorite(id)}
-                      hitSlop={8}
-                      style={styles.heartBtn}>
-                      <KnitIcon
-                        name={pt.favorited ? 'bookmark-filled' : 'bookmark'}
-                        color={Colors.coralDeep}
-                        accent={pt.favorited ? undefined : Colors.coral}
-                      />
-                    </Pressable>
-                  </View>
-                ))}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          pt.favorited ? `Unfavourite ${pt.name}` : `Favourite ${pt.name}`
+                        }
+                        onPress={() => toggleFavorite(id)}
+                        hitSlop={8}
+                        style={styles.heartBtn}>
+                        <KnitIcon
+                          name={pt.favorited ? 'bookmark-filled' : 'bookmark'}
+                          color={Colors.coralDeep}
+                          accent={pt.favorited ? undefined : Colors.coral}
+                        />
+                      </Pressable>
+                    </View>
+                  );
+                })}
               </View>
             </>
           ) : view === 'techniques' ? (
             <TechniqueLibrary />
           ) : view === 'materials' ? (
             <View style={styles.techList}>
+              {Object.keys(materials).length === 0 && (
+                <EmptyState
+                  illustration="no-materials"
+                  title="Your stash is empty"
+                  message="Add a yarn by hand, or photograph its ball band and Knitwit fills in the details."
+                  action={
+                    <PillButton onPress={openNew} style={styles.emptyButton}>
+                      <ThemedText type="default" themeColor="white">
+                        Add a yarn
+                      </ThemedText>
+                    </PillButton>
+                  }
+                />
+              )}
               {Object.entries(materials).map(([id, m]) => {
                 const status = m.status ?? 'instash';
                 const meta = [
@@ -209,6 +269,20 @@ export default function LibraryScreen() {
             </View>
           ) : (
             <View style={styles.techList}>
+              {Object.keys(tools).length === 0 && (
+                <EmptyState
+                  illustration="no-tools"
+                  title="No needles or hooks yet"
+                  message="Add what you own, and a project can say which ones it is using."
+                  action={
+                    <PillButton onPress={openNew} style={styles.emptyButton}>
+                      <ThemedText type="default" themeColor="white">
+                        Add a tool
+                      </ThemedText>
+                    </PillButton>
+                  }
+                />
+              )}
               {Object.entries(tools).map(([id, t]) => {
                 const owned = t.quantity ?? 1;
                 const inUse = toolInUseCount(projects, id);
@@ -244,9 +318,7 @@ export default function LibraryScreen() {
               })}
             </View>
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
@@ -268,50 +340,10 @@ function SegButton({
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.filterChip, active && styles.filterChipActive]}>
-      <ThemedText type="smallBold" themeColor={active ? 'white' : 'inkSoft'}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  newBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+  emptyButton: {
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.five,
   },
   segment: {
     flexDirection: 'row',
@@ -327,19 +359,7 @@ const styles = StyleSheet.create({
   },
   segBtnActive: {
     backgroundColor: Colors.white,
-  },
-  filters: {
-    flexGrow: 0,
-  },
-  filterChip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    marginRight: Spacing.two,
-  },
-  filterChipActive: {
-    backgroundColor: Colors.blushDeep,
+    ...Shadows.card,
   },
   libList: {
     gap: Spacing.two,
@@ -353,6 +373,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radii.medium,
     paddingRight: Spacing.three,
+    ...Shadows.card,
+  },
+  // `Link asChild` hands its props to an anchor that is only as wide as its contents, so a long
+  // summary line ran straight past the edge of the card and pushed the bookmark off the screen
+  // with it. The width has to be claimed by a view around the link; minWidth lets the text inside
+  // shrink to it and truncate.
+  libRowLink: {
+    flex: 1,
+    minWidth: 0,
   },
   libRow: {
     flexDirection: 'row',
@@ -362,7 +391,21 @@ const styles = StyleSheet.create({
   },
   libInfo: {
     gap: 2,
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
+  },
+  swatches: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+    marginTop: 2,
+  },
+  swatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 59, 56, 0.15)',
   },
   heartBtn: {
     marginLeft: 'auto',
@@ -371,12 +414,10 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   stashRow: {
+    ...RowSurface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    backgroundColor: Colors.white,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
   },
   qtyPill: {
     backgroundColor: Colors.creamDeep,

@@ -30,13 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# Claude Code: settings.json is shared (committed so every Conductor
-# workspace gets the same config); settings.local.json is machine-specific
+# Claude Code: settings.json (plugins, permissions, the install-on-start hook) and launch.json
+# (the dev servers the Browser pane can start) are shared; everything else is machine-specific.
+# Gitignored files a new worktree still needs are listed in .worktreeinclude.
 .claude/*
 !.claude/settings.json
-
-# Conductor: .conductor/settings.toml is shared, personal overrides are not
-.conductor/settings.local.toml
+!.claude/launch.json
 
 # local env files
 .env
@@ -53,3 +52,7 @@ yarn-error.*
 reference/example pattern.pdf
 .vercel
 .env*
+
+# iCloud Drive writes "name 2.ext" conflict copies when a synced folder (Desktop, Documents) is
+# edited faster than it syncs. One of those inside src/app becomes a route.
+* 2.*

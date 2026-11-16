@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { ConfirmButton, FormField, PillButton, SelectField } from '@/components/knitwit-ui';
 import { CareSymbolsField } from '@/components/care-symbols-field';
@@ -9,8 +8,8 @@ import { CalculatorLink } from '@/components/calculators/calculator-link';
 import { GaugeField } from '@/components/gauge-field';
 import { PhotoImage } from '@/components/photo';
 import { SwatchField } from '@/components/swatch-field';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { EdgeFunctionAborted } from '@/lib/edge-function';
 import { goBackOr } from '@/lib/navigation';
 import { pickImage, pickImageMessage } from '@/lib/pick-image';
@@ -19,7 +18,7 @@ import { describeFilled, readYarnLabel } from '@/lib/read-yarn-label';
 import { MATERIAL_STATUS_LABELS, MATERIAL_STATUS_ORDER, WASHING_LABELS, YARN_WEIGHTS,
   toolSizeOptions,
 } from '@/constants/catalogs';
-import { Colors, MaxContentWidth, MaxNameLength, Radii, Spacing } from '@/constants/theme';
+import { Colors, MaxNameLength, Radii, Spacing } from '@/constants/theme';
 import { usePageTitle } from '@/lib/use-page-title';
 import { useKnitwitStore } from '@/store/useKnitwitStore';
 import type { CraftType, Material, MaterialStatus } from '@/types/knitwit';
@@ -143,10 +142,8 @@ export default function MaterialEditScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title" heading={1}>{isNew ? 'New material' : 'Edit material'}</ThemedText>
+    <Screen kind="pushed">
+          <ThemedText type="title" heading={1}>{isNew ? 'New yarn' : 'Edit yarn'}</ThemedText>
 
           {/* Same idiom as a project's or a pattern's picture: tap the hero to pick one, with a
               separate remove beneath so clearing it can't be a mis-tap on "change". A yarn could be
@@ -408,27 +405,11 @@ export default function MaterialEditScreen() {
               }}
             />
           )}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
   saveBtn: {
     marginTop: Spacing.two,
   },

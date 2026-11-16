@@ -162,16 +162,65 @@ export function quantize(sample: ImageSample, targetWidth: number, colors: numbe
   const pixels = boxSample(sample, width, height);
   const palette = medianCut(pixels, Math.max(PIXEL_COLORS.min, Math.min(colors, PIXEL_COLORS.max)));
   const cells = pixels.map((p) => nearest(p, palette));
-  // Drop palette entries no cell actually uses, and renumber — asking for 8 colours on a photo that
-  // only needs 5 should leave a key of 5, not 8 with three that never appear.
-  const used = Array.from(new Set(cells)).sort((a, b) => a - b);
+  // Asking for 8 colours on a photo that only needs 5 should leave a key of 5, not 8 with three
+  // that never appear.
+  return compactPalette({ width, height, palette, cells });
+}
+
+// Drop palette entries no cell uses, and renumber the cells to match. Run on the photo's own
+// palette, and again on a hand-painted grid before it becomes a pattern: paint over every stitch of
+// a colour and that colour should leave the yarn list, not linger as a yarn nobody knits with.
+export function compactPalette(grid: QuantizedGrid): QuantizedGrid {
+  const used = Array.from(new Set(grid.cells)).sort((a, b) => a - b);
+  if (used.length === grid.palette.length) return grid;
   const remap = new Map(used.map((old, next) => [old, next]));
   return {
-    width,
-    height,
-    palette: used.map((i) => palette[i]),
-    cells: cells.map((c) => remap.get(c)!),
+    ...grid,
+    palette: used.map((i) => grid.palette[i]),
+    cells: grid.cells.map((c) => remap.get(c)!),
   };
+}
+
+// One stitch repainted by hand, in a colour already on the palette. Hands back the very same grid
+// when nothing changes — a drag passes over the same cell many times, and an unchanged grid is
+// what lets the editor skip the re-render.
+export function paintCell(grid: QuantizedGrid, index: number, paletteIndex: number): QuantizedGrid {
+  if (index < 0 || index >= grid.cells.length) return grid;
+  if (paletteIndex < 0 || paletteIndex >= grid.palette.length) return grid;
+  if (grid.cells[index] === paletteIndex) return grid;
+  const cells = grid.cells.slice();
+  cells[index] = paletteIndex;
+  return { ...grid, cells };
+}
+
+// Every cell on the straight line from one stitch to another, both ends included (Bresenham). A
+// drag reports where the finger is now, not every stitch it crossed on the way — move quickly and
+// it jumps several at a time — so the painter fills in the gap between one report and the next to
+// leave an unbroken stroke rather than a dotted one.
+export function cellsBetween(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  let { x, y } = from;
+  const dx = Math.abs(to.x - x);
+  const dy = -Math.abs(to.y - y);
+  const sx = x < to.x ? 1 : -1;
+  const sy = y < to.y ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    out.push({ x, y });
+    if (x === to.x && y === to.y) return out;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y += sy;
+    }
+  }
 }
 
 export function rgbToHex({ r, g, b }: Rgb): string {

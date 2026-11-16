@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { FormField } from '@/components/knitwit-ui';
+import { ChipSelectedStyle, ChipStyle, FormField } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import {
   convertGauge,
   defaultWindow,
@@ -167,11 +167,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   grow: { flex: 1, minWidth: 120 },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.blushDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
 });

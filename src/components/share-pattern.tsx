@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { PillButton } from '@/components/knitwit-ui';
+import { ChipSelectedStyle, ChipStyle, PillButton } from '@/components/knitwit-ui';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radii, Spacing } from '@/constants/theme';
 import { EN, patternHtml, type PatternStrings } from '@/lib/pattern-html';
@@ -215,13 +215,8 @@ const styles = StyleSheet.create({
   label: { marginTop: Spacing.three },
   langRow: { marginTop: Spacing.one },
   langs: { flexDirection: 'row', gap: Spacing.two },
-  chip: {
-    backgroundColor: Colors.creamDeep,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-  },
-  chipOn: { backgroundColor: Colors.blushDeep },
+  chip: ChipStyle,
+  chipOn: ChipSelectedStyle,
   action: { marginTop: Spacing.one, alignSelf: 'flex-start', paddingHorizontal: Spacing.five },
   close: { alignSelf: 'center', paddingVertical: Spacing.three, marginTop: Spacing.two },
 });
